@@ -8,7 +8,7 @@ import { currentRound } from '@/game/selectors';
 import { createDuelSession, type DuelSession } from './duel';
 import { type NetMessage, peerIdFor } from './protocol';
 import { createFakeNetwork, type FakeNetwork } from './testUtils/fakePeer';
-import { COUNTDOWN_MS, resetOnlineDuel, useOnlineDuel } from './useOnlineDuel';
+import { COUNTDOWN_MS, GO_LINGER_MS, resetOnlineDuel, useOnlineDuel } from './useOnlineDuel';
 
 const CODE = 'ABCDEF';
 const T0 = 1_700_000_000_000;
@@ -43,6 +43,18 @@ function finishedGame(): GameState {
   ];
   s = actions.reduce((acc, a) => reduce(acc, a), s);
   return s;
+}
+
+/** Record every distinct countdown value the hook publishes. */
+function subscribeCountdown(result: { current: { countdown: number | null } }, sink: Array<number | null>): () => void {
+  let last: number | null | undefined;
+  const id = setInterval(() => {
+    if (result.current.countdown !== last) {
+      last = result.current.countdown;
+      sink.push(result.current.countdown);
+    }
+  }, 20);
+  return () => clearInterval(id);
 }
 
 afterEach(() => {
@@ -198,6 +210,85 @@ describe('useOnlineDuel — race setup', () => {
     });
     expect(hook.result.current.countdown).toBe(0);
     expect(hook.result.current.startAt).toBe(Date.now() - 100);
+  });
+
+  it('lets go of the countdown a second after "GO" so no screen can be left covered', async () => {
+    vi.useFakeTimers();
+    const net = createFakeNetwork();
+    const hook = renderHook(() => useOnlineDuel());
+    act(() => hook.result.current.host(hostMe, { peerFactory: net.peerFactory, code: CODE }));
+    await act(async () => {
+      await net.flush();
+    });
+    joinAsOpponent(net, []);
+    await act(async () => {
+      await net.flush();
+    });
+
+    const seen: Array<number | null> = [];
+    const stop = subscribeCountdown(hook.result, seen);
+    await act(async () => {
+      hook.result.current.start();
+      await net.flush();
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(COUNTDOWN_MS + 200);
+    });
+    expect(hook.result.current.countdown).toBe(0);
+    expect(hook.result.current.startAt).not.toBeNull();
+
+    // ...and a second later it is gone, startAt with it.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(GO_LINGER_MS + 100);
+    });
+    expect(hook.result.current.countdown).toBeNull();
+    expect(hook.result.current.startAt).toBeNull();
+
+    // A whole race later it is still null (this is what used to park a "GO" overlay on the lobby).
+    await act(async () => {
+      hook.result.current.sendProgress(finishedGame());
+      hook.result.current.sendFinished(finishedGame());
+      await net.flush();
+      await vi.advanceTimersByTimeAsync(60_000);
+    });
+    expect(hook.result.current.countdown).toBeNull();
+    stop();
+    // 0 is emitted exactly once, so the `> 0 → 0` hand-off fires once on each peer.
+    expect(seen.filter((c) => c === 0)).toHaveLength(1);
+    expect(seen).toEqual([3, 2, 1, 0, null]);
+  });
+
+  it('tracks my own readiness and clears it for every new init', async () => {
+    const net = createFakeNetwork();
+    const host = createDuelSession({ role: 'host', code: CODE, me: hostMe, peerFactory: net.peerFactory });
+    opponentSession = host;
+    await net.flush();
+
+    const hook = renderHook(() => useOnlineDuel());
+    act(() => hook.result.current.join(CODE, guestMe, { peerFactory: net.peerFactory }));
+    await act(async () => {
+      await net.flush();
+    });
+    expect(hook.result.current.myReady).toBe(false);
+
+    await act(async () => {
+      host.send({ type: 'init', settings: normalizeSettings({ mode: 'fixed', seed: 'one' }), tracks: [makeTrack({ id: 1 })] });
+      await net.flush();
+    });
+    expect(hook.result.current.myReady).toBe(false);
+
+    await act(async () => {
+      hook.result.current.ready();
+      await net.flush();
+    });
+    expect(hook.result.current.myReady).toBe(true);
+
+    // A rematch init means the guest has to ready up again.
+    await act(async () => {
+      host.send({ type: 'init', settings: normalizeSettings({ mode: 'fixed', seed: 'two' }), tracks: [makeTrack({ id: 1 })] });
+      await net.flush();
+    });
+    expect(hook.result.current.myReady).toBe(false);
   });
 
   it('falls back to a local countdown when the peers’ clocks disagree', async () => {
@@ -367,6 +458,49 @@ describe('useOnlineDuel — rematch and leaving', () => {
       await net.flush();
     });
     expect(result.current.initPayload?.settings.seed).toBe(offer.seed);
+  });
+
+  it('re-arms the countdown for a rematch once the first race is over', async () => {
+    vi.useFakeTimers();
+    const { net, opponent, result } = await finished();
+
+    // race 1: the countdown runs out and lets go of itself
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(COUNTDOWN_MS + GO_LINGER_MS + 200);
+    });
+    expect(result.current.countdown).toBeNull();
+    expect(result.current.startAt).toBeNull();
+    expect(result.current.status).toBe('finished');
+
+    await act(async () => {
+      result.current.rematch();
+      await net.flush();
+    });
+    await act(async () => {
+      opponent.send({ type: 'rematchAccept' });
+      await net.flush();
+    });
+    expect(result.current.rematchSeed).toBeTruthy();
+    expect(result.current.myReady).toBe(false);
+    expect(result.current.countdown).toBeNull();
+
+    // race 2: a full, clean countdown again
+    await act(async () => {
+      result.current.sendInit({ mode: 'fixed', packIds: ['p'], rounds: 1 }, [makeTrack({ id: 1 })]);
+      opponent.send({ type: 'ready' });
+      result.current.start();
+      await net.flush();
+    });
+    expect(result.current.countdown).toBe(COUNTDOWN_MS / 1000);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(COUNTDOWN_MS + 200);
+    });
+    expect(result.current.countdown).toBe(0);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(GO_LINGER_MS + 100);
+    });
+    expect(result.current.countdown).toBeNull();
+    expect(result.current.startAt).toBeNull();
   });
 
   it('accepts an incoming rematch offer', async () => {

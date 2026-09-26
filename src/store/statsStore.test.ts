@@ -244,7 +244,7 @@ describe('export / import', () => {
         JSON.stringify({
           data: {
             totals: { games: 2, byMode: { classic: { games: 2, best: 10, avg: 5 } }, junk: true },
-            records: [{ id: 'ok' }, { nope: true }],
+            records: [{ id: 'ok', finishedAt: 1, score: 10, rounds: 1, correct: 1, mode: 'classic' }, { id: 'bare' }, { nope: true }],
             tracks: { 5: { trackId: 5, title: 't', artist: 'a', cover: '', timesSeen: 1, timesCorrect: 1, fastestClip: 0.1, lastSeen: 1 } },
             achievements: [{ id: 'needle-drop', at: 1, gameId: 'ok' }, 'garbage'],
             daily: { '2026-09-20': { score: 10, correct: 1, rounds: 1, grid: '🟩 0.1s' } },
@@ -260,6 +260,31 @@ describe('export / import', () => {
     expect(state.achievements).toHaveLength(1);
     expect(state.daily['2026-09-20'].date).toBe('2026-09-20');
     expect(state.tracks[5].fastestClip).toBe(0.1);
+  });
+});
+
+describe('record validation', () => {
+  const good = { id: 'good', finishedAt: 1_700_000_000_000, score: 500, rounds: 5, correct: 3, mode: 'classic' };
+  const bad = [
+    { id: 'bare' },
+    { id: 'no-date', score: 1, rounds: 1, mode: 'classic' },
+    { id: 'nan-score', finishedAt: 1, score: Number.NaN, rounds: 1, mode: 'classic' },
+    { id: 'string-rounds', finishedAt: 1, score: 1, rounds: '5', mode: 'classic' },
+    { id: 'bad-mode', finishedAt: 1, score: 1, rounds: 1, mode: 'karaoke' },
+  ];
+
+  it('import drops records without numeric finishedAt/score/rounds or with an unknown mode (P3-12)', () => {
+    expect(store().import(JSON.stringify({ totals: {}, records: [bad[0], good, ...bad.slice(1)], daily: {} }))).toBe(true);
+    expect(store().records.map((r) => r.id)).toEqual(['good']);
+  });
+
+  it('rehydrating a tampered localStorage payload drops them too', async () => {
+    localStorage.setItem(
+      STATS_STORAGE_KEY,
+      JSON.stringify({ state: { totals: {}, records: [...bad, good], tracks: {}, achievements: [], daily: {} }, version: STATS_VERSION }),
+    );
+    await useStatsStore.persist.rehydrate();
+    expect(store().records.map((r) => r.id)).toEqual(['good']);
   });
 });
 

@@ -42,6 +42,8 @@ import {
 export const COUNTDOWN_MS = 3000;
 /** A `startAt` further out than this means the peers' clocks disagree — fall back to a local 3 s. */
 export const MAX_COUNTDOWN_MS = 10000;
+/** How long the final "GO" frame stays on screen after the countdown reaches 0. */
+export const GO_LINGER_MS = 1000;
 export const EMOTE_TTL_MS = 4000;
 export const MAX_EMOTES = 8;
 
@@ -64,11 +66,17 @@ export interface OnlineDuelState {
   error: string | null;
   /** Local-clock epoch ms when the race starts, or null. */
   startAt: number | null;
-  /** Seconds left before the race starts: 3 → 0, then it stays 0. Null when nothing is scheduled. */
+  /**
+   * Seconds left before the race starts: 3 → 2 → 1 → 0 (the "GO" frame), then back to `null` about
+   * a second later so no screen is left holding a full-screen countdown after the race began.
+   * The `> 0 → 0` transition is the hand-off signal; `null` means nothing is scheduled.
+   */
   countdown: number | null;
   /** The agreed settings + track pool. Feed BOTH of these to `useGameStore.start`. */
   initPayload: InitMsg | null;
   opponentReady: boolean;
+  /** True once I have sent `ready` for the current init. Cleared by every new init / rematch. */
+  myReady: boolean;
   opponentProgress: ProgressMsg | null;
   opponentFinished: FinishedMsg | null;
   myFinished: FinishedMsg | null;
@@ -131,6 +139,7 @@ const IDLE: OnlineDuelState = {
   countdown: null,
   initPayload: null,
   opponentReady: false,
+  myReady: false,
   opponentProgress: null,
   opponentFinished: null,
   myFinished: null,
@@ -143,10 +152,18 @@ const IDLE: OnlineDuelState = {
 /** Cleared whenever a new race is being set up. */
 const PER_GAME: Pick<
   OnlineDuelState,
-  'startAt' | 'countdown' | 'opponentProgress' | 'opponentFinished' | 'myFinished' | 'rematchOffer' | 'rematchPending'
+  | 'startAt'
+  | 'countdown'
+  | 'myReady'
+  | 'opponentProgress'
+  | 'opponentFinished'
+  | 'myFinished'
+  | 'rematchOffer'
+  | 'rematchPending'
 > = {
   startAt: null,
   countdown: null,
+  myReady: false,
   opponentProgress: null,
   opponentFinished: null,
   myFinished: null,
@@ -160,6 +177,8 @@ const listeners = new Set<() => void>();
 let session: DuelSession | null = null;
 let unsubscribes: Array<() => void> = [];
 let countdownTimer: ReturnType<typeof setInterval> | null = null;
+/** Drops the "GO" frame a second after the race started. */
+let goTimer: ReturnType<typeof setTimeout> | null = null;
 let emoteTimers: Array<ReturnType<typeof setTimeout>> = [];
 let emoteCounter = 0;
 /** Seed to use on the next `sendInit` (set by the rematch handshake). */
@@ -186,6 +205,10 @@ function stopCountdown(): void {
     clearInterval(countdownTimer);
     countdownTimer = null;
   }
+  if (goTimer !== null) {
+    clearTimeout(goTimer);
+    goTimer = null;
+  }
 }
 
 function clearEmoteTimers(): void {
@@ -203,10 +226,30 @@ function scheduleStart(remoteStartAt: number): void {
   const startAt = delta >= 0 && delta <= MAX_COUNTDOWN_MS ? remoteStartAt : Date.now() + COUNTDOWN_MS;
   stopCountdown();
   set({ startAt, countdown: secondsLeft(startAt) });
+  /**
+   * The race is on: emit 0 exactly once (that transition is what hands both peers off to /play),
+   * then let go of the countdown. Parking on 0 forever used to leave a full-screen "GO" overlay on
+   * the lobby for anyone who came back to /duel later.
+   */
+  const land = (): void => {
+    stopCountdown();
+    if (state.countdown !== 0) set({ countdown: 0 });
+    goTimer = setTimeout(() => {
+      goTimer = null;
+      if (state.countdown === 0) set({ countdown: null, startAt: null });
+    }, GO_LINGER_MS);
+  };
+  if (secondsLeft(startAt) <= 0) {
+    land();
+    return;
+  }
   countdownTimer = setInterval(() => {
     const left = secondsLeft(startAt);
+    if (left <= 0) {
+      land();
+      return;
+    }
     if (left !== state.countdown) set({ countdown: left });
-    if (left <= 0) stopCountdown();
   }, 100);
 }
 
@@ -330,7 +373,9 @@ const actions: OnlineDuelActions = {
   },
 
   ready() {
-    session?.send({ type: 'ready' });
+    if (!session) return;
+    session.send({ type: 'ready' });
+    set({ myReady: true });
   },
 
   start() {

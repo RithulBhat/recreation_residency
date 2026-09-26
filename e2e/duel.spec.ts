@@ -178,6 +178,23 @@ test('duel · two browsers race each other', async ({ browser }) => {
 
     await expect(a).toHaveURL(/#\/play/, { timeout: 20_000 });
     await expect(b).toHaveURL(/#\/play/, { timeout: 20_000 });
+
+    /* ---- back to the lobby mid-race: no countdown left on top of it (P1-2) ---- */
+    await a.goBack();
+    await expect(a).toHaveURL(/#\/duel/, { timeout: 15_000 });
+    await settle(a);
+    // The overlay is scroll-locked and covers everything, so its absence is what makes the lobby usable.
+    await expect(a.getByTestId('duel-countdown')).toHaveCount(0);
+    await expect(a.getByTestId('room-code')).toBeVisible();
+    await expect(a).toHaveURL(/#\/duel/); // and no second hand-off drags us back to /play
+    await a.screenshot({ path: `${OUT}/back-to-lobby-desktop.png`, fullPage: true });
+    await expectNoHorizontalOverflow(a);
+
+    const leave = a.getByTestId('duel-leave');
+    await expect(leave).toBeVisible();
+    await leave.click({ timeout: 10_000 }); // times out if anything is covering the button
+    await expect(a.getByTestId('duel-same-device')).toBeVisible();
+
     expect(errors, 'uncaught page errors').toEqual([]);
   } finally {
     await hostCtx.close();

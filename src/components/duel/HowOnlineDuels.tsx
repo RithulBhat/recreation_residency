@@ -10,12 +10,12 @@ const BULLETS = [
   {
     icon: <Swords />,
     title: 'Same songs, same second',
-    body: 'Both devices race the identical seeded playlist, so nobody gets an easier round.',
+    body: 'Two solo runs through the identical seeded playlist — no buzzing in on each other. Most points wins.',
   },
   {
     icon: <ShieldQuestion />,
     title: 'Straight between browsers',
-    body: 'Scores travel peer-to-peer over WebRTC. No server ever sees your game.',
+    body: 'A signalling server only introduces the two browsers; guesses and scores go straight between them.',
   },
 ];
 

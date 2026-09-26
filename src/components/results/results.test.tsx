@@ -43,6 +43,7 @@ function duelStub(partial: Partial<UseOnlineDuel>): UseOnlineDuel {
     countdown: 0,
     initPayload: null,
     opponentReady: true,
+    myReady: false,
     opponentProgress: null,
     opponentFinished: null,
     myFinished: null,

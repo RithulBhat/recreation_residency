@@ -24,6 +24,16 @@ export function DuelOutcome({ duel, state }: DuelOutcomeProps) {
   const me = duel.me;
   const them = duel.opponent;
   const theirs = duel.opponentFinished;
+  const mineDone = duel.myFinished;
+  /** Equal scores are settled on correct calls, then on time (see `net/progress.outcome`) — say which. */
+  const tiebreak =
+    mineDone && theirs && mineDone.score === theirs.score
+      ? mineDone.correct !== theirs.correct
+        ? 'Same points — more correct calls takes it.'
+        : mineDone.durationMs !== theirs.durationMs
+          ? 'Same points, same calls — the faster run takes it.'
+          : null
+      : null;
   const counting = duel.countdown !== null && duel.countdown > 0;
   const rematchLabel = counting
     ? `Starting in ${duel.countdown}…`
@@ -58,6 +68,7 @@ export function DuelOutcome({ duel, state }: DuelOutcomeProps) {
           {them && <Avatar emoji={them.emoji} color={them.color} size="sm" name={them.name} />}
         </div>
       </div>
+      {tiebreak && <p className="mt-2 text-center text-xs text-muted">{tiebreak}</p>}
       <div className="mt-4 flex flex-wrap gap-2">
         <Button
           variant={duel.rematchOffer ? 'glow' : 'primary'}

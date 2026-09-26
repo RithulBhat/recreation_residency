@@ -26,7 +26,7 @@ import {
   Zap,
 } from 'lucide-react';
 import type { GameMode, GameSettings } from '@/types';
-import { sanitizeRoomCodeInput, useOnlineDuel } from '@/net';
+import { GO_LINGER_MS, sanitizeRoomCodeInput, useOnlineDuel } from '@/net';
 import { PoolError, loadPool, startLoadedGame } from '@/lib/startGame';
 import { applyPresetToSettings, findPreset, normalizeSettings } from '@/game/presets';
 import { useGameStore } from '@/store/gameStore';
@@ -58,6 +58,11 @@ import {
 
 /** Seconds of 'connecting' before we suggest a hotspot / same-device fallback. */
 const SLOW_CONNECT_MS = 10_000;
+/**
+ * How long after `startAt` the "GO" frame may still be shown. The store already drops `countdown`
+ * to null a second in; this is the belt-and-braces guard so a stale 0 can never cover the lobby.
+ */
+const GO_VISIBLE_MS = GO_LINGER_MS + 500;
 
 type Stage = 'choose' | 'online';
 
@@ -102,7 +107,6 @@ export default function Duel() {
   const [presetId, setPresetId] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [poolError, setPoolError] = useState<string | null>(null);
-  const [readied, setReadied] = useState(false);
   const [slow, setSlow] = useState(false);
 
   const me = useMemo(() => toPlayerConfig(name, look), [name, look]);
@@ -133,11 +137,6 @@ export default function Duel() {
     const id = window.setTimeout(() => setSlow(true), SLOW_CONNECT_MS);
     return () => window.clearTimeout(id);
   }, [duel.status]);
-
-  // A fresh init (first config, or a rematch) means the guest has to ready up again.
-  useEffect(() => {
-    setReadied(false);
-  }, [duel.initPayload]);
 
   // Handing off to /play. Both peers do this when their local countdown hits zero.
   const startedRef = useRef(false);
@@ -185,7 +184,6 @@ export default function Duel() {
 
   const onLeave = useCallback(() => {
     duel.leave();
-    setReadied(false);
     setSending(false);
     setPoolError(null);
     setStage(linkedCode.length === 6 ? 'online' : 'choose');
@@ -270,6 +268,13 @@ export default function Duel() {
       </Card>
     ) : null;
 
+  /**
+   * The overlay is for the 3-2-1 and the "GO" frame only. Anything else (a finished race, a lobby
+   * revisited with the browser Back button) must leave the page usable.
+   */
+  const showCountdown =
+    countdown !== null && (countdown > 0 || (duel.startAt !== null && Date.now() - duel.startAt < GO_VISIBLE_MS));
+
   /* ----------------------------------------------------- render */
 
   return (
@@ -277,7 +282,7 @@ export default function Duel() {
       <SectionHeading
         eyebrow="Head to head"
         title={<>Duel a <span className="text-gradient">friend</span></>}
-        description="Two devices, one room code. Identical songs in identical order — first ear wins."
+        description="Two devices, one room code. Identical songs in identical order — most points wins."
         size="lg"
         as="h1"
         action={
@@ -525,7 +530,7 @@ export default function Duel() {
               {duel.initPayload ? (
                 <>
                   <DuelSummary settings={duel.initPayload.settings} />
-                  {readied ? (
+                  {duel.myReady ? (
                     <p className="mt-5 flex items-start gap-2 text-sm font-semibold text-success" data-testid="duel-guest-ready">
                       <Check className="mt-0.5 size-4 shrink-0" aria-hidden />
                       You&rsquo;re ready — waiting for {opponentName} to start the race.
@@ -535,10 +540,7 @@ export default function Duel() {
                       variant="glow"
                       size="xl"
                       className="mt-5"
-                      onClick={() => {
-                        duel.ready();
-                        setReadied(true);
-                      }}
+                      onClick={duel.ready}
                       leadingIcon={<Check />}
                       data-testid="duel-ready"
                     >
@@ -562,8 +564,8 @@ export default function Duel() {
       <HowOnlineDuels />
       <Footer className="mt-0" />
 
-      {duel.countdown !== null && (
-        <CountdownOverlay seconds={duel.countdown} me={duel.me} opponent={duel.opponent} />
+      {showCountdown && (
+        <CountdownOverlay seconds={duel.countdown ?? 0} me={duel.me} opponent={duel.opponent} />
       )}
     </div>
   );
