@@ -11,6 +11,7 @@ import {
   PartyPopper,
   Play,
   Share2,
+  SlidersHorizontal,
   Sparkles,
   Swords,
   Timer,
@@ -18,6 +19,9 @@ import {
   Zap,
 } from 'lucide-react';
 import type { Pack } from '@/types';
+import type { LoadedGame } from '@/lib/startGame';
+import { useSettingsStore } from '@/store/settingsStore';
+import { useStartGame } from '@/hooks/useStartGame';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Vinyl, type VinylState } from '@/components/Vinyl';
@@ -27,7 +31,7 @@ import { PackCard } from '@/components/PackCard';
 import { SectionHeading } from '@/components/SectionHeading';
 import { HowItWorks } from '@/components/HowItWorks';
 import { Footer } from '@/components/Footer';
-import { ResumeBanner } from '@/components/ResumeGame';
+import { ReplaceGameDialog, ResumeBanner } from '@/components/ResumeGame';
 
 /* ------------------------------------------------------------------ */
 /* Fallback packs (until the catalog is wired)                          */
@@ -70,7 +74,9 @@ const FEATURES = [
 
 /* ------------------------------------------------------------------ */
 
-const CLIPS = ['0.1', '0.5', '2', '10'];
+// Values of (nearly) equal width in Unbounded — "2" alone is half the width of "0.5" and would leave
+// a hole in the reserved cell.
+const CLIPS = ['0.1', '0.5', '2.5', '10'];
 
 function ClipTicker() {
   const reduce = useReducedMotion();
@@ -81,8 +87,11 @@ function ClipTicker() {
     return () => window.clearInterval(id);
   }, [reduce]);
   const value = CLIPS[i] ?? '0.1';
+  // Proportional figures (no `tabular`): Unbounded's tabular "1" sits in a full digit cell and left a
+  // visible hole between "0.1" and "seconds". The cell is as wide as the widest value ("0.5" = 2.2ch)
+  // so the headline never re-wraps as it ticks; narrower values centre inside it.
   return (
-    <span className="inline-grid overflow-hidden align-bottom" style={{ minWidth: '2.1ch' }} aria-live="off">
+    <span className="inline-grid justify-items-center overflow-hidden align-bottom" style={{ minWidth: '2.2ch' }} aria-live="off">
       <AnimatePresence mode="popLayout" initial={false}>
         <motion.span
           key={value}
@@ -90,7 +99,7 @@ function ClipTicker() {
           animate={{ y: 0, opacity: 1 }}
           exit={reduce ? { opacity: 0 } : { y: '-110%', opacity: 0 }}
           transition={{ type: 'spring', stiffness: 380, damping: 32 }}
-          className="col-start-1 row-start-1 tabular"
+          className="col-start-1 row-start-1"
         >
           {value}
         </motion.span>
@@ -99,13 +108,19 @@ function ClipTicker() {
   );
 }
 
-function HeroVinyl() {
-  const navigate = useNavigate();
+interface HeroVinylProps {
+  /** Starts a game from the saved settings; resolves null when nothing started (declined / failed). */
+  onStart: () => Promise<LoadedGame | null>;
+}
+
+/** The hero record IS the play button: one tap loads the saved setup and lands on /play. */
+function HeroVinyl({ onStart }: HeroVinylProps) {
   const reduce = useReducedMotion();
   const [state, setState] = useState<VinylState>('idle');
   const [progress, setProgress] = useState(0);
   const raf = useRef<number | null>(null);
 
+  // A short needle-drop sweep while the pool loads; the ring parks at full if loading takes longer.
   useEffect(() => {
     if (state !== 'playing') return;
     const start = performance.now();
@@ -114,34 +129,31 @@ function HeroVinyl() {
       const t = dur === 0 ? 1 : Math.min(1, (now - start) / dur);
       setProgress(t);
       if (t < 1) raf.current = requestAnimationFrame(tick);
-      else {
-        setState('done');
-        window.setTimeout(() => navigate('/setup'), 350);
-      }
     };
     raf.current = requestAnimationFrame(tick);
     return () => {
       if (raf.current) cancelAnimationFrame(raf.current);
     };
-  }, [state, navigate, reduce]);
+  }, [state, reduce]);
+
+  const tap = () => {
+    if (state !== 'idle') return;
+    setState('playing');
+    void onStart().then((loaded) => {
+      if (loaded) return; // navigating away
+      setState('idle');
+      setProgress(0);
+    });
+  };
 
   return (
     <div className="relative mx-auto flex w-full max-w-sm flex-col items-center">
       <div className="pointer-events-none absolute inset-x-8 top-6 h-2/3 rounded-full bg-gradient-accent opacity-20 blur-3xl" aria-hidden />
-      <Vinyl
-        state={state}
-        progress={progress}
-        size="min(68vw, 340px)"
-        clipLabel="0.1s"
-        onClick={() => {
-          if (state === 'idle') setState('playing');
-        }}
-        aria-label="Start playing"
-      />
-      <div className="mt-6 h-14 w-full max-w-xs opacity-90">
+      <Vinyl state={state} progress={progress} size="clamp(200px, 62vw, 340px)" clipLabel="0.1s" onClick={tap} aria-label="Start playing" />
+      <div className="mt-3 h-9 w-full max-w-xs opacity-90 sm:mt-6 sm:h-14">
         <Visualizer analyser={null} active={false} variant="bars" bars={40} idleAmplitude={state === 'playing' ? 1 : 0.55} />
       </div>
-      <p className="mt-2 font-mono text-[11px] uppercase tracking-widest text-muted">Tap the record</p>
+      <p className="eyebrow-readable mt-2">{state === 'playing' ? 'Loading songs…' : 'Tap the record to play'}</p>
     </div>
   );
 }
@@ -155,8 +167,14 @@ export interface HomeProps {
 export default function Home({ packs }: HomeProps) {
   const navigate = useNavigate();
   const reduce = useReducedMotion();
+  const game = useStartGame();
+  const settings = useSettingsStore((s) => s.settings);
   const featured = (packs && packs.length > 0 ? packs.filter((p) => p.featured) : FALLBACK_PACKS).slice(0, 8);
   const list = featured.length >= 4 ? featured : (packs && packs.length > 0 ? packs : FALLBACK_PACKS).slice(0, 8);
+
+  // Songspot's whole advantage is "you are playing in one tap". Settings persist, so the CTA can
+  // start the last setup straight away; the lobby is one ghost link away for anyone who wants it.
+  const playNow = () => game.start(settings);
 
   const rise = (delay: number) =>
     reduce
@@ -166,43 +184,72 @@ export default function Home({ packs }: HomeProps) {
   return (
     <div className="flex flex-col gap-16 sm:gap-24">
       {/* Hero */}
-      <section className="grid items-center gap-8 pt-2 sm:pt-10 lg:grid-cols-[1.1fr_0.9fr] lg:gap-8" aria-labelledby="hero-title">
-        <div className="flex min-w-0 flex-col items-start">
-          <ResumeBanner className="mb-5 w-full sm:w-auto sm:min-w-80" />
-          <motion.div {...rise(0)}>
-            <Badge tone="accent" dot className="mb-5">
+      <section
+        className="flex flex-col gap-4 pt-1 sm:gap-8 sm:pt-10 lg:grid lg:grid-cols-[1.1fr_0.9fr] lg:items-center"
+        aria-labelledby="hero-title"
+      >
+        {/* `contents` below sm flattens the copy into the section so the record can sit between the
+            headline and the subhead on a phone (badge → headline → record → subhead → Play now). */}
+        <div className="contents sm:flex sm:min-w-0 sm:flex-col sm:items-start sm:gap-5">
+          <ResumeBanner className="order-first w-full sm:w-auto sm:min-w-80" />
+          <motion.div {...rise(0)} className="order-1">
+            <Badge tone="accent" dot>
               <Sparkles className="size-3" /> Free · no sign-up · nothing to install
             </Badge>
           </motion.div>
           <motion.h1
             id="hero-title"
             {...rise(0.1)}
-            className="max-w-full font-display text-[clamp(2rem,10.5vw,2.6rem)] font-black leading-[1.02] tracking-tight text-fg sm:text-6xl lg:text-[4.4rem]"
+            className="order-2 max-w-full font-display text-[clamp(1.9rem,9.2vw,2.6rem)] font-black leading-[1.02] tracking-tight text-fg sm:text-6xl lg:text-[4.4rem]"
           >
             Name the track from{' '}
             <span className="text-gradient whitespace-nowrap">
               <ClipTicker /> seconds.
             </span>
           </motion.h1>
-          <motion.p {...rise(0.18)} className="mt-5 max-w-xl text-base text-muted sm:text-lg">
-            Thousands of songs across <strong className="font-semibold text-fg">150+ packs</strong>, any clip length from 0.1 to 10 seconds,
-            duels, party mode, voice guessing and a daily challenge. Songspot walked so Songooner could sprint.
+          <motion.p {...rise(0.18)} className="order-4 max-w-xl text-base text-muted sm:text-lg">
+            Thousands of songs, <strong className="font-semibold text-fg">150+ packs</strong>, any clip from 0.1 to 10 seconds.
           </motion.p>
-          <motion.div {...rise(0.26)} className="mt-8 flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
-            <Button variant="glow" size="xl" to="/setup" leadingIcon={<Play className="fill-current" />} className="w-full sm:w-auto">
+          <motion.div {...rise(0.26)} className="order-5 flex w-full flex-col gap-2 sm:mt-3 sm:w-auto sm:flex-row sm:items-center sm:gap-3">
+            <Button
+              variant="glow"
+              size="xl"
+              onClick={() => void playNow()}
+              loading={game.loading}
+              leadingIcon={<Play className="fill-current" />}
+              className="w-full sm:w-auto"
+              data-testid="play-now"
+            >
               Play now
             </Button>
-            <Button variant="secondary" size="xl" to="/daily" leadingIcon={<CalendarDays />} className="w-full sm:w-auto">
-              Daily challenge
-            </Button>
+            <div className="flex items-center justify-center gap-1 sm:justify-start">
+              <Button variant="ghost" size="md" to="/setup" leadingIcon={<SlidersHorizontal />}>
+                Customise
+              </Button>
+              <Button variant="ghost" size="md" to="/daily" leadingIcon={<CalendarDays />}>
+                Daily
+              </Button>
+            </div>
           </motion.div>
+          {game.error && (
+            <p className="order-5 text-sm font-semibold text-danger" role="alert">
+              {game.error}{' '}
+              <Link to="/setup" className="font-semibold text-fg underline-offset-2 hover:underline">
+                Change the setup
+              </Link>
+            </p>
+          )}
         </div>
 
-        <motion.div {...rise(0.2)} className="py-2">
-          <HeroVinyl />
+        <motion.div {...rise(0.2)} className="order-3 sm:order-none sm:py-2">
+          <HeroVinyl onStart={playNow} />
         </motion.div>
 
-        <motion.ul {...rise(0.34)} className="flex flex-wrap justify-center gap-2 lg:col-span-2 lg:justify-start" aria-label="Highlights">
+        <motion.ul
+          {...rise(0.34)}
+          className="order-6 flex flex-wrap justify-center gap-2 sm:order-none lg:col-span-2 lg:justify-start"
+          aria-label="Highlights"
+        >
           {FEATURES.map((f) => (
             <li key={f.text} className="glass inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium text-fg/85 [&>svg]:size-3.5 [&>svg]:text-accent">
               {f.icon}
@@ -246,6 +293,7 @@ export default function Home({ packs }: HomeProps) {
               key={p.id}
               pack={p}
               size="sm"
+              showFeatured={false}
               className="w-44 shrink-0 snap-start sm:w-52"
               onToggle={(id) => navigate(`/setup?packs=${encodeURIComponent(id)}`)}
               onPlay={(id) => navigate(`/setup?packs=${encodeURIComponent(id)}&autostart=1`)}
@@ -267,15 +315,15 @@ export default function Home({ packs }: HomeProps) {
 
       {/* Closing CTA */}
       <section className="glass noise relative overflow-hidden rounded-4xl p-6 text-center sm:p-12" aria-labelledby="cta-title">
-        <div className="pointer-events-none absolute -left-20 -top-20 size-72 rounded-full bg-accent opacity-25 blur-3xl" aria-hidden />
-        <div className="pointer-events-none absolute -bottom-24 -right-16 size-72 rounded-full bg-accent-2 opacity-20 blur-3xl" aria-hidden />
+        <div className="pointer-events-none absolute -left-20 -top-20 size-72 rounded-full bg-accent-vivid opacity-25 blur-3xl" aria-hidden />
+        <div className="pointer-events-none absolute -bottom-24 -right-16 size-72 rounded-full bg-accent-2-vivid opacity-20 blur-3xl" aria-hidden />
         <div className="relative">
           <h2 id="cta-title" className="font-display text-2xl font-black tracking-tight text-fg sm:text-4xl">
             Think you know music? <span className="text-gradient">Prove it in 0.1s.</span>
           </h2>
           <p className="mx-auto mt-3 max-w-md text-sm text-muted sm:text-base">Grab a friend, pick a pack, and let the record spin.</p>
           <div className="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
-            <Button variant="glow" size="lg" to="/setup" leadingIcon={<Play className="fill-current" />}>
+            <Button variant="glow" size="lg" onClick={() => void playNow()} loading={game.loading} leadingIcon={<Play className="fill-current" />}>
               Play now
             </Button>
             <Button variant="secondary" size="lg" to="/duel" leadingIcon={<Swords />}>
@@ -286,6 +334,7 @@ export default function Home({ packs }: HomeProps) {
       </section>
 
       <Footer className="mt-0" />
+      <ReplaceGameDialog game={game} />
     </div>
   );
 }
