@@ -27,11 +27,15 @@ async function settle(page: Page, ms = 700) {
  * Open /play (loads the DEV hook) and start a real game from the given settings. The first-run coach
  * marks are pre-dismissed unless a test asks for them (`coach: true`).
  */
-async function startGame(page: Page, settings: Partial<GameSettings>, opts: { coach?: boolean } = {}) {
-  await page.addInitScript((coach) => {
-    localStorage.clear();
-    if (!coach) localStorage.setItem('sg:coach:play', 'done');
-  }, opts.coach ?? false);
+async function startGame(page: Page, settings: Partial<GameSettings>, opts: { coach?: boolean; stats?: unknown } = {}) {
+  await page.addInitScript(
+    ({ coach, stats }) => {
+      localStorage.clear();
+      if (!coach) localStorage.setItem('sg:coach:play', 'done');
+      if (stats !== undefined) localStorage.setItem('sg:stats', JSON.stringify(stats));
+    },
+    { coach: opts.coach ?? false, stats: opts.stats },
+  );
   await page.goto('/#/play');
   await expect(page.getByRole('heading', { name: 'No game in progress' })).toBeVisible();
   await page.waitForFunction(() => typeof window.__songooner?.start === 'function');
@@ -169,8 +173,10 @@ for (const [name, vp] of Object.entries(VIEWPORTS)) {
       return { title: t.title, artist: t.artist };
     });
     if (name === 'desktop') {
-      // H opens the hint menu (once the field is not focused), ↓ walks it, Enter takes a hint.
-      await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+      // Next hands focus to the field (a frame later); leave it, then H opens the hint menu, ↓ walks
+      // it and Enter takes a hint.
+      await expect(input).toBeFocused();
+      await input.blur();
       await page.keyboard.press('h');
       await expect(page.getByRole('dialog', { name: 'Hints' })).toBeVisible();
       await expect(page.getByRole('button', { name: /Release year hint/ })).toBeFocused();
@@ -194,12 +200,9 @@ for (const [name, vp] of Object.entries(VIEWPORTS)) {
     await expect(last).toContainText('Hints ×1');
     await expect(last).toContainText('First try');
     await expect(last).toContainText('Round score');
-    // First try at the run's only clip length: the 0.1 s Club stamp lands on the record.
+    // A 1 s win is not a 0.1 s Club win: no stamp, the outcome label carries the clip.
     await expect(page.getByTestId('outcome')).toHaveText(/Nailed it · 1s/i);
-    const stamp = page.getByTestId('club-stamp');
-    await expect(stamp).toBeVisible();
-    await expect(stamp).toContainText('1s');
-    await expect(stamp).toContainText('Club');
+    await expect(page.getByTestId('club-stamp')).toHaveCount(0);
     await expect(stage).toHaveAttribute('data-tonearm', 'rest');
     await settle(page);
     await page.screenshot({ path: `${OUT}/play-won-${name}.png`, fullPage: true });
@@ -531,6 +534,41 @@ test('play · first-run coach marks show once, walk three steps and never come b
   await expect(page.getByTestId('stage')).toBeVisible();
   await settle(page, 400);
   await expect(page.getByTestId('coach-marks')).toHaveCount(0);
+});
+
+test('play · the 0.1 s Club stamp lands on a win heard at 0.1 s, with the lifetime tally', async ({ page }) => {
+  test.setTimeout(120_000);
+  await page.setViewportSize(VIEWPORTS.mobile);
+  // Six 0.1 s wins on record already (the same figure the results card reads).
+  const stats = { state: { totals: { byClipBucket: { '0.1': { seen: 9, correct: 6 } } } }, version: 1 };
+  await startGame(page, { packIds: ['pop-hits'], mode: 'classic', rounds: 2, seed: 'e2e-club' }, { stats });
+  const stage = page.getByTestId('stage');
+  const input = page.getByRole('combobox', { name: 'Your guess' });
+  const answer = async () =>
+    page.evaluate(() => {
+      const s = window.__songooner!.gameStore.getState().state;
+      const t = s.rounds[s.currentRound].track;
+      return `${t.artist} - ${t.title}`;
+    });
+  await input.fill(await answer());
+  await input.press('Enter');
+  const stamp = page.getByTestId('club-stamp');
+  await expect(stamp).toBeVisible();
+  await expect(stamp).toContainText('0.1s');
+  await expect(stamp).toContainText('Club');
+  await expect(stamp).toContainText('×7');
+  await expect(page.getByTestId('outcome')).toHaveText(/Nailed it · 0.1s/i);
+  await settle(page, 1300);
+  await page.screenshot({ path: `${OUT}/club-stamp-mobile.png` });
+
+  // Round 2: a skip grows the clip to 0.3 s — that win is not a club win.
+  await page.getByTestId('reveal').filter({ visible: true }).getByRole('button', { name: 'Next song' }).click();
+  await expect(stage).not.toHaveAttribute('data-vinyl', 'loading', { timeout: 30_000 });
+  await page.getByRole('button', { name: 'Skip → 0.3s' }).click();
+  await input.fill(await answer());
+  await input.press('Enter');
+  await expect(page.getByTestId('outcome')).toHaveText(/Nailed it · 0.3s/i);
+  await expect(page.getByTestId('club-stamp')).toHaveCount(0);
 });
 
 test('play · touch autocomplete offers "Submit as is" on top of 44 px rows', async ({ browser }) => {

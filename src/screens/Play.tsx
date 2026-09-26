@@ -50,7 +50,8 @@ const TWO_COLUMN = '(min-width: 64rem)';
 export default function Play() {
   const state = useGameStore((s) => s.state);
   const { skip, giveUp, quit } = useGameStore.getState();
-  const perfectLifetime = useStatsStore((s) => s.totals.perfectRounds);
+  // Lifetime 0.1 s wins — the results card reads the same figure.
+  const clubLifetime = useStatsStore((s) => s.totals.byClipBucket['0.1'].correct);
   const { settings, status } = state;
   const round = currentRound(state);
   const playing = status === 'playing';
@@ -108,7 +109,7 @@ export default function Play() {
 
   const blur = coverBlur(round, settings);
   const hearing = roundOver && audio.vinylState === 'playing';
-  const stamp = roundOver ? clubStampFor(state, perfectLifetime) : null;
+  const stamp = roundOver ? clubStampFor(state, clubLifetime) : null;
   const reveal = (className?: string) => (
     <RevealCard state={state} onNext={actions.next} onHear={audio.hear} onStop={audio.stop} hearing={hearing} className={className} />
   );

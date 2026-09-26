@@ -7,7 +7,7 @@ export { Feedback, type FeedbackProps } from './Feedback';
 export { RoundChips, packSummary, currentStreak, type PackSummary } from './RoundChips';
 export { Tonearm, PIVOT, STYLUS, ANGLES, type TonearmMode, type TonearmProps } from './Tonearm';
 export { ClubStamp, type ClubStampProps } from './ClubStamp';
-export { outcomeLabel, isPerfectRound, clubStampFor, winningGuess, type OutcomeLabel, type OutcomeTone, type ClubStampData } from './outcome';
+export { outcomeLabel, isClubRound, clubStampFor, winningGuess, CLUB_CLIP, type OutcomeLabel, type OutcomeTone, type ClubStampData } from './outcome';
 export { RevealCard, breakdownFor, isLastRound, roundVerdict, type RevealCardProps } from './RevealCard';
 export { PlayersBar, BUZZ_KEYS, type PlayersBarProps } from './PlayersBar';
 export { PassPhoneDialog, type PassPhoneDialogProps } from './PassPhoneDialog';

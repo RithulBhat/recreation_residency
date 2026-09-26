@@ -3,7 +3,7 @@ import { createInitialState, reduce } from '@/game/engine';
 import { makeTrack } from '@/game/fixtures';
 import { normalizeSettings } from '@/game/presets';
 import type { GameState } from '@/types';
-import { clubStampFor, isPerfectRound, outcomeLabel } from './outcome';
+import { clubStampFor, isClubRound, outcomeLabel } from './outcome';
 
 const TRACKS = [makeTrack({ id: 1, title: 'Alpha' }), makeTrack({ id: 2, title: 'Bravo' }), makeTrack({ id: 3, title: 'Charlie' })];
 
@@ -30,15 +30,24 @@ describe('outcomeLabel', () => {
   });
 });
 
-describe('isPerfectRound / clubStampFor', () => {
-  it('needs a first-try win at the shortest clip of the run', () => {
+describe('isClubRound / clubStampFor', () => {
+  it('is about the clip heard on the winning try, not the try index or the run', () => {
     const s = start();
     const first = reduce(s, { type: 'guess', text: s.rounds[0].track.title, now: 2000 });
-    expect(isPerfectRound(first.rounds[0], first.settings)).toBe(true);
+    expect(isClubRound(first.rounds[0])).toBe(true);
+    // A skip grows the clip to 0.3 s: that win is not a 0.1 s win.
     const skipped = reduce(s, { type: 'skip', now: 1500 });
-    const second = reduce(skipped, { type: 'guess', text: s.rounds[0].track.title, now: 2000 });
-    expect(isPerfectRound(second.rounds[0], second.settings)).toBe(false);
-    expect(clubStampFor(second, 4)).toBeNull();
+    const later = reduce(skipped, { type: 'guess', text: s.rounds[0].track.title, now: 2000 });
+    expect(isClubRound(later.rounds[0])).toBe(false);
+    expect(clubStampFor(later, 4)).toBeNull();
+    // A fixed 1 s game never qualifies, even first try.
+    const fixed = start({ mode: 'fixed', clipMode: 'fixed', clipLength: 1, tries: 3 });
+    const fixedWin = reduce(fixed, { type: 'guess', text: fixed.rounds[0].track.title, now: 2000 });
+    expect(clubStampFor(fixedWin, 9)).toBeNull();
+    // A fixed 0.1 s game does — on any try, the player only ever heard 0.1 s.
+    const tenth = start({ mode: 'fixed', clipMode: 'fixed', clipLength: 0.1, tries: 3 });
+    const secondTry = reduce(reduce(tenth, { type: 'guess', text: 'nope', now: 1500 }), { type: 'guess', text: tenth.rounds[0].track.title, now: 2000 });
+    expect(isClubRound(secondTry.rounds[0])).toBe(true);
   });
 
   it('counts the lifetime tally plus this game, and reports the clip and score', () => {
@@ -48,9 +57,5 @@ describe('isPerfectRound / clubStampFor', () => {
     const next = reduce(won, { type: 'next', now: 3000 });
     const wonAgain = reduce(next, { type: 'guess', text: next.rounds[1].track.title, now: 4000 });
     expect(clubStampFor(wonAgain, 5)?.count).toBe(7);
-    // A fixed-clip run: the only clip length is the shortest one.
-    const fixed = start({ mode: 'fixed', clipMode: 'fixed', clipLength: 2, tries: 3 });
-    const fixedWin = reduce(fixed, { type: 'guess', text: fixed.rounds[0].track.title, now: 2000 });
-    expect(clubStampFor(fixedWin, 0)?.clip).toBe(2);
   });
 });
