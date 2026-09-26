@@ -65,8 +65,14 @@ export const AUTOPLAY_BLOCKED = 'Audio needs a tap to start';
 const SCHEDULE_LEAD = 0.015;
 /** Fade applied when a clip is stopped mid-way (avoids a click). */
 const STOP_FADE = 0.008;
-/** After a fetch/decode failure a url stays on the element path for this long before Web Audio is retried. */
-const FAILURE_TTL_MS = 60_000;
+/**
+ * After a fetch/decode failure a url stays on the element path for this long before Web Audio is
+ * retried. Short on purpose: the element backend can't apply effects (reverse / speed / pitch /
+ * lo-fi), so a clip that fell back must return to Web Audio as soon as the CDN is reachable again.
+ * Any successful fetch+decode also clears every mark (see `loadBuffer`), so a retry that works on
+ * one url immediately un-degrades the rest.
+ */
+const FAILURE_TTL_MS = 8_000;
 /** Shortest wall-clock clip we will schedule. */
 const MIN_WALL = 0.02;
 /** `AudioContext.resume()` can hang forever outside a user gesture; never wait longer than this. */
@@ -318,7 +324,9 @@ class EngineImpl implements SongoonerAudioEngine {
       const data = await res.arrayBuffer();
       const buffer = await decode(ctx, data);
       this.remember(url, buffer);
-      this.failedAt.delete(url);
+      // A fetch+decode that worked means the network/CDN is back: drop every "recently failed" mark
+      // so other urls go straight back to Web Audio (with effects) instead of the element fallback.
+      this.failedAt.clear();
       return buffer;
     })();
     this.inflight.set(url, task);

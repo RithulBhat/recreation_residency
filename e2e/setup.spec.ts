@@ -54,6 +54,32 @@ async function expectIconButtonsLabelled(page: Page) {
   expect(missing, 'icon buttons without aria-label').toEqual([]);
 }
 
+/**
+ * Coarse-pointer hit areas: the visual box, or the `touch-hit-44` ::before slop, must reach 44 px.
+ * Hidden elements (display:none, zero-size, collapsed panels) are skipped.
+ */
+async function expectTouchTargets(page: Page, selector: string) {
+  const coarse = await page.evaluate(() => matchMedia('(pointer: coarse)').matches);
+  expect(coarse, 'test context must emulate a coarse pointer').toBe(true);
+  const small = await page.evaluate((sel) => {
+    const out: string[] = [];
+    for (const el of document.querySelectorAll<HTMLElement>(sel)) {
+      const r = el.getBoundingClientRect();
+      if (r.width === 0 || r.height === 0) continue;
+      const before = getComputedStyle(el, '::before');
+      const slop = before.content !== 'none' && before.position === 'absolute';
+      const w = Math.max(r.width, slop ? parseFloat(before.width) || 0 : 0);
+      const h = Math.max(r.height, slop ? parseFloat(before.height) || 0 : 0);
+      if (w < 44 || h < 44) {
+        const label = el.getAttribute('aria-label') ?? el.textContent?.trim().slice(0, 30) ?? '';
+        out.push(`${Math.round(w)}\u00d7${Math.round(h)} ${el.tagName.toLowerCase()} "${label}"`);
+      }
+    }
+    return out;
+  }, selector);
+  expect(small, `touch targets under 44px for ${selector}`).toEqual([]);
+}
+
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.clear();
@@ -344,4 +370,95 @@ test('setup · mobile mix packs sheet + collapsible sections', async ({ page }) 
   await page.keyboard.press('Escape');
   await expect(dialog).toBeHidden();
   await expect(page.getByRole('list', { name: 'Selected packs' }).getByRole('listitem')).toHaveCount(2);
+});
+
+test('setup · party with 8 players fits a 390 px phone', async ({ page }) => {
+  await page.setViewportSize(VIEWPORTS.mobile);
+  await page.goto('/#/setup?mode=party');
+  await settle(page);
+  const add = page.getByRole('button', { name: 'Add player' });
+  for (let i = 0; i < 6; i++) await add.click();
+  await expect(page.getByRole('list', { name: 'Players' }).getByRole('listitem')).toHaveCount(8);
+  await expect(add).toBeDisabled(); // 8 is the cap
+  await expect(page.getByRole('textbox', { name: 'Player 8 name' })).toBeVisible();
+  await page.waitForTimeout(300);
+  await expectNoHorizontalOverflow(page);
+  await page.screenshot({ path: `${OUT}/setup-party8-mobile.png`, fullPage: true });
+
+  // …and the 320 px floor too, where the name fields have the least room.
+  await page.setViewportSize({ width: 320, height: 640 });
+  await page.waitForTimeout(400);
+  await expectNoHorizontalOverflow(page);
+});
+
+test.describe('home · featured pack autostart', () => {
+  test.use({ hasTouch: true });
+
+  test('a featured pack\u2019s play button asks before replacing a live game', async ({ page }) => {
+    await page.setViewportSize(VIEWPORTS.mobile);
+    await page.goto('/#/setup');
+    await settle(page);
+    await page.waitForFunction(() => typeof window.__songooner?.start === 'function');
+    const firstId = await page.evaluate(async () => {
+      await window.__songooner!.start({ packIds: ['pop-hits'], mode: 'classic', rounds: 10, seed: 'e2e-autostart' });
+      return window.__songooner!.gameStore.getState().state.id;
+    });
+
+    await page.goto('/#/');
+    await settle(page);
+    const featured = page.locator('section[aria-labelledby="packs-title"]');
+    const playPack = featured.locator('button[aria-label^="Play "]').first();
+    const packName = (await playPack.getAttribute('aria-label'))!.replace(/^Play /, '');
+    await playPack.tap();
+
+    // The autostart lands on the lobby and asks, exactly like pressing Start would.
+    const dialog = page.getByRole('dialog', { name: 'Replace the game in progress?' });
+    await expect(dialog).toBeVisible();
+    await expect(dialog).toContainText('Round 1/10');
+    await page.screenshot({ path: `${OUT}/home-autostart-replace-dialog-mobile.png`, fullPage: false });
+
+    // "Keep it" declines: the live game survives and nothing navigated to /play.
+    await dialog.getByRole('button', { name: 'Keep it' }).click();
+    await expect(dialog).toBeHidden();
+    expect(await page.evaluate(() => location.hash)).toBe('#/setup');
+    expect(await page.evaluate(() => window.__songooner!.gameStore.getState().state.id)).toBe(firstId);
+    expect(await page.evaluate(() => window.__songooner!.gameStore.getState().state.status)).toBe('playing');
+    // the tapped pack was still applied to the lobby, so Start is one tap away
+    await expect(page.getByRole('list', { name: 'Selected packs' })).toContainText(packName);
+  });
+});
+
+test.describe('setup · touch targets on a coarse pointer', () => {
+  test.use({ hasTouch: true, isMobile: true });
+
+  test('pack chips, stage chips and every other lobby control reach 44 px', async ({ page }) => {
+    await page.setViewportSize(VIEWPORTS.mobile);
+    await page.goto('/#/setup');
+    await settle(page);
+
+    // The pack chips' Remove \u2715 was the worst offender in the app at 28\u00d728.
+    const packChips = page.getByRole('list', { name: 'Selected packs' });
+    await expect(packChips.getByRole('button', { name: /^Remove / }).first()).toBeVisible();
+    await expectTouchTargets(page, '[aria-label="Selected packs"] button');
+    await expectTouchTargets(page, '[aria-label="Clip stages"] button');
+    // …and nothing else in the lobby is under 44 px either.
+    await expectTouchTargets(page, 'main button, main a[href], main [role="radio"], main [role="switch"]');
+
+    // A second pack makes Remove enabled (it is disabled at one pack) — still 44 px.
+    await page.getByRole('button', { name: 'Mix packs' }).click();
+    const sheet = page.getByRole('dialog', { name: 'Mix packs' });
+    await sheet.getByRole('button', { name: /^Add / }).nth(1).click();
+    await page.keyboard.press('Escape');
+    await expect(sheet).toBeHidden();
+    await expect(packChips.getByRole('listitem')).toHaveCount(2);
+    await expectTouchTargets(page, '[aria-label="Selected packs"] button');
+
+    // The pack browser's own small controls (Clear / Surprise me / tag chips / selection bar).
+    await page.goto('/#/packs');
+    await settle(page);
+    await page.getByRole('button', { name: /^Add / }).first().click();
+    await expect(page.getByRole('button', { name: 'Play 1', exact: true })).toBeVisible();
+    // the floating selection bar is portalled to <body>, so it needs its own selector
+    await expectTouchTargets(page, 'main button, main a[href], main [role="radio"], main [role="tab"], [data-testid="pack-selection-bar"] button');
+  });
 });

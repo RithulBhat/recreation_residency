@@ -365,6 +365,75 @@ describe('element fallback', () => {
     expect(play).toHaveBeenCalledTimes(2);
   });
 
+  // The element backend can apply no effects, so the "recently failed" window has to be short and
+  // must end the moment the network is demonstrably back — otherwise reverse/speed/pitch/lo-fi are
+  // silently dropped for the whole window after a single CDN blip.
+  it('retries Web Audio ~8 s after a failure, not a minute later', async () => {
+    let now = 1_700_000_000_000;
+    vi.spyOn(Date, 'now').mockImplementation(() => now);
+    let offline = true;
+    const fetchFn = vi.fn<FetchLike>(async () => {
+      if (offline) throw new TypeError('Failed to fetch');
+      return okResponse;
+    });
+    mockMedia();
+    const ctx = new FakeAudioContext();
+    const engine = createAudioEngine({ createContext: () => ctx.asAudioContext(), fetchFn });
+
+    await engine.playClip({ url: url(1), offset: 0, duration: 0.05 });
+    expect(engine.getBackend()).toBe('element');
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+
+    // Inside the window the url stays on the element path (no refetch storm while the CDN is down).
+    offline = false;
+    now += 7_000;
+    await engine.playClip({ url: url(1), offset: 0, duration: 0.05 });
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+    expect(engine.getBackend()).toBe('element');
+
+    // Just past it, Web Audio (and therefore the effect chain) is tried again.
+    now += 2_000;
+    const done = engine.playClip({ url: url(1), offset: 0, duration: 0.05 });
+    await waitForSource(ctx);
+    expect(fetchFn).toHaveBeenCalledTimes(2);
+    expect(engine.getBackend()).toBe('webaudio');
+    ctx.endAllSources();
+    await done;
+  });
+
+  it('any successful fetch+decode clears every failure mark, so effects come back at once', async () => {
+    const now = 1_700_000_000_000;
+    vi.spyOn(Date, 'now').mockImplementation(() => now); // the TTL never expires on its own here
+    const offline = new Set([url(1), url(2)]);
+    const fetchFn = vi.fn<FetchLike>(async (u) => {
+      if (offline.has(u)) throw new TypeError('Failed to fetch');
+      return okResponse;
+    });
+    mockMedia();
+    const ctx = new FakeAudioContext();
+    const engine = createAudioEngine({ createContext: () => ctx.asAudioContext(), fetchFn });
+
+    await engine.playClip({ url: url(1), offset: 0, duration: 0.05 });
+    await engine.playClip({ url: url(2), offset: 0, duration: 0.05 });
+    expect(engine.getBackend()).toBe('element');
+
+    // The CDN is back: the next round's preload succeeds, which un-marks the urls that had failed.
+    offline.clear();
+    await expect(engine.preloadStrict(url(3))).resolves.toBeUndefined();
+
+    const done = engine.playClip({ url: url(1), offset: 0, duration: 0.05 });
+    await waitForSource(ctx);
+    expect(engine.getBackend()).toBe('webaudio');
+    ctx.endAllSources();
+    await done;
+    // url(2) recovered with it — the mark is cleared for every url, not just the one that succeeded.
+    const again = engine.playClip({ url: url(2), offset: 0, duration: 0.05 });
+    await waitForSource(ctx);
+    expect(engine.getBackend()).toBe('webaudio');
+    ctx.endAllSources();
+    await again;
+  });
+
   it('falls back on a decode error and rejects with a clear message when the element fails too', async () => {
     const ctx = new FakeAudioContext();
     ctx.decodeError = new Error('bad mp3');

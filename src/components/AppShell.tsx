@@ -102,7 +102,7 @@ export function AppShell({
       {/* Top bar */}
       {/* In focus mode on a sideways phone the 64 px bar is a fifth of the screen — the stage gets it back. */}
       <header className={cn('sticky top-0 z-40 pt-safe', immersive && 'landscape-phone:hidden')}>
-        <div className="glass border-x-0 border-t-0 bg-bg/80">
+        <div className="glass border-x-0 border-t-0 bg-bg/90">
           <div className={cn('mx-auto flex h-16 w-full items-center gap-3 px-4 sm:px-6', widths[width])}>
             <Link to="/" className="flex min-h-11 min-w-0 items-center rounded-xl focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent-2" aria-label="Songooner home">
               <Logo size="md" />
@@ -151,7 +151,7 @@ export function AppShell({
       {/* Mobile bottom tab bar */}
       {!immersive && (
         <nav className="fixed inset-x-0 bottom-0 z-40 md:hidden" aria-label="Primary mobile">
-          <div className="glass-strong border-x-0 border-b-0 bg-bg/92 pb-safe">
+          <div className="glass-strong border-x-0 border-b-0 bg-bg/97 pb-safe">
             <ul className="grid h-[4.5rem] grid-cols-5 px-1">
               {MOBILE_NAV.map((n) => (
                 <li key={n.to} className="min-w-0">

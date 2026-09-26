@@ -145,7 +145,7 @@ export function PackGrid({
           </Chip>
         ))}
         {tags.length > 0 && (
-          <button type="button" onClick={() => setTags([])} className="h-8 shrink-0 px-2 text-xs font-semibold text-muted hover:text-fg">
+          <button type="button" onClick={() => setTags([])} className="touch-hit-44 h-8 shrink-0 px-2 text-xs font-semibold text-muted hover:text-fg">
             Clear tags
           </button>
         )}
@@ -157,7 +157,7 @@ export function PackGrid({
       type="button"
       aria-label="Clear search"
       onClick={() => setQuery('')}
-      className="grid size-8 place-items-center rounded-full text-muted hover:bg-surface hover:text-fg"
+      className="touch-hit-44 grid size-8 place-items-center rounded-full text-muted hover:bg-surface hover:text-fg"
     >
       <X className="size-4" />
     </button>
@@ -258,7 +258,7 @@ export function PackGrid({
           {hasFilters && ' match'}
         </span>
         {onSurprise && (
-          <button type="button" onClick={onSurprise} className="inline-flex items-center gap-1 font-semibold text-accent hover:underline">
+          <button type="button" onClick={onSurprise} className="touch-hit-44 inline-flex items-center gap-1 font-semibold text-accent hover:underline">
             <Shuffle className="size-3.5" /> Surprise me
           </button>
         )}
@@ -315,7 +315,7 @@ export function PackGrid({
                   </div>
                 </div>
                 {onClearSelection && (
-                  <button type="button" onClick={onClearSelection} className="hidden h-9 px-2 text-xs font-semibold text-muted hover:text-fg sm:block">
+                  <button type="button" onClick={onClearSelection} className="touch-hit-44 hidden h-9 px-2 text-xs font-semibold text-muted hover:text-fg sm:block">
                     Clear
                   </button>
                 )}

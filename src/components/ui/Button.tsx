@@ -92,6 +92,8 @@ export function Button(props: ButtonProps) {
     baseClasses,
     buttonSizeClasses[size],
     buttonVariantClasses[variant],
+    // 36 px is under the 44 px touch minimum: give the small size invisible hit slop on coarse pointers.
+    size === 'sm' && 'touch-hit-44',
     size === 'xl' && 'font-display tracking-tight',
     pill && 'rounded-full',
     fullWidth && 'w-full',

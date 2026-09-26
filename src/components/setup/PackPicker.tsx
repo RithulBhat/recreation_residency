@@ -61,7 +61,7 @@ export function PackPicker() {
               aria-label={`Remove ${p.name}`}
               disabled={packs.length <= 1}
               onClick={() => toggle(p.id)}
-              className="grid size-7 place-items-center rounded-full text-muted transition-colors hover:bg-black/20 hover:text-fg disabled:opacity-30"
+              className="touch-hit-44 grid size-7 place-items-center rounded-full text-muted transition-colors hover:bg-black/20 hover:text-fg disabled:opacity-30"
             >
               <X className="size-3.5" />
             </button>

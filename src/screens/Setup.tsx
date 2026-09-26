@@ -72,8 +72,9 @@ export default function Setup() {
     if (preset) store.applyPreset(preset);
     if (Object.keys(patch).length) store.update(patch);
     if (params.get('share') === '1') setNotice('Finish any game and share the challenge link from the results screen — your friend gets the same songs.');
-    // Autostart is an explicit "play this pack now" tap, so it never asks about a live game.
-    if (params.get('autostart') === '1') void start(useSettingsStore.getState().settings, { force: true });
+    // Autostart (Home/Packs "play this pack now") goes through the same replace-game confirmation as
+    // Start: ReplaceGameDialog below picks the pending start up, so a live game is never silently lost.
+    if (params.get('autostart') === '1') void start(useSettingsStore.getState().settings);
     setParams({}, { replace: true });
   }, [params, setParams, start]);
 
@@ -102,7 +103,7 @@ export default function Setup() {
         <div className="glass flex items-start gap-3 rounded-2xl px-4 py-3 text-sm text-fg" role="status">
           <Info className="mt-0.5 size-4 shrink-0 text-accent" aria-hidden />
           <span className="flex-1">{notice}</span>
-          <button type="button" aria-label="Dismiss" onClick={() => setNotice(null)} className="grid size-7 place-items-center rounded-full text-muted hover:bg-surface hover:text-fg">
+          <button type="button" aria-label="Dismiss" onClick={() => setNotice(null)} className="touch-hit-44 grid size-7 place-items-center rounded-full text-muted hover:bg-surface hover:text-fg">
             <X className="size-4" />
           </button>
         </div>

@@ -51,6 +51,10 @@ function PlayerRow({ player, index, removable, onChange, onRemove }: RowProps) {
           </button>
         }
       >
+        {/* NOTE: the emoji (32 px) / colour (28 px) swatches are still under the 44 px touch minimum.
+            A 44 px grid needs 6 columns × 4 rows, which makes the popover ~320 px tall and slides the
+            colour row underneath the fixed StartBar on a phone — it needs a flip-up placement in
+            `Popover` first, so it is deliberately left alone here. */}
         <div className="p-1">
           <div className="grid grid-cols-8 gap-1" role="group" aria-label="Emoji">
             {PLAYER_EMOJI.map((e) => (

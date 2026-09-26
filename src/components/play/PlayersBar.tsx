@@ -40,7 +40,7 @@ function PlayerCard({
       <Avatar emoji={player.emoji} color={player.color} size="sm" name={player.name} active={active} />
       <div className="min-w-0 flex-1 leading-tight">
         <div className="truncate text-sm font-semibold text-fg">{player.name}</div>
-        <div className="flex items-center gap-2 font-mono text-xs text-muted tabular">
+        <div className="flex min-w-0 items-center gap-2 overflow-hidden font-mono text-xs text-muted tabular">
           <NumberTicker value={player.score} animateOnMount={false} className="text-fg" />
           {player.streak >= 2 && (
             <span className="inline-flex items-center gap-0.5 text-warn">

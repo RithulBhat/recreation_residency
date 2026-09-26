@@ -34,6 +34,7 @@ export function PackSelectionBar({ selected, loading, error, onPlay, onAddToSetu
           exit={reduce ? { opacity: 0 } : { opacity: 0, y: 24 }}
           transition={{ type: 'spring', stiffness: 400, damping: 34 }}
           className="pointer-events-none fixed inset-x-0 z-40 flex justify-center px-3 md:px-6"
+          data-testid="pack-selection-bar"
           style={{ bottom }}
         >
           <div className="glass-strong pointer-events-auto flex w-full max-w-2xl flex-wrap items-center justify-end gap-2 rounded-3xl bg-bg-elevated/95 p-2 pl-4 shadow-xl">
@@ -63,7 +64,7 @@ export function PackSelectionBar({ selected, loading, error, onPlay, onAddToSetu
             ) : (
               <>
                 {selected.length > 0 && !loading && (
-                  <button type="button" onClick={onClear} className="h-9 px-2 text-xs font-semibold text-muted hover:text-fg">
+                  <button type="button" onClick={onClear} className="touch-hit-44 h-9 px-2 text-xs font-semibold text-muted hover:text-fg">
                     Clear
                   </button>
                 )}

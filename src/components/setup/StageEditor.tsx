@@ -67,7 +67,7 @@ export function StageEditor({ stages, onChange }: StageEditorProps) {
                 disabled={disabled}
                 onClick={() => toggle(v)}
                 className={cn(
-                  'h-10 min-w-12 rounded-full border px-3 font-mono text-sm font-semibold tabular transition-[background-color,border-color,color,transform] active:scale-95 disabled:cursor-not-allowed',
+                  'touch-hit-44 h-10 min-w-12 rounded-full border px-3 font-mono text-sm font-semibold tabular transition-[background-color,border-color,color,transform] active:scale-95 disabled:cursor-not-allowed',
                   on
                     ? 'border-transparent bg-accent-solid text-accent-fg shadow-glow disabled:opacity-80'
                     : 'border-border bg-surface text-muted hover:bg-surface-strong hover:text-fg disabled:opacity-40',

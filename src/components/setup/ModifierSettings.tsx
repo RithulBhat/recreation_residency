@@ -58,7 +58,7 @@ export function ModifierSettings() {
           type="button"
           onClick={() => update({ modifiers: { ...NEUTRAL_MODIFIERS } })}
           disabled={active.length === 0}
-          className="inline-flex h-9 items-center gap-1.5 rounded-xl px-2 text-xs font-semibold text-muted transition-colors hover:text-fg disabled:opacity-40"
+          className="touch-hit-44 inline-flex h-9 items-center gap-1.5 rounded-xl px-2 text-xs font-semibold text-muted transition-colors hover:text-fg disabled:opacity-40"
         >
           <RotateCcw className="size-3.5" aria-hidden />
           Reset modifiers
