@@ -43,6 +43,8 @@ interface CompactPayload {
   g: CompactSettings;
   b?: string;
   c?: number;
+  /** track ids */
+  i?: number[];
 }
 
 function encodeModifiers(m: Modifiers): unknown[] {
@@ -97,6 +99,9 @@ export function encodeChallenge(p: ChallengePayload): string {
   const compact: CompactPayload = { v: 1, s: p.seed, g };
   if (p.by) compact.b = p.by.slice(0, 24);
   if (typeof p.score === 'number' && Number.isFinite(p.score)) compact.c = Math.round(p.score);
+  if (Array.isArray(p.trackIds) && p.trackIds.length > 0) {
+    compact.i = p.trackIds.filter((n) => Number.isInteger(n) && n > 0).slice(0, 60);
+  }
   return toBase64Url(JSON.stringify(compact));
 }
 
@@ -147,6 +152,10 @@ export function decodeChallenge(code: string): ChallengePayload | null {
   const payload: ChallengePayload = { v: 1, seed: raw.s.trim(), settings };
   if (typeof raw.b === 'string' && raw.b.trim()) payload.by = raw.b.trim().slice(0, 24);
   if (typeof raw.c === 'number' && Number.isFinite(raw.c)) payload.score = raw.c;
+  if (Array.isArray(raw.i)) {
+    const ids = raw.i.filter((n): n is number => typeof n === 'number' && Number.isInteger(n) && n > 0);
+    if (ids.length > 0) payload.trackIds = ids.slice(0, 60);
+  }
   return payload;
 }
 

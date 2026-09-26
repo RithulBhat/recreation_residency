@@ -211,4 +211,6 @@ export interface ChallengePayload {
   /** challenger's result, optional */
   by?: string;
   score?: number;
+  /** exact tracks played (Deezer ids), so the friend gets the same songs regardless of pool changes */
+  trackIds?: number[];
 }
