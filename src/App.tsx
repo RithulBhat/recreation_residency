@@ -10,6 +10,14 @@ import { useTheme } from '@/hooks/useTheme';
 const Home = lazy(() => import('@/screens/Home'));
 const Gallery = lazy(() => import('@/screens/Gallery'));
 const Placeholder = lazy(() => import('@/screens/Placeholder'));
+const Packs = lazy(() => import('@/screens/Packs'));
+const Setup = lazy(() => import('@/screens/Setup'));
+const Play = lazy(() => import('@/screens/Play'));
+const Results = lazy(() => import('@/screens/Results'));
+const Daily = lazy(() => import('@/screens/Daily'));
+const Stats = lazy(() => import('@/screens/Stats'));
+const Duel = lazy(() => import('@/screens/Duel'));
+const Challenge = lazy(() => import('@/screens/Challenge'));
 
 const VOLUME_KEY = 'sg:volume';
 const MUTED_KEY = 'sg:muted';
@@ -67,14 +75,14 @@ export default function App() {
           <Suspense fallback={<BrandedLoader fullscreen />}>
             <Routes location={location}>
               <Route path="/" element={<Home />} />
-              <Route path="/packs" element={<Placeholder />} />
-              <Route path="/setup" element={<Placeholder />} />
-              <Route path="/play" element={<Placeholder />} />
-              <Route path="/results" element={<Placeholder />} />
-              <Route path="/daily" element={<Placeholder />} />
-              <Route path="/stats" element={<Placeholder />} />
-              <Route path="/duel" element={<Placeholder />} />
-              <Route path="/c/:code" element={<Placeholder />} />
+              <Route path="/packs" element={<Packs />} />
+              <Route path="/setup" element={<Setup />} />
+              <Route path="/play" element={<Play />} />
+              <Route path="/results" element={<Results />} />
+              <Route path="/daily" element={<Daily />} />
+              <Route path="/stats" element={<Stats />} />
+              <Route path="/duel" element={<Duel />} />
+              <Route path="/c/:code" element={<Challenge />} />
               <Route path="/gallery" element={<Gallery />} />
               <Route path="*" element={<Placeholder name="Not found" />} />
             </Routes>
