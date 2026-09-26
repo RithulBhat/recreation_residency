@@ -12,7 +12,8 @@ export interface PlayHotkeys {
   skip: () => void;
   next: () => void;
   buzzAt: (index: number) => void;
-  focusHint: () => void;
+  /** Open the hint menu (and move focus into it). */
+  openHints: () => void;
   openHelp: () => void;
   openQuit: () => void;
   voice: Pick<UseVoiceGuess, 'supported' | 'start' | 'stop'>;
@@ -22,7 +23,7 @@ export interface PlayHotkeys {
  * Space = play/replay · Enter = next (after the reveal) · → = skip · H = hints · M (hold) = talk ·
  * A / L = buzz · N = next · Esc = quit · ? = help. Shortcuts pause while typing, except Enter/Esc.
  */
-export function usePlayHotkeys({ playing, roundOver, modal, allowSkip, play, skip, next, buzzAt, focusHint, openHelp, openQuit, voice }: PlayHotkeys): void {
+export function usePlayHotkeys({ playing, roundOver, modal, allowSkip, play, skip, next, buzzAt, openHints, openHelp, openQuit, voice }: PlayHotkeys): void {
   const live = !modal && (playing || roundOver);
 
   // Space plays the clip — unless a button/link has focus, which keeps its native activation.
@@ -42,7 +43,9 @@ export function usePlayHotkeys({ playing, roundOver, modal, allowSkip, play, ski
       right: () => {
         if (playing && allowSkip) skip();
       },
-      h: focusHint,
+      h: () => {
+        if (playing) openHints();
+      },
       a: () => buzzAt(0),
       l: () => buzzAt(1),
       n: () => {

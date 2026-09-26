@@ -1,4 +1,4 @@
-import { Disc3, Play, Settings2 } from 'lucide-react';
+import { CalendarDays, Disc3, Play } from 'lucide-react';
 import { Button, Card } from '@/components/ui';
 
 /** Shown when `/play` is opened without a game in the store. */
@@ -17,7 +17,7 @@ export function NoGame() {
             <Button to="/setup" variant="glow" size="lg" leadingIcon={<Play className="fill-current" />}>
               Set up a game
             </Button>
-            <Button to="/daily" variant="secondary" size="lg" leadingIcon={<Settings2 />}>
+            <Button to="/daily" variant="secondary" size="lg" leadingIcon={<CalendarDays />}>
               Daily challenge
             </Button>
           </div>

@@ -54,7 +54,8 @@ export type SfxName =
   | 'whoosh'
   | 'countdown'
   | 'gameover'
-  | 'streak';
+  | 'streak'
+  | 'needle';
 
 export interface Sfx {
   play(name: SfxName): void;

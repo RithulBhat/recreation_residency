@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useId, useState, type ReactNode } from 'react';
 import { motion, useReducedMotion } from 'motion/react';
 import { LoaderCircle, Pause, Play, RotateCcw } from 'lucide-react';
 import { cn } from './ui/cn';
@@ -23,6 +23,10 @@ export interface VinylProps {
   'aria-label'?: string;
   /** Hide the center icon chip */
   hideIcon?: boolean;
+  /** A breathing halo that says "press me" — shown while idle, callers turn it off after the first play. */
+  nudge?: boolean;
+  /** Decoration layered over the record (tonearm, stamps). Positioned against the record's box. */
+  overlay?: ReactNode;
 }
 
 const icons: Record<VinylState, React.ReactNode> = {
@@ -51,6 +55,8 @@ export function Vinyl({
   className,
   'aria-label': ariaLabel,
   hideIcon,
+  nudge = false,
+  overlay,
 }: VinylProps) {
   const reduce = useReducedMotion();
   const playing = state === 'playing';
@@ -62,11 +68,13 @@ export function Vinyl({
   useEffect(() => setCoverFailed(false), [coverUrl]);
   // Per-instance gradient id: several records can be on one page (hero, gallery, results).
   const ringId = `sg-vinyl-ring-${useId().replace(/\W/g, '')}`;
+  const nudging = nudge && state === 'idle' && !disabled;
 
   return (
     <div
       className={cn('relative inline-block select-none', className)}
       style={{ width: size, height: size, containerType: 'inline-size' }}
+      data-nudge={nudging ? '' : undefined}
     >
       {/* Halo */}
       <div
@@ -76,6 +84,11 @@ export function Vinyl({
           playing ? 'opacity-60 animate-pulse-soft' : state === 'done' ? 'opacity-30' : 'opacity-15',
         )}
       />
+
+      {/* "Press me" ring — breathes outward from the rim until the first tap. */}
+      {nudging && !reduce && (
+        <span aria-hidden className="record-nudge pointer-events-none absolute inset-[7%] rounded-full border-2 border-accent-2/70" />
+      )}
 
       {/* Progress ring */}
       <svg
@@ -138,11 +151,12 @@ export function Vinyl({
           <div className="absolute inset-[47.5%] rounded-full bg-[var(--sg-vinyl)] shadow-[inset_0_0_0_1px_rgb(255_255_255/0.15)]" />
         </div>
         <div className="vinyl-gloss" />
+        {/* The hub is the button: an accent-gradient disc with a glow, legible over any cover in any theme. */}
         {!hideIcon && (
           <span
             className={cn(
-              'absolute left-1/2 top-1/2 grid aspect-square w-[22%] -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border border-white/20 bg-black/45 text-white backdrop-blur-md transition-[transform,background-color] duration-200',
-              playing && 'bg-black/30',
+              'absolute left-1/2 top-1/2 grid aspect-square w-[26%] -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-gradient-accent text-accent-fg shadow-glow transition-[transform,filter,box-shadow] duration-200',
+              playing ? 'brightness-95' : 'shadow-glow-lg',
             )}
             aria-hidden
           >
@@ -150,6 +164,8 @@ export function Vinyl({
           </span>
         )}
       </motion.button>
+
+      {overlay}
 
       {clipLabel && (
         <span

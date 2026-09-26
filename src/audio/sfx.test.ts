@@ -18,6 +18,7 @@ const NAMES: SfxName[] = [
   'countdown',
   'gameover',
   'streak',
+  'needle',
 ];
 
 const voices = (ctx: FakeAudioContext): FakeScheduledSource[] =>

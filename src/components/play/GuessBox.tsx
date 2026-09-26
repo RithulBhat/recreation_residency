@@ -7,7 +7,7 @@ import { MicButton, type UseVoiceGuess } from '@/voice';
 import { isBuzzerDuel } from '@/game/presets';
 import { canGuess, currentRound, nextClipLength } from '@/game/selectors';
 import { useCoarsePointer } from '@/hooks/useMediaQuery';
-import { HintChips } from './HintChips';
+import { HintMenu, UsedHints, type HintMenuHandle } from './HintMenu';
 import { clipLabel } from './format';
 
 export interface GuessBoxProps {
@@ -24,9 +24,10 @@ export interface GuessBoxProps {
   shakeKey: number;
   voice: UseVoiceGuess;
   inputRef?: RefObject<HTMLInputElement | null>;
-  hintRef?: RefObject<HTMLButtonElement | null>;
+  /** Imperative handle of the hint menu (the H shortcut opens it). */
+  hintRef?: RefObject<HintMenuHandle | null>;
   className?: string;
-  /** Short landscape viewports: tighter gaps, hint chips in one swipeable row. */
+  /** Short landscape viewports: tighter gaps. */
   compact?: boolean;
 }
 
@@ -70,7 +71,7 @@ function Option({ track, query, big }: { track: Track; query: string; big: boole
   );
 }
 
-/** The guess field with suggestions, mic, hint chips and the skip / give-up row. */
+/** The guess field with suggestions, the mic, taken hints, and the skip / hint / give-up row. */
 export function GuessBox({
   state,
   query,
@@ -96,6 +97,11 @@ export function GuessBox({
   const skip = useMemo(() => skipLabel(state), [state]);
   if (!round) return null;
 
+  // After a hint, a keyboard user is straight back in the field; on touch the keyboard stays down.
+  const refocus = () => {
+    if (!coarse) inputRef?.current?.focus();
+  };
+
   return (
     <motion.div
       key={shakeKey}
@@ -104,9 +110,11 @@ export function GuessBox({
       transition={{ duration: 0.42, ease: 'easeInOut' }}
       data-testid="guess-box"
     >
-      <div className="flex items-start gap-2">
+      <UsedHints round={round} />
+
+      <div className="flex items-start gap-2" data-coach="guess">
         <Combobox<Track>
-          className="min-w-0 flex-1"
+          className="guess-field min-w-0 flex-1"
           value={query}
           onChange={onQueryChange}
           options={options}
@@ -139,7 +147,7 @@ export function GuessBox({
         />
         {voice.supported && (
           <MicButton
-            size={52}
+            size={56}
             listening={voice.listening}
             level={voice.level}
             interim={voice.interim}
@@ -153,16 +161,16 @@ export function GuessBox({
         )}
       </div>
 
-      <HintChips ref={hintRef} settings={state.settings} round={round} onHint={onHint} disabled={!live || !allowed} scroll={compact} />
-
-      <div className="flex items-center gap-2">
+      {/* Action row: the hint panel anchors to this row (relative), so it never leaves a phone's viewport. */}
+      <div className="relative flex items-center gap-2">
         {state.settings.allowSkip && (
-          <Button variant="secondary" size="md" leadingIcon={<SkipForward />} onClick={onSkip} disabled={!live} className="flex-1 sm:flex-none">
+          <Button variant="secondary" size="md" leadingIcon={<SkipForward />} onClick={onSkip} disabled={!live} className="min-w-0 flex-1 sm:flex-none" data-coach="skip">
             {skip}
           </Button>
         )}
-        <Button variant="ghost" size="md" leadingIcon={<Flag />} onClick={onGiveUp} disabled={!live} className="text-muted">
-          Give up
+        <HintMenu ref={hintRef} settings={state.settings} round={round} onHint={onHint} onSelected={refocus} disabled={!live || !allowed} className={state.settings.allowSkip ? undefined : 'flex-1 sm:flex-none'} />
+        <Button variant="ghost" size="md" leadingIcon={<Flag />} onClick={onGiveUp} disabled={!live} aria-label="Give up" className="ml-auto shrink-0 text-muted">
+          <span className="hidden sm:inline">Give up</span>
         </Button>
       </div>
     </motion.div>
