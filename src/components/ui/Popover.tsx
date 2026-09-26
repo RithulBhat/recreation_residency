@@ -80,7 +80,7 @@ export function Popover({
             exit={reduce ? { opacity: 0 } : { opacity: 0, y: side === 'bottom' ? -6 : 6, scale: 0.97 }}
             transition={{ duration: 0.16, ease: 'easeOut' }}
             className={cn(
-              'glass-strong absolute z-50 rounded-2xl bg-bg-elevated/95 p-2 shadow-xl',
+              'glass-strong absolute z-50 rounded-2xl bg-bg-elevated/96 p-2 shadow-xl',
               side === 'bottom' ? 'top-full mt-2' : 'bottom-full mb-2',
               align === 'end' && 'right-0',
               align === 'start' && 'left-0',

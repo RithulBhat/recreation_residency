@@ -47,7 +47,7 @@ export function CustomPackList({ packs, selectedIds, onToggle, onRemove, classNa
               <span
                 className={cn(
                   'grid size-7 shrink-0 place-items-center rounded-full border transition-colors',
-                  selected ? 'border-transparent bg-accent text-accent-fg' : 'border-border-strong text-muted',
+                  selected ? 'border-transparent bg-accent-solid text-accent-fg' : 'border-border-strong text-muted',
                 )}
                 aria-hidden
               >

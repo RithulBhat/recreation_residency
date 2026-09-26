@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { Link, NavLink } from 'react-router';
-import { CalendarDays, ChartColumn, Home, Library, Play, SlidersHorizontal } from 'lucide-react';
+import { CalendarDays, ChartColumn, Gamepad2, Home, Library, SlidersHorizontal } from 'lucide-react';
 import type { ThemeName } from '@/hooks/useTheme';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { cn } from './ui/cn';
@@ -32,7 +32,8 @@ export interface AppShellProps {
 }
 
 const NAV = [
-  { to: '/setup', label: 'Play', icon: <Play /> },
+  // "Lobby", not "Play": the tab opens the setup screen, while "Play now" CTAs start a game.
+  { to: '/setup', label: 'Lobby', icon: <Gamepad2 /> },
   { to: '/packs', label: 'Packs', icon: <Library /> },
   { to: '/daily', label: 'Daily', icon: <CalendarDays /> },
   { to: '/stats', label: 'Stats', icon: <ChartColumn /> },
@@ -99,8 +100,9 @@ export function AppShell({
       </a>
 
       {/* Top bar */}
-      <header className="sticky top-0 z-40 pt-safe">
-        <div className="glass border-x-0 border-t-0 bg-bg/60">
+      {/* In focus mode on a sideways phone the 64 px bar is a fifth of the screen — the stage gets it back. */}
+      <header className={cn('sticky top-0 z-40 pt-safe', immersive && 'landscape-phone:hidden')}>
+        <div className="glass border-x-0 border-t-0 bg-bg/80">
           <div className={cn('mx-auto flex h-16 w-full items-center gap-3 px-4 sm:px-6', widths[width])}>
             <Link to="/" className="flex min-h-11 min-w-0 items-center rounded-xl focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent-2" aria-label="Songooner home">
               <Logo size="md" />
@@ -149,7 +151,7 @@ export function AppShell({
       {/* Mobile bottom tab bar */}
       {!immersive && (
         <nav className="fixed inset-x-0 bottom-0 z-40 md:hidden" aria-label="Primary mobile">
-          <div className="glass-strong border-x-0 border-b-0 bg-bg/80 pb-safe">
+          <div className="glass-strong border-x-0 border-b-0 bg-bg/92 pb-safe">
             <ul className="grid h-[4.5rem] grid-cols-5 px-1">
               {MOBILE_NAV.map((n) => (
                 <li key={n.to} className="min-w-0">

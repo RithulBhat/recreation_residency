@@ -30,7 +30,7 @@ export function StartBar({ game }: StartBarProps) {
   return (
     <Portal>
     <div className="pointer-events-none fixed inset-x-0 z-40 px-3 md:px-6" style={{ bottom }} data-testid="start-bar">
-      <div className="glass-strong pointer-events-auto mx-auto flex w-full max-w-6xl flex-col gap-2 rounded-3xl bg-bg-elevated/95 p-2 pl-4 shadow-xl sm:flex-row sm:items-center sm:gap-3">
+      <div className="glass-strong pointer-events-auto mx-auto flex w-full max-w-6xl flex-col gap-2 rounded-3xl bg-bg-elevated/96 p-2 pl-4 shadow-xl sm:flex-row sm:items-center sm:gap-3">
         <div className="min-w-0 flex-1 py-1">
           {game.error ? (
             <p className="text-sm font-semibold text-danger" role="alert">

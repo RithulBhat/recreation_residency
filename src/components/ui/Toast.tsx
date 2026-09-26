@@ -140,7 +140,7 @@ function ToastViewport({ items, onDismiss }: { items: ToastRecord[]; onDismiss: 
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={reduce ? { opacity: 0 } : { opacity: 0, y: -10, scale: 0.96 }}
               transition={{ type: 'spring', stiffness: 500, damping: 36 }}
-              className="glass-strong pointer-events-auto flex w-full max-w-sm items-start gap-3 rounded-2xl bg-bg-elevated/95 p-3 pr-2 shadow-xl"
+              className="glass-strong pointer-events-auto flex w-full max-w-sm items-start gap-3 rounded-2xl bg-bg-elevated/96 p-3 pr-2 shadow-xl"
             >
               <span className={cn('mt-0.5 shrink-0 [&>svg]:size-5', toneClass[t.tone ?? 'neutral'])} aria-hidden>
                 {t.icon ?? toneIcon[t.tone ?? 'neutral']}

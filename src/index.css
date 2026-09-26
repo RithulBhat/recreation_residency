@@ -6,6 +6,15 @@
    mapped into Tailwind via @theme inline so utilities like
    bg-bg / text-fg / bg-surface / border-border / text-muted / bg-accent
    resolve per-theme at the element level.
+
+   Token roles:
+   - accent / accent-2 / accent-3 / success / warn / danger — TEXT-SAFE.
+     Every one of these clears 4.5:1 against --sg-bg (checked by
+     scratch script; light themes darken them).
+   - accent-vivid / accent-2-vivid / accent-3-vivid — the saturated
+     originals, for fills, gradients and glows only (never body text).
+   - accent-solid — a solid fill that --sg-accent-fg stays readable on
+     at small sizes (chips, ticks). Same as accent except in midnight.
    ------------------------------------------------------------------ */
 
 @theme {
@@ -60,19 +69,23 @@
   --color-accent: var(--sg-accent);
   --color-accent-2: var(--sg-accent-2);
   --color-accent-3: var(--sg-accent-3);
+  --color-accent-vivid: var(--sg-accent-vivid);
+  --color-accent-2-vivid: var(--sg-accent-2-vivid);
+  --color-accent-3-vivid: var(--sg-accent-3-vivid);
+  --color-accent-solid: var(--sg-accent-solid);
   --color-accent-fg: var(--sg-accent-fg);
   --color-success: var(--sg-success);
   --color-danger: var(--sg-danger);
   --color-warn: var(--sg-warn);
 
-  --shadow-glow: 0 0 0 1px color-mix(in oklab, var(--sg-accent) 35%, transparent),
-    0 12px 40px -10px color-mix(in oklab, var(--sg-accent) 70%, transparent);
-  --shadow-glow-lg: 0 0 0 1px color-mix(in oklab, var(--sg-accent) 40%, transparent),
-    0 24px 80px -16px color-mix(in oklab, var(--sg-accent) 85%, transparent),
-    0 0 120px -30px color-mix(in oklab, var(--sg-accent-2) 70%, transparent);
-  --shadow-card: 0 1px 0 0 color-mix(in oklab, var(--sg-fg) 6%, transparent) inset,
-    0 20px 50px -24px rgb(0 0 0 / 0.55);
+  /* Shadows resolve through --sg-* so themes can swap soft glows for hard drops. */
+  --shadow-glow: var(--sg-shadow-glow);
+  --shadow-glow-lg: var(--sg-shadow-glow-lg);
+  --shadow-card: var(--sg-shadow-card);
 }
+
+/* Phone held sideways: the header is worth more as stage than as chrome. */
+@custom-variant landscape-phone (@media (orientation: landscape) and (max-height: 520px));
 
 /* ------------------------------------------------------------------
    Themes
@@ -92,15 +105,28 @@ html[data-theme='midnight'] {
   --sg-accent: #a855f7;
   --sg-accent-2: #22d3ee;
   --sg-accent-3: #f472b6;
+  --sg-accent-vivid: #a855f7;
+  --sg-accent-2-vivid: #22d3ee;
+  --sg-accent-3-vivid: #f472b6;
+  /* white on #a855f7 is 3.96:1 — small text on a solid accent uses this darker fill (5.4:1) */
+  --sg-accent-solid: #9333ea;
   --sg-accent-fg: #ffffff;
   --sg-success: #34d399;
   --sg-danger: #fb7185;
   --sg-warn: #fbbf24;
-  --gradient-accent: linear-gradient(135deg, #a855f7 0%, #22d3ee 55%, #f472b6 100%);
+  --gradient-accent: linear-gradient(135deg, var(--sg-accent-vivid) 0%, var(--sg-accent-2-vivid) 55%, var(--sg-accent-3-vivid) 100%);
+  --gradient-text: var(--gradient-accent);
   --sg-aurora-opacity: 0.55;
   --sg-glass-blur: 18px;
   --sg-vinyl: #0f0f14;
   --sg-vinyl-groove: rgb(255 255 255 / 0.06);
+  --sg-shadow-glow: 0 0 0 1px color-mix(in oklab, var(--sg-accent) 35%, transparent),
+    0 12px 40px -10px color-mix(in oklab, var(--sg-accent) 70%, transparent);
+  --sg-shadow-glow-lg: 0 0 0 1px color-mix(in oklab, var(--sg-accent) 40%, transparent),
+    0 24px 80px -16px color-mix(in oklab, var(--sg-accent) 85%, transparent),
+    0 0 120px -30px color-mix(in oklab, var(--sg-accent-2) 70%, transparent);
+  --sg-shadow-card: 0 1px 0 0 color-mix(in oklab, var(--sg-fg) 6%, transparent) inset,
+    0 20px 50px -24px rgb(0 0 0 / 0.55);
 }
 
 html[data-theme='vinyl'] {
@@ -116,11 +142,17 @@ html[data-theme='vinyl'] {
   --sg-accent: #f5a524;
   --sg-accent-2: #f2d59a;
   --sg-accent-3: #d9552b;
+  --sg-accent-vivid: #f5a524;
+  --sg-accent-2-vivid: #f2d59a;
+  --sg-accent-3-vivid: #d9552b;
+  --sg-accent-solid: #f5a524;
   --sg-accent-fg: #1d1207;
-  --sg-success: #8fd18a;
+  /* warm olive rather than mint: the one cool colour in the palette stuck out */
+  --sg-success: #b8d16a;
   --sg-danger: #f27a6a;
   --sg-warn: #f8c95c;
-  --gradient-accent: linear-gradient(135deg, #f5a524 0%, #f2d59a 50%, #d9552b 100%);
+  --gradient-accent: linear-gradient(135deg, var(--sg-accent-vivid) 0%, var(--sg-accent-2-vivid) 50%, var(--sg-accent-3-vivid) 100%);
+  --gradient-text: var(--gradient-accent);
   --sg-aurora-opacity: 0.4;
   --sg-glass-blur: 16px;
   --sg-vinyl: #17110b;
@@ -133,22 +165,38 @@ html[data-theme='y2k'] {
   --sg-bg-elevated: #eef2f8;
   --sg-surface: rgb(255 255 255 / 0.55);
   --sg-surface-strong: rgb(255 255 255 / 0.85);
-  --sg-border: rgb(20 40 90 / 0.14);
-  --sg-border-strong: rgb(20 40 90 / 0.26);
+  --sg-border: rgb(20 40 90 / 0.16);
+  --sg-border-strong: rgb(20 40 90 / 0.28);
   --sg-fg: #0b1233;
   --sg-muted: #4b5677;
-  --sg-accent: #1e5bff;
-  --sg-accent-2: #ff2fa0;
+  /* text-safe (≥ 4.5:1 on --sg-bg) */
+  --sg-accent: #1442d6;
+  --sg-accent-2: #c2186f;
   --sg-accent-3: #6d28ff;
+  /* fills + gradients keep the electric originals */
+  --sg-accent-vivid: #1e5bff;
+  --sg-accent-2-vivid: #ff2fa0;
+  --sg-accent-3-vivid: #6d28ff;
+  --sg-accent-solid: #1442d6;
   --sg-accent-fg: #ffffff;
-  --sg-success: #0f9d6b;
-  --sg-danger: #e11d48;
-  --sg-warn: #d97706;
-  --gradient-accent: linear-gradient(135deg, #1e5bff 0%, #6d28ff 50%, #ff2fa0 100%);
+  --sg-success: #0a7350;
+  --sg-danger: #be123c;
+  --sg-warn: #9a5200;
+  --gradient-accent: linear-gradient(135deg, var(--sg-accent-vivid) 0%, var(--sg-accent-3-vivid) 50%, var(--sg-accent-2-vivid) 100%);
+  /* text gradients stay inside the text-safe pair so the middle of a number never fades out */
+  --gradient-text: linear-gradient(135deg, var(--sg-accent) 0%, var(--sg-accent-3) 100%);
   --sg-aurora-opacity: 0.35;
   --sg-glass-blur: 14px;
   --sg-vinyl: #1a1f33;
   --sg-vinyl-groove: rgb(255 255 255 / 0.08);
+  /* Y2K signatures: a 1 px chrome bevel along the top of every card and hard, offset drops instead of soft glows */
+  --sg-shadow-card: inset 0 1px 0 rgb(255 255 255 / 0.9), 0 1px 0 rgb(20 40 90 / 0.08),
+    0 6px 0 -3px rgb(20 40 90 / 0.1), 0 14px 28px -18px rgb(20 40 90 / 0.35);
+  --sg-shadow-glow: 0 0 0 1px color-mix(in oklab, var(--sg-accent-vivid) 45%, transparent),
+    0 4px 0 0 color-mix(in oklab, var(--sg-accent-vivid) 40%, transparent);
+  --sg-shadow-glow-lg: inset 0 1px 0 rgb(255 255 255 / 0.55), 0 0 0 1px color-mix(in oklab, var(--sg-accent-vivid) 50%, transparent),
+    0 6px 0 0 color-mix(in oklab, var(--sg-accent-vivid) 45%, transparent),
+    0 16px 30px -16px color-mix(in oklab, var(--sg-accent-vivid) 60%, transparent);
 }
 
 html[data-theme='daylight'] {
@@ -157,22 +205,32 @@ html[data-theme='daylight'] {
   --sg-bg-elevated: #ffffff;
   --sg-surface: rgb(255 255 255 / 0.72);
   --sg-surface-strong: rgb(255 255 255 / 0.95);
-  --sg-border: rgb(20 20 50 / 0.1);
-  --sg-border-strong: rgb(20 20 50 / 0.18);
+  --sg-border: rgb(20 20 50 / 0.16);
+  --sg-border-strong: rgb(20 20 50 / 0.26);
   --sg-fg: #15152c;
   --sg-muted: #61617c;
-  --sg-accent: #7c3aed;
-  --sg-accent-2: #0891b2;
-  --sg-accent-3: #db2777;
+  /* text-safe (≥ 4.5:1 on --sg-bg) */
+  --sg-accent: #6d28d9;
+  --sg-accent-2: #0e6f88;
+  --sg-accent-3: #be185d;
+  /* fills + gradients keep the bright originals */
+  --sg-accent-vivid: #7c3aed;
+  --sg-accent-2-vivid: #0891b2;
+  --sg-accent-3-vivid: #db2777;
+  --sg-accent-solid: #6d28d9;
   --sg-accent-fg: #ffffff;
-  --sg-success: #059669;
-  --sg-danger: #e11d48;
-  --sg-warn: #d97706;
-  --gradient-accent: linear-gradient(135deg, #7c3aed 0%, #0891b2 55%, #db2777 100%);
+  --sg-success: #046c4e;
+  --sg-danger: #be123c;
+  --sg-warn: #9a5200;
+  --gradient-accent: linear-gradient(135deg, var(--sg-accent-vivid) 0%, var(--sg-accent-2-vivid) 55%, var(--sg-accent-3-vivid) 100%);
+  --gradient-text: linear-gradient(135deg, var(--sg-accent) 0%, var(--sg-accent-3) 100%);
   --sg-aurora-opacity: 0.28;
   --sg-glass-blur: 14px;
   --sg-vinyl: #1b1b24;
   --sg-vinyl-groove: rgb(255 255 255 / 0.07);
+  /* near-white surfaces on a near-white page need a real edge: crisp border + shadow-sm */
+  --sg-shadow-card: inset 0 1px 0 rgb(255 255 255 / 0.9), 0 1px 2px rgb(20 20 50 / 0.06),
+    0 12px 32px -20px rgb(20 20 50 / 0.28);
 }
 
 /* ------------------------------------------------------------------
@@ -243,8 +301,9 @@ html[data-theme='daylight'] {
    Utilities
    ------------------------------------------------------------------ */
 
+/* `background-color` (not the shorthand) so a `bg-*` utility on the same element wins. */
 @utility glass {
-  background: var(--sg-surface);
+  background-color: var(--sg-surface);
   border: 1px solid var(--sg-border);
   backdrop-filter: blur(var(--sg-glass-blur)) saturate(1.4);
   -webkit-backdrop-filter: blur(var(--sg-glass-blur)) saturate(1.4);
@@ -252,7 +311,7 @@ html[data-theme='daylight'] {
 }
 
 @utility glass-strong {
-  background: var(--sg-surface-strong);
+  background-color: var(--sg-surface-strong);
   border: 1px solid var(--sg-border-strong);
   backdrop-filter: blur(calc(var(--sg-glass-blur) * 1.4)) saturate(1.6);
   -webkit-backdrop-filter: blur(calc(var(--sg-glass-blur) * 1.4)) saturate(1.6);
@@ -268,7 +327,7 @@ html[data-theme='daylight'] {
 }
 
 @utility text-gradient {
-  background: var(--gradient-accent);
+  background: var(--gradient-text, var(--gradient-accent));
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -277,6 +336,17 @@ html[data-theme='daylight'] {
 
 @utility bg-gradient-accent {
   background-image: var(--gradient-accent);
+}
+
+/* Small uppercase caption that stays legible on every theme (12 px, fg at 70 %). */
+@utility eyebrow-readable {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: color-mix(in oklab, var(--sg-fg) 70%, transparent);
 }
 
 @utility border-gradient {
@@ -383,6 +453,18 @@ html[data-theme='daylight'] {
 }
 
 /* ------------------------------------------------------------------
+   Theme signatures (scoped, so components stay token-only)
+   ------------------------------------------------------------------ */
+
+/* y2k: the wordmark is chrome — white highlight over a navy underside, a hairline edge so the
+   letterforms keep their silhouette on the pale header, and a hard drop beneath. */
+html[data-theme='y2k'] .wordmark {
+  background-image: linear-gradient(180deg, #ffffff 0%, #b9c6dc 45%, #1e3a7a 55%, #6b8bd6 100%);
+  -webkit-text-stroke: 0.4px rgb(11 18 51 / 0.6);
+  filter: drop-shadow(0 1px 0 rgb(255 255 255 / 0.9)) drop-shadow(0 2px 3px rgb(20 40 90 / 0.35));
+}
+
+/* ------------------------------------------------------------------
    Aurora background (cheap: transform-only, will-change)
    ------------------------------------------------------------------ */
 
@@ -393,13 +475,13 @@ html[data-theme='daylight'] {
   overflow: hidden;
   pointer-events: none;
   background:
-    radial-gradient(120% 80% at 50% -10%, color-mix(in oklab, var(--sg-accent) 18%, transparent), transparent 60%),
+    radial-gradient(120% 80% at 50% -10%, color-mix(in oklab, var(--sg-accent-vivid) 18%, transparent), transparent 60%),
     var(--sg-bg);
 }
 
 html[data-theme='y2k'] .aurora {
   background:
-    radial-gradient(120% 80% at 50% -10%, color-mix(in oklab, var(--sg-accent) 16%, transparent), transparent 60%),
+    radial-gradient(120% 80% at 50% -10%, color-mix(in oklab, var(--sg-accent-vivid) 16%, transparent), transparent 60%),
     linear-gradient(180deg, #f4f7fb 0%, #d3dbe8 34%, #eef2f8 52%, #c6cfde 100%);
 }
 
@@ -415,19 +497,19 @@ html[data-theme='y2k'] .aurora {
 }
 
 .aurora-blob-1 {
-  --blob-color: var(--sg-accent);
+  --blob-color: var(--sg-accent-vivid);
   top: -20vmax;
   left: -15vmax;
 }
 .aurora-blob-2 {
-  --blob-color: var(--sg-accent-2);
+  --blob-color: var(--sg-accent-2-vivid);
   top: 10vmax;
   right: -25vmax;
   animation-duration: 34s;
   animation-delay: -8s;
 }
 .aurora-blob-3 {
-  --blob-color: var(--sg-accent-3);
+  --blob-color: var(--sg-accent-3-vivid);
   bottom: -30vmax;
   left: 20vmax;
   animation-duration: 30s;

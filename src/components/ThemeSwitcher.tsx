@@ -52,7 +52,7 @@ export function ThemeGrid({ theme, onChange, className }: ThemeSwitcherProps) {
               <span className="absolute bottom-2 left-2 h-1.5 w-8 rounded-full" style={{ background: t.swatches[1], opacity: 0.85 }} />
               <span className="absolute bottom-2 left-11 h-1.5 w-4 rounded-full" style={{ background: t.swatches[2] }} />
               {selected && (
-                <span className="absolute right-1.5 top-1.5 grid size-5 place-items-center rounded-full bg-accent text-accent-fg">
+                <span className="absolute right-1.5 top-1.5 grid size-5 place-items-center rounded-full bg-accent-solid text-accent-fg">
                   <Check className="size-3" strokeWidth={3} />
                 </span>
               )}

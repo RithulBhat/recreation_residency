@@ -253,7 +253,7 @@ export function Slider({
                 className={cn(
                   'h-8 shrink-0 rounded-full border px-3 font-mono text-xs font-semibold tabular transition-[background-color,border-color,color,transform] active:scale-95',
                   active
-                    ? 'border-transparent bg-accent text-accent-fg shadow-glow'
+                    ? 'border-transparent bg-accent-solid text-accent-fg shadow-glow'
                     : 'border-border bg-surface text-muted hover:bg-surface-strong hover:text-fg',
                 )}
               >

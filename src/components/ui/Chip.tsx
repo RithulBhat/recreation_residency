@@ -36,7 +36,7 @@ export function Chip({
         'group touch-hit-44 inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border font-medium transition-[background-color,border-color,color,transform] duration-150 active:scale-95',
         size === 'sm' ? 'h-8 px-3 text-xs' : 'h-10 px-4 text-sm',
         selected
-          ? 'border-transparent bg-accent text-accent-fg shadow-glow'
+          ? 'border-transparent bg-accent-solid text-accent-fg shadow-glow'
           : 'glass text-fg hover:bg-surface-strong hover:border-border-strong',
         className,
       )}

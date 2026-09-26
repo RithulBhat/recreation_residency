@@ -332,7 +332,7 @@ test('setup · mobile mix packs sheet + collapsible sections', async ({ page }) 
   // leave and come back through the app (a reload would re-run the localStorage.clear init script)
   await page.getByRole('navigation', { name: 'Primary mobile' }).getByRole('link', { name: 'Daily' }).click();
   await expect(page.getByRole('heading', { name: 'Pack of the day' })).toBeVisible();
-  await page.getByRole('navigation', { name: 'Primary mobile' }).getByRole('link', { name: 'Play' }).click();
+  await page.getByRole('navigation', { name: 'Primary mobile' }).getByRole('link', { name: 'Lobby' }).click();
   await expect(page.getByRole('button', { name: /Rounds & rules/ })).toHaveAttribute('aria-expanded', 'true');
 
   await page.getByRole('button', { name: 'Mix packs' }).click();

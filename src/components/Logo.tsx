@@ -56,7 +56,7 @@ export function Logo({ size = 'md', glyphOnly = false, className, spinning }: Lo
     <span className={cn('inline-flex items-center', s.gap, className)}>
       <LogoGlyph size={s.glyph} spinning={spinning} />
       {!glyphOnly && (
-        <span className={cn('font-display font-black tracking-tight leading-none text-gradient', s.text)}>
+        <span className={cn('wordmark font-display font-black tracking-tight leading-none text-gradient', s.text)}>
           Songooner
         </span>
       )}
