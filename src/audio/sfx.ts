@@ -233,6 +233,12 @@ const VOICES: Record<SfxName, Voice> = {
       tone(ctx, out, { type: 'sine', freq: freq * 2, at, dur: 0.14, gain: 0.035 });
     });
   },
+
+  // The stylus meeting the groove: a short filtered tick with a dull thump under it. Quiet on purpose.
+  needle: (ctx, out, t) => {
+    noise(ctx, out, { at: t, dur: 0.045, gain: 0.1, attack: 0.002, filter: { type: 'bandpass', freq: 2600, freqTo: 700, q: 1.4 } });
+    tone(ctx, out, { type: 'sine', freq: 160, freqTo: 55, at: t + 0.004, dur: 0.07, gain: 0.06, attack: 0.003 });
+  },
 };
 
 class SfxImpl implements Sfx {

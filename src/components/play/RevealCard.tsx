@@ -5,7 +5,7 @@ import { AlbumArt } from '@/components/AlbumArt';
 import { Badge, Button, Kbd, cn } from '@/components/ui';
 import { scoreGuess } from '@/game/scoring';
 import { currentRound } from '@/game/selectors';
-import { VERDICT_LABEL, VERDICT_TONE, clipLabel, points } from './format';
+import { VERDICT_LABEL, VERDICT_TONE, clipLabel, displayTitle, points } from './format';
 
 export interface RevealCardProps {
   state: GameState;
@@ -70,7 +70,9 @@ export function RevealCard({ state, onNext, onHear, onStop, hearing, className }
   const breakdown = breakdownFor(state, round);
   const win = round.guesses.find((g) => g.verdict === 'correct');
   const last = isLastRound(state);
-  const meta = [track.releaseYear, track.album].filter((v): v is string | number => !!v).join(' · ');
+  const meta = [track.releaseYear, track.album ? displayTitle(track.album) : ''].filter((v): v is string | number => !!v).join(' · ');
+  // The try row reads as a delta so the first-try case does not repeat the base figure.
+  const tryCost = breakdown ? breakdown.base * breakdown.clipFactor * (1 - breakdown.tryFactor) : 0;
 
   return (
     <motion.section
@@ -97,7 +99,7 @@ export function RevealCard({ state, onNext, onHear, onStop, hearing, className }
             {VERDICT_LABEL[verdict]}
           </Badge>
           <h2 className="mt-1.5 line-clamp-2 font-display text-lg font-bold leading-tight text-fg sm:text-xl" title={track.titleFull}>
-            {track.title}
+            {displayTitle(track.title)}
           </h2>
           <p className="truncate text-sm font-semibold text-fg/80">{track.artist}</p>
           {meta && <p className="truncate text-xs text-muted">{meta}</p>}
@@ -131,7 +133,11 @@ export function RevealCard({ state, onNext, onHear, onStop, hearing, className }
         {breakdown && win ? (
           <div className="flex flex-col gap-1">
             <Row label={`Base · clip ${clipLabel(win.clipLength)} ×${breakdown.clipFactor.toFixed(2)}`} value={`${points(breakdown.base * breakdown.clipFactor)}`} />
-            <Row label={`Try ${win.tryIndex + 1} ×${breakdown.tryFactor.toFixed(2)}`} value={`${points(breakdown.base * breakdown.clipFactor * breakdown.tryFactor)}`} />
+            {tryCost > 0 ? (
+              <Row label={`Try ${win.tryIndex + 1} ×${breakdown.tryFactor.toFixed(2)}`} value={`−${points(tryCost)}`} tone="minus" />
+            ) : (
+              <Row label="First try" value="×1.00" />
+            )}
             {breakdown.timeBonus > 0 && <Row label="Speed bonus" value={`+${points(breakdown.timeBonus)}`} tone="plus" />}
             {breakdown.streakBonus > 0 && <Row label="Streak bonus" value={`+${points(breakdown.streakBonus)}`} tone="plus" />}
             {breakdown.hintPenalty > 0 && <Row label={`Hints ×${round.hintsUsed.length}`} value={`−${points(breakdown.hintPenalty)}`} tone="minus" />}

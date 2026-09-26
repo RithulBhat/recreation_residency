@@ -27,11 +27,15 @@ async function settle(page: Page, ms = 700) {
  * Open /play (loads the DEV hook) and start a real game from the given settings. The first-run coach
  * marks are pre-dismissed unless a test asks for them (`coach: true`).
  */
-async function startGame(page: Page, settings: Partial<GameSettings>, opts: { coach?: boolean } = {}) {
-  await page.addInitScript((coach) => {
-    localStorage.clear();
-    if (!coach) localStorage.setItem('sg:coach:play', 'done');
-  }, opts.coach ?? false);
+async function startGame(page: Page, settings: Partial<GameSettings>, opts: { coach?: boolean; stats?: unknown } = {}) {
+  await page.addInitScript(
+    ({ coach, stats }) => {
+      localStorage.clear();
+      if (!coach) localStorage.setItem('sg:coach:play', 'done');
+      if (stats !== undefined) localStorage.setItem('sg:stats', JSON.stringify(stats));
+    },
+    { coach: opts.coach ?? false, stats: opts.stats },
+  );
   await page.goto('/#/play');
   await expect(page.getByRole('heading', { name: 'No game in progress' })).toBeVisible();
   await page.waitForFunction(() => typeof window.__songooner?.start === 'function');
@@ -104,16 +108,30 @@ for (const [name, vp] of Object.entries(VIEWPORTS)) {
     await settle(page);
     await page.screenshot({ path: `${OUT}/play-idle-${name}.png`, fullPage: true });
 
-    // Every hint kind is on offer — the year comes from the /track lookup the round-open does (P2-1).
+    // Every hint kind sits behind one Hint button — the year comes from the /track lookup the round-open does (P2-1).
+    const hintButton = page.getByTestId('hint-button');
+    await expect(hintButton).toBeEnabled();
+    await expect(hintButton).toHaveAccessibleName(/Hints, 2 left/);
+    await hintButton.click();
     await expect(page.getByRole('button', { name: /Release year hint/ })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole('button', { name: /First letter hint/ })).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('hint-menu')).toHaveCount(0);
+    // The round chips hold the verdict slot on phones; the record breathes until its first tap.
+    if (name === 'mobile') await expect(page.getByTestId('round-chips')).toBeVisible();
+    await expect(page.locator('[data-nudge]')).toHaveCount(1);
 
     // Press the record — twice, fast. The double-tap guard swallows the bounce (P3-2): the clip
-    // plays for 1 s, the ring fills, the vinyl ends in "done", and it counted as ONE listen.
+    // plays for 1 s, the ring fills, the vinyl ends in "done", and it counted as ONE listen. The
+    // tonearm lands on the groove while it plays and hovers ("cue") once the clip ends.
     const stage = page.getByTestId('stage');
     await page.getByRole('button', { name: /play clip/i }).dblclick();
     await expect(stage).toHaveAttribute('data-vinyl', 'playing', { timeout: 20_000 });
+    await expect(stage).toHaveAttribute('data-tonearm', 'down');
     await expect(stage).toHaveAttribute('data-vinyl', 'done', { timeout: 20_000 });
+    await expect(stage).toHaveAttribute('data-tonearm', 'cue');
     await expect(page.getByRole('button', { name: /replay clip/i })).toBeVisible();
+    await expect(page.locator('[data-nudge]')).toHaveCount(0);
     expect(await page.evaluate(() => window.__songooner!.gameStore.getState().state.rounds[0].playsThisTry)).toBe(1);
 
     // Wrong guess → feedback + tries strip advances.
@@ -131,6 +149,7 @@ for (const [name, vp] of Object.entries(VIEWPORTS)) {
     await page.getByRole('button', { name: 'Give up' }).click();
     const reveal = page.getByTestId('reveal').filter({ visible: true });
     await expect(reveal).toBeVisible();
+    await expect(page.getByTestId('outcome')).toHaveText(/The answer/i);
     await expect(reveal.getByRole('link', { name: /Deezer/ })).toHaveAttribute('href', /deezer\.com\/track\/\d+/);
     await expect(reveal.getByRole('button', { name: 'Next song' })).toBeVisible();
     // The meta line carries the release year now ("2019 · After Hours").
@@ -153,16 +172,38 @@ for (const [name, vp] of Object.entries(VIEWPORTS)) {
       const t = s.rounds[s.currentRound].track;
       return { title: t.title, artist: t.artist };
     });
-    await page.getByRole('button', { name: /First letter hint/ }).click();
+    if (name === 'desktop') {
+      // Next hands focus to the field (a frame later); leave it, then H opens the hint menu, ↓ walks
+      // it and Enter takes a hint.
+      await expect(input).toBeFocused();
+      await input.blur();
+      await page.keyboard.press('h');
+      await expect(page.getByRole('dialog', { name: 'Hints' })).toBeVisible();
+      await expect(page.getByRole('button', { name: /Release year hint/ })).toBeFocused();
+      await page.keyboard.press('ArrowDown');
+      await page.keyboard.press('ArrowDown');
+      await page.keyboard.press('ArrowDown');
+      await expect(page.getByRole('button', { name: /First letter hint/ })).toBeFocused();
+      await page.keyboard.press('Enter');
+    } else {
+      await page.getByTestId('hint-button').click();
+      await page.getByRole('button', { name: /First letter hint/ }).click();
+    }
+    await expect(page.getByTestId('hint-menu')).toHaveCount(0);
     await expect(page.getByTestId('hints')).toContainText('Title:');
     await input.fill(answer.title.slice(0, Math.min(6, answer.title.length)));
     const option = page.getByRole('option').filter({ hasText: answer.artist }).first();
     await expect(option).toBeVisible({ timeout: 10_000 });
     await option.click();
-    await expect(page.getByTestId('feedback')).toContainText(/Correct at 1s \(\+[\d,]+\)/);
+    await expect(page.getByTestId('feedback').filter({ visible: true })).toContainText(/Correct at 1s \(\+[\d,]+\)/);
     const last = page.getByTestId('reveal').filter({ visible: true });
     await expect(last).toContainText('Hints ×1');
+    await expect(last).toContainText('First try');
     await expect(last).toContainText('Round score');
+    // A 1 s win is not a 0.1 s Club win: no stamp, the outcome label carries the clip.
+    await expect(page.getByTestId('outcome')).toHaveText(/Nailed it · 1s/i);
+    await expect(page.getByTestId('club-stamp')).toHaveCount(0);
+    await expect(stage).toHaveAttribute('data-tonearm', 'rest');
     await settle(page);
     await page.screenshot({ path: `${OUT}/play-won-${name}.png`, fullPage: true });
     if (name === 'desktop') {
@@ -237,12 +278,22 @@ test('play · blitz clock counts down and auto-advances', async ({ page }) => {
 
   const clock = page.getByTestId('blitz-clock').getByRole('progressbar');
   await expect(clock).toBeVisible();
+  await expect(page.getByTestId('blitz-readout')).toHaveText(/0:[34]\d/);
+  await expect(page.getByTestId('blitz-tally')).toHaveText(/0\s*songs/);
   const first = Number(await clock.getAttribute('aria-valuenow'));
   await page.waitForTimeout(1500);
   const later = Number(await clock.getAttribute('aria-valuenow'));
   expect(later).toBeLessThan(first);
   await expect(page.getByTestId('stage-strip')).toHaveCount(0);
+  await expect(page.getByTestId('hint-button')).toHaveCount(0); // no hint budget in blitz
   await expect(page.getByRole('button', { name: 'Skip (−3s)' })).toBeVisible();
+  // Under ten seconds the readout turns red and pulses.
+  await page.evaluate(() => {
+    const store = window.__songooner!.gameStore;
+    store.setState((s) => ({ state: { ...s.state, blitzEndsAt: Date.now() + 8000 } }));
+  });
+  await expect(page.getByTestId('blitz-readout')).toHaveClass(/blitz-urgent/);
+  await expect(page.getByTestId('blitz-readout')).toHaveClass(/text-danger/);
   await settle(page, 300);
   await page.screenshot({ path: `${OUT}/blitz-mobile.png`, fullPage: true });
 
@@ -424,7 +475,8 @@ for (const vp of [
     const record = await page.getByRole('button', { name: /play clip/i }).boundingBox();
     const input = await page.getByRole('combobox', { name: 'Your guess' }).boundingBox();
     const skip = await page.getByRole('button', { name: /^Skip/ }).boundingBox();
-    for (const [label, box] of [['record', record], ['input', input], ['skip', skip]] as const) {
+    const hint = await page.getByTestId('hint-button').boundingBox();
+    for (const [label, box] of [['record', record], ['input', input], ['skip', skip], ['hint', hint]] as const) {
       expect(box, `${label} has a box`).not.toBeNull();
       expect(box!.y, `${label} top`).toBeGreaterThanOrEqual(0);
       expect(box!.y + box!.height, `${label} bottom within ${vp.height}`).toBeLessThanOrEqual(vp.height + 1);
@@ -452,6 +504,9 @@ test('play · first-run coach marks show once, walk three steps and never come b
   const dialog = marks.getByRole('dialog', { name: 'Tap the record' });
   await expect(dialog).toBeVisible();
   await expect(marks).toContainText('1/3');
+  // The record stays sharp under a spotlight (no blur), and the copy uses the run's real first clip.
+  await expect(marks.getByTestId('coach-spotlight')).toHaveClass(/coach-spotlight/);
+  await expect(dialog).toContainText('You get 0.1s of the song');
   await settle(page, 400);
   await page.screenshot({ path: `${OUT}/coach-1-mobile.png` });
 
@@ -481,6 +536,41 @@ test('play · first-run coach marks show once, walk three steps and never come b
   await expect(page.getByTestId('coach-marks')).toHaveCount(0);
 });
 
+test('play · the 0.1 s Club stamp lands on a win heard at 0.1 s, with the lifetime tally', async ({ page }) => {
+  test.setTimeout(120_000);
+  await page.setViewportSize(VIEWPORTS.mobile);
+  // Six 0.1 s wins on record already (the same figure the results card reads).
+  const stats = { state: { totals: { byClipBucket: { '0.1': { seen: 9, correct: 6 } } } }, version: 1 };
+  await startGame(page, { packIds: ['pop-hits'], mode: 'classic', rounds: 2, seed: 'e2e-club' }, { stats });
+  const stage = page.getByTestId('stage');
+  const input = page.getByRole('combobox', { name: 'Your guess' });
+  const answer = async () =>
+    page.evaluate(() => {
+      const s = window.__songooner!.gameStore.getState().state;
+      const t = s.rounds[s.currentRound].track;
+      return `${t.artist} - ${t.title}`;
+    });
+  await input.fill(await answer());
+  await input.press('Enter');
+  const stamp = page.getByTestId('club-stamp');
+  await expect(stamp).toBeVisible();
+  await expect(stamp).toContainText('0.1s');
+  await expect(stamp).toContainText('Club');
+  await expect(stamp).toContainText('×7');
+  await expect(page.getByTestId('outcome')).toHaveText(/Nailed it · 0.1s/i);
+  await settle(page, 1300);
+  await page.screenshot({ path: `${OUT}/club-stamp-mobile.png` });
+
+  // Round 2: a skip grows the clip to 0.3 s — that win is not a club win.
+  await page.getByTestId('reveal').filter({ visible: true }).getByRole('button', { name: 'Next song' }).click();
+  await expect(stage).not.toHaveAttribute('data-vinyl', 'loading', { timeout: 30_000 });
+  await page.getByRole('button', { name: 'Skip → 0.3s' }).click();
+  await input.fill(await answer());
+  await input.press('Enter');
+  await expect(page.getByTestId('outcome')).toHaveText(/Nailed it · 0.3s/i);
+  await expect(page.getByTestId('club-stamp')).toHaveCount(0);
+});
+
 test('play · touch autocomplete offers "Submit as is" on top of 44 px rows', async ({ browser }) => {
   test.setTimeout(120_000);
   const ctx = await browser.newContext({ viewport: VIEWPORTS.mobile, hasTouch: true, isMobile: true });
@@ -491,6 +581,9 @@ test('play · touch autocomplete offers "Submit as is" on top of 44 px rows', as
       const s = window.__songooner!.gameStore.getState().state;
       return s.rounds[s.currentRound].track.title;
     });
+    // No keyboard on a phone: the record's status line says "tap", never "press Space".
+    await expect(page.getByTestId('stage')).toContainText(/Tap the record/i);
+    await expect(page.getByTestId('stage')).not.toContainText(/press/i);
     const input = page.getByRole('combobox', { name: 'Your guess' });
     await input.fill(answer.slice(0, Math.min(4, answer.length)));
     const submitRow = page.getByTestId('submit-as-is');

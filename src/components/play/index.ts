@@ -1,9 +1,13 @@
-export { TopBar, type TopBarProps } from './TopBar';
+export { TopBar, BLITZ_URGENT_MS, type TopBarProps } from './TopBar';
 export { StageStrip, type StageStripProps } from './StageStrip';
 export { Stage, type StageProps } from './Stage';
 export { GuessBox, skipLabel, type GuessBoxProps } from './GuessBox';
-export { HintChips, type HintChipsProps } from './HintChips';
+export { HintMenu, UsedHints, HINT_COST, type HintMenuHandle, type HintMenuProps, type UsedHintsProps } from './HintMenu';
 export { Feedback, type FeedbackProps } from './Feedback';
+export { RoundChips, packSummary, currentStreak, type PackSummary } from './RoundChips';
+export { Tonearm, PIVOT, STYLUS, ANGLES, type TonearmMode, type TonearmProps } from './Tonearm';
+export { ClubStamp, type ClubStampProps } from './ClubStamp';
+export { outcomeLabel, isClubRound, clubStampFor, winningGuess, CLUB_CLIP, type OutcomeLabel, type OutcomeTone, type ClubStampData } from './outcome';
 export { RevealCard, breakdownFor, isLastRound, roundVerdict, type RevealCardProps } from './RevealCard';
 export { PlayersBar, BUZZ_KEYS, type PlayersBarProps } from './PlayersBar';
 export { PassPhoneDialog, type PassPhoneDialogProps } from './PassPhoneDialog';
@@ -11,8 +15,8 @@ export { OpponentPanel, EMOTES, type OpponentPanelProps } from './OpponentPanel'
 export { HotkeysHelp, hotkeyRows, type HotkeysHelpProps } from './HotkeysHelp';
 export { QuitDialog, type QuitDialogProps } from './QuitDialog';
 export { NoGame } from './NoGame';
-export { PlaySidebar } from './PlaySidebar';
-export { CoachMarks, COACH_STEPS, type CoachMarksProps, type CoachStep } from './CoachMarks';
+export { PlaySidebar, type PlaySidebarProps } from './PlaySidebar';
+export { CoachMarks, coachSteps, type CoachMarksProps, type CoachStep } from './CoachMarks';
 export { useCoachMarks, isCoachDone, markCoachDone, COACH_KEY } from './useCoachMarks';
 export { useFinishGame, isDiscardedGame } from './useFinishGame';
 export { createTapGuard, DOUBLE_TAP_MS, type TapGuard } from './tapGuard';
@@ -21,7 +25,8 @@ export { useGameAudio, applyVolumePrefs, readVolumePref, patchRoundTrack, isLive
 export { useGameHost, hostEventFor, type GameHost } from './useGameHost';
 export { useGameClock, TICK_MS } from './useGameClock';
 export { usePlayHotkeys, type PlayHotkeys } from './usePlayHotkeys';
+export { usePlayActions, focusSoon, type PlayActions, type PlayActionsInput } from './usePlayActions';
 export { useSuggestions, useGamePool } from './useSuggestions';
 export { useOnlineDuelSync, isDuelActive } from './useOnlineDuelSync';
 export { diffGameEvents, initialGameEvents, useGameEvents, STREAK_MILESTONES, type GameEvent } from './gameEvents';
-export { clipLabel, points, clock, VERDICT_LABEL, VERDICT_TONE } from './format';
+export { clipLabel, displayTitle, points, clock, VERDICT_LABEL, VERDICT_TONE } from './format';

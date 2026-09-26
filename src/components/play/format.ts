@@ -9,6 +9,22 @@ export function clipLabel(seconds: number): string {
   return `${seconds.toFixed(2).replace(/\.?0+$/, '')}s`;
 }
 
+const FEAT = /\s*[([]\s*(?:feat|ft|featuring|with)\b\.?[^)\]]*[)\]]/gi;
+const VERSIONS =
+  '(?:\\d{4}\\s+)?(?:remaster(?:ed)?|radio edit|single version|album version|mono|stereo|bonus track|(?:super )?deluxe(?: edition)?|expanded(?: edition)?|(?:\\d+(?:st|nd|rd|th) )?anniversary(?: edition)?|special edition|explicit|clean|live|original mix|extended(?: mix| version)?|sped up|slowed(?: \\+ reverb)?|from [^)\\]]+)';
+const VERSION_PAREN = new RegExp(`\\s*[([]\\s*${VERSIONS}\\b[^)\\]]*[)\\]]`, 'gi');
+const VERSION_DASH = new RegExp(`\\s+[-–—]\\s+${VERSIONS}\\b.*$`, 'i');
+
+/**
+ * A title as it should read on screen: trailing `(feat. …)`, `- Remastered 2011`, `(Radio Edit)` and
+ * friends are dropped. Remixes and other genuinely different versions are kept. Falls back to the
+ * original when nothing would be left.
+ */
+export function displayTitle(title: string): string {
+  const out = title.replace(FEAT, '').replace(VERSION_PAREN, '').replace(VERSION_DASH, '').replace(/\s{2,}/g, ' ').trim();
+  return out.length > 0 ? out : title.trim();
+}
+
 /** `6420` → `6,420`. */
 export function points(n: number): string {
   return Math.round(Number.isFinite(n) ? n : 0).toLocaleString('en-US');

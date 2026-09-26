@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import type { GameState, Guess, Round } from '@/types';
 import { cn } from '@/components/ui';
@@ -11,6 +12,8 @@ export interface FeedbackProps {
   className?: string;
   /** Keep a line of space while there is no verdict (default) so the layout never jumps. */
   reserve?: boolean;
+  /** What fills the slot while there is no verdict (e.g. the round chips). */
+  fallback?: ReactNode;
 }
 
 type Tone = 'success' | 'warn' | 'danger' | 'neutral';
@@ -52,8 +55,8 @@ function verdictLine(state: GameState, round: Round, guess: Guess): { text: stri
   }
 }
 
-/** Inline verdict toast for the latest guess of the current round. */
-export function Feedback({ state, className, reserve = true }: FeedbackProps) {
+/** Inline verdict toast for the latest guess of the current round; `fallback` fills the slot otherwise. */
+export function Feedback({ state, className, reserve = true, fallback }: FeedbackProps) {
   const reduce = useReducedMotion();
   const current = currentRound(state);
   // Blitz auto-advances, so the verdict of the song that just ended lives on the previous round.
@@ -66,7 +69,7 @@ export function Feedback({ state, className, reserve = true }: FeedbackProps) {
   return (
     <div className={cn(reserve && 'min-h-9', className)} aria-live="polite" data-testid="feedback">
       <AnimatePresence mode="wait" initial={false}>
-        {line && (
+        {line ? (
           <motion.div
             key={key}
             initial={reduce ? { opacity: 0 } : { opacity: 0, y: 6, scale: 0.98 }}
@@ -78,7 +81,18 @@ export function Feedback({ state, className, reserve = true }: FeedbackProps) {
           >
             <span className="truncate">{line.text}</span>
           </motion.div>
-        )}
+        ) : fallback ? (
+          <motion.div
+            key="fallback"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.18 }}
+            className={cn('flex w-full items-center', reserve && 'min-h-9')}
+          >
+            {fallback}
+          </motion.div>
+        ) : null}
       </AnimatePresence>
     </div>
   );

@@ -5,13 +5,14 @@ import { clipLabel } from './format';
 
 export interface StageStripProps {
   state: GameState;
+  className?: string;
 }
 
 /**
  * The ladder of tries: one pill per escalating stage (`0.1s · 0.3s · 1s …`) or dots for fixed
  * tries (`try 1/3 · 1s`). Consumed tries are struck, the current one glows. Hidden in blitz.
  */
-export function StageStrip({ state }: StageStripProps) {
+export function StageStrip({ state, className }: StageStripProps) {
   const { settings } = state;
   const round = currentRound(state);
   if (!round || settings.mode === 'blitz') return null;
@@ -32,7 +33,7 @@ export function StageStrip({ state }: StageStripProps) {
   };
 
   return (
-    <div className="flex items-center gap-3" data-testid="stage-strip">
+    <div className={cn('flex items-center gap-3', className)} data-testid="stage-strip">
       <ol
         className={cn('flex min-w-0 flex-wrap items-center gap-1.5', !escalating && 'gap-2')}
         aria-label={escalating ? 'Clip stages' : 'Tries'}

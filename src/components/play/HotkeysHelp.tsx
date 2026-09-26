@@ -19,7 +19,7 @@ export function hotkeyRows(settings: GameSettings, voiceSupported: boolean): Row
     { keys: ['Space'], label: 'Play / replay the clip' },
     { keys: ['Enter'], label: 'Submit your guess · next song' },
     { keys: ['→'], label: settings.allowSkip ? 'Skip this try' : 'Skip (disabled in this game)' },
-    { keys: ['H'], label: 'Jump to the hints' },
+    { keys: ['H'], label: 'Open the hints' },
   ];
   if (voiceSupported) rows.push({ keys: ['M'], label: 'Hold to talk (voice guess)' });
   if (isBuzzerDuel(settings)) rows.push({ keys: ['A', 'L'], label: 'Buzz in (left / right player)' });

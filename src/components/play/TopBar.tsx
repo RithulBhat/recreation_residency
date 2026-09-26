@@ -13,6 +13,9 @@ export interface TopBarProps {
   onHelp: () => void;
 }
 
+/** Under this many ms left, the blitz clock turns red and pulses once a second. */
+export const BLITZ_URGENT_MS = 10_000;
+
 function Lives({ lives, max }: { lives: number; max: number }) {
   return (
     <span className="inline-flex items-center gap-0.5" role="img" aria-label={`${lives} of ${max} lives left`}>
@@ -24,6 +27,35 @@ function Lives({ lives, max }: { lives: number; max: number }) {
         />
       ))}
     </span>
+  );
+}
+
+/** Blitz: the clock is the hero — a big mono readout beside the ring, the song tally under it. */
+function BlitzClock({ state, now }: { state: GameState; now: number }) {
+  const { settings } = state;
+  const left = timeLeftMs(state, now);
+  const urgent = left !== null && left < BLITZ_URGENT_MS;
+  const total = Math.max(1, settings.blitzDuration) * 1000;
+  return (
+    <div className="flex items-center gap-3" data-testid="blitz-clock">
+      <CountdownRing
+        progress={left !== null ? left / total : 0}
+        size={56}
+        stroke={5}
+        label="Blitz clock"
+        warnBelow={Math.min(0.5, BLITZ_URGENT_MS / total)}
+        className={cn(urgent && 'blitz-urgent')}
+      />
+      <div className="leading-none">
+        <div className={cn('font-mono text-4xl font-bold tabular', urgent ? 'blitz-urgent text-danger' : 'text-fg')} data-testid="blitz-readout">
+          {clock(left ?? 0)}
+        </div>
+        <div className="mt-1.5" data-testid="blitz-tally">
+          <span className="font-mono text-2xl font-semibold tabular text-fg">{wonRounds(state)}</span>{' '}
+          <span className="text-sm text-muted">{wonRounds(state) === 1 ? 'song' : 'songs'}</span>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -40,19 +72,7 @@ export function TopBar({ state, now, onQuit, onHelp }: TopBarProps) {
   return (
     <header className="flex items-center gap-2 sm:gap-3">
       {blitz ? (
-        <div className="flex items-center gap-3">
-          <div data-testid="blitz-clock">
-            <CountdownRing progress={left !== null ? left / (settings.blitzDuration * 1000) : 0} size={56} stroke={5} label="Blitz clock" warnBelow={0.2}>
-              <span className="text-sm">{clock(left ?? 0)}</span>
-            </CountdownRing>
-          </div>
-          <div className="leading-tight">
-            <div className="font-display text-lg font-bold text-fg">
-              {wonRounds(state)} <span className="text-sm font-semibold text-muted">songs</span>
-            </div>
-            <div className="font-mono text-[11px] uppercase tracking-widest text-muted">Blitz · wrong −3s</div>
-          </div>
-        </div>
+        <BlitzClock state={state} now={now} />
       ) : (
         <div className="flex items-center gap-3">
           <div className="leading-tight">
@@ -77,9 +97,9 @@ export function TopBar({ state, now, onQuit, onHelp }: TopBarProps) {
 
       <div className="ml-auto flex items-center gap-1.5 sm:gap-3">
         {solo && (
-          <div className="text-right leading-tight">
+          <div className="mr-3 text-right leading-tight">
             <div className="font-mono text-[11px] uppercase tracking-widest text-muted">Score</div>
-            <NumberTicker value={state.totalScore} animateOnMount={false} className="font-display text-xl font-bold text-gradient" />
+            <NumberTicker value={state.totalScore} animateOnMount={false} className="font-display text-2xl font-bold text-gradient" />
           </div>
         )}
         {solo && streak >= 2 && (
