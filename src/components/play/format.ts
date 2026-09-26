@@ -11,7 +11,7 @@ export function clipLabel(seconds: number): string {
 
 const FEAT = /\s*[([]\s*(?:feat|ft|featuring|with)\b\.?[^)\]]*[)\]]/gi;
 const VERSIONS =
-  '(?:\\d{4}\\s+)?(?:remaster(?:ed)?|radio edit|single version|album version|mono|stereo|bonus track|deluxe(?: edition)?|explicit|clean|live|original mix|extended(?: mix| version)?|sped up|slowed(?: \\+ reverb)?|from [^)\\]]+)';
+  '(?:\\d{4}\\s+)?(?:remaster(?:ed)?|radio edit|single version|album version|mono|stereo|bonus track|(?:super )?deluxe(?: edition)?|expanded(?: edition)?|(?:\\d+(?:st|nd|rd|th) )?anniversary(?: edition)?|special edition|explicit|clean|live|original mix|extended(?: mix| version)?|sped up|slowed(?: \\+ reverb)?|from [^)\\]]+)';
 const VERSION_PAREN = new RegExp(`\\s*[([]\\s*${VERSIONS}\\b[^)\\]]*[)\\]]`, 'gi');
 const VERSION_DASH = new RegExp(`\\s+[-–—]\\s+${VERSIONS}\\b.*$`, 'i');
 

@@ -10,6 +10,9 @@ describe('displayTitle', () => {
     expect(displayTitle('Levitating (feat. DaBaby) - Radio Edit')).toBe('Levitating');
     expect(displayTitle('Bohemian Rhapsody - Live at Wembley')).toBe('Bohemian Rhapsody');
     expect(displayTitle('Flowers (From "Barbie The Album")')).toBe('Flowers');
+    expect(displayTitle('Christina Aguilera (Expanded Edition)')).toBe('Christina Aguilera');
+    expect(displayTitle('Rumours (Super Deluxe)')).toBe('Rumours');
+    expect(displayTitle('Thriller (25th Anniversary Edition)')).toBe('Thriller');
   });
 
   it('keeps remixes and titles that merely contain the words', () => {
