@@ -1,10 +1,11 @@
-export { ResultsHero, headline, type ResultsHeroProps } from './ResultsHero';
+export { ResultsHero, headline, heroLead, type ResultsHeroProps } from './ResultsHero';
 export { ProgressionCard, type ProgressionCardProps } from './ProgressionCard';
 export { Podium, type PodiumProps } from './Podium';
 export { DuelOutcome, type DuelOutcomeProps } from './DuelOutcome';
 export { DailyCard, msUntilMidnight, type DailyCardProps } from './DailyCard';
 export { ChallengeBanner, challengeLine, type ChallengeBannerProps } from './ChallengeBanner';
 export { RoundList, type RoundListProps } from './RoundList';
-export { ResultActions, type ResultActionsProps } from './ResultActions';
+export { ResultActions, packLabel, type ResultActionsProps } from './ResultActions';
+export { ShareMenu, type ShareMenuProps } from './ShareMenu';
 export { usePreviewPlayer, type PreviewPlayer } from './usePreviewPlayer';
 export { useRematch } from './useRematch';

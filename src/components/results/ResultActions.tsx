@@ -1,9 +1,15 @@
-import { Home, Link2, RotateCcw, Settings2, Share2 } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Home, RotateCcw, Settings2 } from 'lucide-react';
 import type { GameState } from '@/types';
 import { Button, toast } from '@/components/ui';
 import { buildChallengeUrl } from '@/game/challenge';
-import { challengeShareText, shareOrCopy, shareText } from '@/stats/share';
+import { getPack } from '@/lib/catalog';
+import { rankFor } from '@/stats/rank';
+import { challengeShareText, shareOrCopy } from '@/stats/share';
+import { prepareShareCard, shareCard, type ShareCardOptions } from '@/stats/shareCard';
 import { useSettingsStore } from '@/store/settingsStore';
+import { useStatsStore } from '@/store/statsStore';
+import { ShareMenu } from './ShareMenu';
 
 export interface ResultActionsProps {
   state: GameState;
@@ -23,18 +29,55 @@ export function challengeTrackIds(state: GameState): number[] {
   return [...state.rounds.map((r) => r.track.id), ...state.queue.map((t) => t.id)].slice(0, MAX_CHALLENGE_TRACKS);
 }
 
+/** `Pop Hits`, `Pop Hits + Burna Boy` — pack names for the card's brag line. */
+export function packLabel(packIds: readonly string[]): string {
+  const names = packIds.map((id) => getPack(id)?.name ?? id).filter((n) => n.length > 0);
+  return names.join(' + ');
+}
+
+function siteUrl(): string {
+  return `${location.origin}${location.pathname}`;
+}
+
 function reportShare(outcome: 'shared' | 'copied' | 'failed', what: string): void {
   if (outcome === 'copied') toast.success(`${what} copied`, 'Paste it anywhere.');
   else if (outcome === 'failed') toast.error("Couldn't share", 'Your browser blocked the clipboard.');
 }
 
+/** Run `cb` once the screen has settled (idle callback, or a short delay where there is none). */
+function whenIdle(cb: () => void): () => void {
+  if (typeof window.requestIdleCallback === 'function') {
+    const id = window.requestIdleCallback(cb, { timeout: 1500 });
+    return () => window.cancelIdleCallback(id);
+  }
+  const id = window.setTimeout(cb, 400);
+  return () => window.clearTimeout(id);
+}
+
 export function ResultActions({ state, onPlayAgain, loading }: ResultActionsProps) {
   const playerName = useSettingsStore((s) => s.playerName);
+  const totals = useStatsStore((s) => s.totals);
+  const [busy, setBusy] = useState(false);
   const { settings } = state;
 
-  const share = async () => {
-    const outcome = await shareOrCopy(shareText(state, { url: `${location.origin}${location.pathname}` }));
-    reportShare(outcome, 'Result');
+  const cardOptions = useMemo<ShareCardOptions>(
+    () => ({ url: siteUrl(), packLabel: packLabel(settings.packIds), rank: rankFor(totals.xp), perfectRounds: totals.perfectRounds }),
+    [settings.packIds, totals.xp, totals.perfectRounds],
+  );
+
+  // Paint the card while the tickers run so the share sheet opens inside the tap's gesture window.
+  useEffect(() => whenIdle(() => void prepareShareCard(state, cardOptions).catch(() => undefined)), [state, cardOptions]);
+
+  const card = async () => {
+    setBusy(true);
+    try {
+      const outcome = await shareCard(state, cardOptions);
+      if (outcome === 'downloaded') toast.success('Card saved', 'Caption copied — post them together.');
+      else if (outcome === 'copied') toast.success('Caption copied', "This browser wouldn't save the picture.");
+      else if (outcome === 'failed') toast.error("Couldn't build the card", 'Try again in a moment.');
+    } finally {
+      setBusy(false);
+    }
   };
 
   const challenge = async () => {
@@ -71,22 +114,17 @@ export function ResultActions({ state, onPlayAgain, loading }: ResultActionsProp
 
   return (
     <section className="flex flex-col gap-2" aria-label="What next" data-testid="result-actions">
-      <div className="grid grid-cols-2 gap-2">
-        <Button variant="glow" size="lg" leadingIcon={<RotateCcw />} onClick={onPlayAgain} loading={loading}>
+      <div className="grid grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] gap-2 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+        <Button variant="glow" size="lg" leadingIcon={<RotateCcw />} onClick={onPlayAgain} loading={loading} data-testid="play-again">
           Play again
         </Button>
-        <Button variant="secondary" size="lg" leadingIcon={<Share2 />} onClick={share}>
-          Share
-        </Button>
+        <ShareMenu onCard={card} onChallenge={challenge} busy={busy} />
       </div>
-      <div className="grid grid-cols-3 gap-2">
-        <Button variant="secondary" leadingIcon={<Link2 />} onClick={challenge} className="px-2">
-          Challenge
+      <div className="flex flex-wrap items-center justify-center gap-x-1">
+        <Button variant="ghost" size="sm" leadingIcon={<Settings2 />} to="/setup">
+          Change settings
         </Button>
-        <Button variant="secondary" leadingIcon={<Settings2 />} to="/setup" className="px-2">
-          Settings
-        </Button>
-        <Button variant="ghost" leadingIcon={<Home />} to="/" className="px-2">
+        <Button variant="ghost" size="sm" leadingIcon={<Home />} to="/">
           Home
         </Button>
       </div>

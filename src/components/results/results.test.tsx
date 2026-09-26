@@ -9,9 +9,9 @@ import { challengeLine } from './ChallengeBanner';
 import { msUntilMidnight } from './DailyCard';
 import { useRematch } from './useRematch';
 import { rematchCopy } from './DuelOutcome';
-import { blitzSummary, fastestWinSec } from './ResultsHero';
+import { blitzSummary, fastestWinSec, headline, heroLead } from './ResultsHero';
 import { summarizeGame } from '@/stats/aggregate';
-import { blitzGame } from '@/stats/testFactory';
+import { blitzGame, classicGame, duelGame, partyGame } from '@/stats/testFactory';
 
 const navigate = vi.fn();
 const startLoadedGame = vi.fn();
@@ -162,5 +162,31 @@ describe('useRematch phases', () => {
     expect(d.ready).toHaveBeenCalledTimes(1);
     rerender({ duel: d }); // the store's `myReady` write re-renders the screen; the stub needs a nudge
     expect(result.current).toBe('ready');
+  });
+});
+
+describe('heroLead', () => {
+  it('leads a solo game with the verdict and the score', () => {
+    const game = classicGame();
+    const lead = heroLead(game, summarizeGame(game));
+    expect(lead).toMatchObject({ title: 'Golden ears.', score: 5640, winner: null, tie: false });
+    expect(headline(summarizeGame(game), game.endReason)).toBe('Golden ears.');
+  });
+
+  it('leads a party with the winner and their score, not the combined total', () => {
+    const party = partyGame();
+    const lead = heroLead(party, summarizeGame(party));
+    expect(lead.title).toBe('Rithul takes it.');
+    expect(lead.score).toBe(2400);
+    expect(lead.winner?.name).toBe('Rithul');
+    expect(lead.tie).toBe(false);
+  });
+
+  it('calls a tie', () => {
+    const duel = duelGame([900, 900]);
+    const lead = heroLead(duel, summarizeGame(duel));
+    expect(lead.title).toBe("It's a tie!");
+    expect(lead.score).toBe(900);
+    expect(lead.tie).toBe(true);
   });
 });

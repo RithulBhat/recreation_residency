@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { CalendarDays, Share2 } from 'lucide-react';
 import type { GameState } from '@/types';
 import { Button, toast } from '@/components/ui';
-import { GRID_LEGEND, dailyShareText, resultGrid, shareOrCopy } from '@/stats/share';
+import { GRID_LEGEND, dailyShareText, formatDailyDate, resultGrid, shareOrCopy } from '@/stats/share';
 
 export interface DailyCardProps {
   state: GameState;
@@ -44,7 +44,9 @@ export function DailyCard({ state, date }: DailyCardProps) {
     <section className="glass rounded-4xl p-5" aria-label="Daily result" data-testid="daily-card">
       <div className="flex items-center gap-2">
         <CalendarDays className="size-5 text-accent" aria-hidden />
-        <h2 className="font-display text-lg font-bold text-fg">Daily · {date}</h2>
+        <h2 className="font-display text-lg font-bold text-fg">
+          Daily · <time dateTime={date}>{formatDailyDate(date)}</time>
+        </h2>
       </div>
       <pre className="mt-3 whitespace-pre-wrap font-mono text-sm leading-relaxed text-fg" aria-label="Result grid">
         {grid}
@@ -57,8 +59,8 @@ export function DailyCard({ state, date }: DailyCardProps) {
         ))}
       </ul>
       <div className="mt-4 flex flex-wrap items-center gap-3">
-        <Button variant="primary" leadingIcon={<Share2 />} onClick={share}>
-          Share today&apos;s result
+        <Button variant="secondary" leadingIcon={<Share2 />} onClick={share}>
+          Share today&apos;s grid
         </Button>
         <span className="font-mono text-xs text-muted tabular">
           Next daily in <span className="text-fg">{hms(left)}</span>
