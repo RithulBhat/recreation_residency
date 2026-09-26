@@ -8,6 +8,10 @@ import { normalizeSettings } from '@/game/presets';
 import { challengeLine } from './ChallengeBanner';
 import { msUntilMidnight } from './DailyCard';
 import { useRematch } from './useRematch';
+import { rematchCopy } from './DuelOutcome';
+import { blitzSummary, fastestWinSec } from './ResultsHero';
+import { summarizeGame } from '@/stats/aggregate';
+import { blitzGame } from '@/stats/testFactory';
 
 const navigate = vi.fn();
 const startLoadedGame = vi.fn();
@@ -113,5 +117,50 @@ describe('useRematch', () => {
     duel = duelStub({ initPayload: fresh, role: 'guest', isHost: false, countdown: null });
     rerender({ d: duel });
     expect(duel.ready).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('blitzSummary', () => {
+  it('reads "N songs in 60 s · fastest · best streak"', () => {
+    const game = blitzGame(7, 2);
+    const record = summarizeGame(game);
+    expect(blitzSummary(game, record)).toBe('7 songs in 90 s · fastest 1.5 s · best streak 7');
+    const shutout = blitzGame(0, 3);
+    expect(blitzSummary(shutout, summarizeGame(shutout))).toBe('0 songs in 90 s · best streak 0');
+    expect(fastestWinSec(shutout)).toBeNull();
+  });
+});
+
+describe('rematchCopy', () => {
+  it('says who everyone is waiting for', () => {
+    expect(rematchCopy('idle', 'Maya', null, true)).toEqual({ label: 'Rematch', note: null });
+    expect(rematchCopy('pending', 'Maya', null, true).label).toBe('Waiting for Maya to accept…');
+    expect(rematchCopy('offer', 'Maya', null, false)).toEqual({ label: 'Accept rematch', note: 'Maya wants a rematch!' });
+    expect(rematchCopy('countdown', 'Maya', 3, true).label).toBe('Starting rematch in 3…');
+    expect(rematchCopy('ready', 'Maya', null, false).note).toContain('Maya is starting');
+    expect(rematchCopy('waitingReady', 'Maya', null, true).label).toBe('Waiting for Maya…');
+  });
+});
+
+describe('useRematch phases', () => {
+  it('reports the handshake phase from the duel state', () => {
+    const old = init('old');
+    const render = (d: UseOnlineDuel) => renderHook(() => useRematch(d, true), { wrapper }).result.current;
+    expect(render(duelStub({ initPayload: old, countdown: null }))).toBe('idle');
+    expect(render(duelStub({ initPayload: old, countdown: null, rematchPending: true }))).toBe('pending');
+    expect(render(duelStub({ initPayload: old, countdown: null, rematchOffer: 'x' }))).toBe('offer');
+    expect(render(duelStub({ initPayload: old, countdown: null, rematchSeed: 'x' }))).toBe('setup');
+    expect(render(duelStub({ initPayload: old, countdown: 2 }))).toBe('countdown');
+    // The guest's `myReady` still reflects the game just played: not a rematch phase…
+    expect(render(duelStub({ initPayload: old, countdown: null, role: 'guest', isHost: false, myReady: true }))).toBe('idle');
+    // …until a fresh init arrives and the hook readies up for it.
+    let d = duelStub({ initPayload: old, countdown: null, role: 'guest', isHost: false, myReady: true });
+    const { result, rerender } = renderHook(({ duel }: { duel: UseOnlineDuel }) => useRematch(duel, true), { wrapper, initialProps: { duel: d } });
+    expect(result.current).toBe('idle');
+    d = duelStub({ initPayload: init('fresh'), countdown: null, role: 'guest', isHost: false, myReady: true, ready: d.ready });
+    rerender({ duel: d });
+    expect(d.ready).toHaveBeenCalledTimes(1);
+    rerender({ duel: d }); // the store's `myReady` write re-renders the screen; the stub needs a nudge
+    expect(result.current).toBe('ready');
   });
 });

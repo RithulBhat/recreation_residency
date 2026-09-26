@@ -55,7 +55,10 @@ async function expectIconButtonsLabelled(page: Page) {
 }
 
 test.beforeEach(async ({ page }) => {
-  await page.addInitScript(() => localStorage.clear());
+  await page.addInitScript(() => {
+    localStorage.clear();
+    localStorage.setItem('sg:coach:play', 'done'); // Start lands on /play: keep the first-run overlay out of the way
+  });
 });
 
 for (const [name, vp] of Object.entries(VIEWPORTS)) {

@@ -45,7 +45,10 @@ function RoundRow({ round, state, player }: { round: Round; state: GameState; pl
         <div className="truncate text-sm font-semibold text-fg" title={track.titleFull}>
           {track.title}
         </div>
-        <div className="truncate text-xs text-muted">{track.artist}</div>
+        <div className="truncate text-xs text-muted">
+          {track.artist}
+          {track.releaseYear ? ` · ${track.releaseYear}` : ''}
+        </div>
         <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
           <Badge tone={VERDICT_TONE[verdict]} size="sm">
             {VERDICT_LABEL[verdict]}

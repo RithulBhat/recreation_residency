@@ -9,6 +9,8 @@ import { clipLabel, points } from './format';
 export interface FeedbackProps {
   state: GameState;
   className?: string;
+  /** Keep a line of space while there is no verdict (default) so the layout never jumps. */
+  reserve?: boolean;
 }
 
 type Tone = 'success' | 'warn' | 'danger' | 'neutral';
@@ -51,7 +53,7 @@ function verdictLine(state: GameState, round: Round, guess: Guess): { text: stri
 }
 
 /** Inline verdict toast for the latest guess of the current round. */
-export function Feedback({ state, className }: FeedbackProps) {
+export function Feedback({ state, className, reserve = true }: FeedbackProps) {
   const reduce = useReducedMotion();
   const current = currentRound(state);
   // Blitz auto-advances, so the verdict of the song that just ended lives on the previous round.
@@ -62,7 +64,7 @@ export function Feedback({ state, className }: FeedbackProps) {
   const key = round && guess ? `${state.id}:${round.index}:${round.guesses.length}` : 'none';
 
   return (
-    <div className={cn('min-h-9', className)} aria-live="polite" data-testid="feedback">
+    <div className={cn(reserve && 'min-h-9', className)} aria-live="polite" data-testid="feedback">
       <AnimatePresence mode="wait" initial={false}>
         {line && (
           <motion.div

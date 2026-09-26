@@ -5,6 +5,7 @@ import { createRng } from '@/game/rng';
 import {
   MAX_TRACKS,
   accuracy,
+  anyRoundAttempted,
   applyGame,
   bestClipBucket,
   bucketClip,
@@ -404,5 +405,16 @@ describe('derived views', () => {
   it('recentForm marks clean games', () => {
     const game = makeGame({ rounds: [{ shape: 'won' }, { shape: 'won' }] });
     expect(recentForm([summarizeGame(game)])[0].clean).toBe(true);
+  });
+});
+
+describe('anyRoundAttempted', () => {
+  it('is false for a game quit before anything happened, true after a listen, a guess or a verdict', () => {
+    const untouched = makeGame({ rounds: [{ shape: 'skipped' }], endReason: 'quit' });
+    untouched.rounds[0] = { ...untouched.rounds[0], playsThisTry: 0, tryIndex: 0 };
+    expect(anyRoundAttempted(untouched)).toBe(false);
+    expect(anyRoundAttempted({ ...untouched, rounds: [{ ...untouched.rounds[0], playsThisTry: 1 }] })).toBe(true);
+    expect(anyRoundAttempted(makeGame({ rounds: [{ shape: 'lost' }], endReason: 'quit' }))).toBe(true);
+    expect(anyRoundAttempted(makeGame({ rounds: [{ shape: 'unresolved' }], endReason: 'quit' }))).toBe(true);
   });
 });

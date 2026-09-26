@@ -340,6 +340,30 @@ describe.each(cases)('$id', ({ id, pos, neg }) => {
   });
 });
 
+describe('an untouched quit game', () => {
+  /** Quit before listening or guessing: the reducer marks the open round 'skipped', nothing was attempted. */
+  function untouchedQuit(startedAt: number): GameState {
+    const g = makeGame({ rounds: [{ shape: 'skipped' }], endReason: 'quit', startedAt, finishedAt: startedAt + 1000 });
+    g.rounds[0] = { ...g.rounds[0], playsThisTry: 0, tryIndex: 0 };
+    return g;
+  }
+
+  it('does not put the player on the board', () => {
+    const ctx = ctxOf(untouchedQuit(at(14)));
+    expect(ctx.record.rounds).toBe(0);
+    expect(ctx.totals.games).toBe(1);
+    expect(achievementById('on-the-board')!.check(ctx)).toBe(false);
+    expect(evaluateAchievements(ctx).map((a) => a.id)).not.toContain('on-the-board');
+  });
+
+  it('is not an Early Bird or a Night Owl either', () => {
+    expect(achievementById('early-bird')!.check(ctxOf(untouchedQuit(at(5, 30))))).toBe(false);
+    expect(achievementById('night-owl')!.check(ctxOf(untouchedQuit(at(2))))).toBe(false);
+    // …while a real game at those hours still is
+    expect(achievementById('early-bird')!.check(ctxOf(makeGame({ startedAt: at(5, 30), rounds: [{ shape: 'lost' }] })))).toBe(true);
+  });
+});
+
 describe('evaluateAchievements', () => {
   it('returns the newly earned ones in roster order', () => {
     const ctx = ctxOf(plain);

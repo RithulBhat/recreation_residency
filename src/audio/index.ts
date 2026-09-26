@@ -1,5 +1,5 @@
 export { getAudioEngine, createAudioEngine, AUTOPLAY_BLOCKED, DEFAULT_CACHE_SIZE } from './engine';
-export type { AudioBackend, AudioEngineOptions, SongoonerAudioEngine, FetchLike, FetchResponseLike } from './engine';
+export type { AudioBackend, AudioEngineOptions, SongoonerAudioEngine, FetchLike, FetchResponseLike, PlayFullOptions } from './engine';
 export { getSfx, createSfx, HOVER_MIN_GAP_MS } from './sfx';
 export {
   clampOffset,

@@ -74,6 +74,19 @@ function headline(appName: string, label: string, correct: number, rounds: numbe
   return `${appName} · ${label} · ${correct}/${rounds} · ${formatScore(score)} pts`;
 }
 
+/** `7 songs in 60s` — a blitz is a race against the clock, not a set of rounds. */
+export function blitzTally(correct: number, seconds: number, spaced = false): string {
+  return `${correct} song${correct === 1 ? '' : 's'} in ${seconds}${spaced ? ' ' : ''}s`;
+}
+
+function headlineFor(appName: string, state: GameState, correct: number, rounds: number, score: number): string {
+  const { settings } = state;
+  if (settings.mode === 'blitz' && !settings.daily) {
+    return `${appName} · Blitz · ${blitzTally(correct, settings.blitzDuration)} · ${formatScore(score)} pts`;
+  }
+  return headline(appName, modeLabel(state), correct, rounds, score);
+}
+
 /** Mode label for a game, e.g. `Classic` or `Daily 2026-09-26`. */
 export function modeLabel(state: GameState): string {
   const daily = state.settings.daily;
@@ -88,7 +101,7 @@ export function shareText(state: GameState, opts: { url?: string; appName?: stri
   const appName = opts.appName ?? DEFAULT_APP_NAME;
   const record = summarizeGame(state);
   const parts = [
-    headline(appName, modeLabel(state), record.correct, record.rounds, record.score),
+    headlineFor(appName, state, record.correct, record.rounds, record.score),
     resultGrid(state),
   ].filter((p) => p.length > 0);
   if (record.players && record.players.length >= 2) {

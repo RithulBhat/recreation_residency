@@ -9,10 +9,11 @@ import {
   resultGrid,
   roundSymbol,
   shareOrCopy,
+  blitzTally,
   shareText,
 } from './share';
 import type { DailyResult } from './types';
-import { classicGame, dailyGame, duelGame, fixedGame, makeGame } from './testFactory';
+import { blitzGame, classicGame, dailyGame, duelGame, fixedGame, makeGame } from './testFactory';
 
 const CLASSIC_GRID = [
   '🟩 0.1s',
@@ -88,6 +89,13 @@ describe('resultGrid', () => {
 });
 
 describe('shareText', () => {
+  it('phrases a blitz as songs against the clock', () => {
+    const line = shareText(blitzGame(7, 2)).split('\n')[0];
+    expect(line).toBe('Songooner · Blitz · 7 songs in 90s · 1,540 pts');
+    expect(shareText(blitzGame(1, 0)).split('\n')[0]).toContain('1 song in 90s');
+    expect(blitzTally(3, 60, true)).toBe('3 songs in 60 s');
+  });
+
   it('builds headline + grid + url', () => {
     const text = shareText(classicGame(), { url: 'https://songooner.app' });
     expect(text).toBe(

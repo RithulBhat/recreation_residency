@@ -94,6 +94,16 @@ export function playedRounds(state: GameState): Round[] {
   );
 }
 
+/**
+ * True once the player actually did something in any round — listened to a clip, guessed, burnt a
+ * try or reached a verdict. A game quit before that is nothing to record.
+ */
+export function anyRoundAttempted(state: GameState): boolean {
+  return state.rounds.some(
+    (r) => r.guesses.length > 0 || r.playsThisTry > 0 || r.tryIndex > 0 || r.status === 'won' || r.status === 'lost',
+  );
+}
+
 /** Every guess of every played round, in order. */
 export function allGuesses(state: GameState): Guess[] {
   return playedRounds(state).flatMap((r) => r.guesses);

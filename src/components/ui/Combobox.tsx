@@ -2,6 +2,9 @@ import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode,
 import { LoaderCircle, Search } from 'lucide-react';
 import { cn } from './cn';
 import { inputSizeClasses } from './Input';
+import { ComboboxList } from './ComboboxList';
+
+export { HighlightMatch } from './HighlightMatch';
 
 export interface ComboboxProps<T> {
   /** Controlled text value */
@@ -39,6 +42,11 @@ export interface ComboboxProps<T> {
   inputMode?: 'text' | 'search';
   name?: string;
   autoComplete?: string;
+  /**
+   * Coarse pointers: a sticky "Submit “…” as is" row on top of the list, 44 px rows and a one-line
+   * reminder that picking a suggestion and submitting the typed text are different things.
+   */
+  touchAffordance?: boolean;
 }
 
 /** `highlight` value when no option is active. */
@@ -71,6 +79,7 @@ export function Combobox<T>({
   inputMode,
   name,
   autoComplete = 'off',
+  touchAffordance = false,
 }: ComboboxProps<T>) {
   const autoId = useId();
   const baseId = id ?? autoId;
@@ -80,8 +89,10 @@ export function Combobox<T>({
   const listRef = useRef<HTMLUListElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
 
-  const shouldShow = open && value.trim().length >= minChars;
+  const typed = value.trim();
+  const shouldShow = open && typed.length >= minChars;
   const hasOptions = options.length > 0;
+  const submitRow = touchAffordance && !!onSubmit && typed.length > 0;
 
   useEffect(() => {
     setHighlight(NONE);
@@ -107,6 +118,12 @@ export function Combobox<T>({
     if (clearOnSelect) onChange('');
   };
 
+  const submitTyped = () => {
+    if (!onSubmit || !typed) return;
+    onSubmit(typed);
+    setOpen(false);
+  };
+
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'ArrowDown') {
       e.preventDefault();
@@ -124,10 +141,9 @@ export function Combobox<T>({
       if (chosen !== undefined) {
         e.preventDefault();
         select(chosen);
-      } else if (onSubmit && value.trim()) {
+      } else if (onSubmit && typed) {
         e.preventDefault();
-        onSubmit(value.trim());
-        setOpen(false);
+        submitTyped();
       }
       return;
     }
@@ -194,77 +210,28 @@ export function Combobox<T>({
         {trailing && <span className="absolute right-1.5 flex items-center">{trailing}</span>}
       </div>
 
-      <ul
-        ref={listRef}
-        id={listId}
-        role="listbox"
-        aria-label={ariaLabel ? `${ariaLabel} suggestions` : 'Suggestions'}
-        hidden={!shouldShow}
-        onMouseLeave={() => setHighlight(NONE)}
-        className={cn(
-          'glass-strong absolute inset-x-0 top-full z-40 mt-2 max-h-72 overflow-y-auto rounded-2xl bg-bg-elevated/95 p-1.5 shadow-xl',
-          shouldShow ? 'animate-fade-in' : '',
-        )}
-      >
-        {!hasOptions && !loading && <li className="px-3 py-3 text-sm text-muted">{emptyMessage}</li>}
-        {!hasOptions && loading && <li className="px-3 py-3 text-sm text-muted">Searching…</li>}
-        {options.map((o, i) => {
-          const highlighted = i === highlight;
-          const desc = getDescription?.(o);
-          return (
-            <li
-              key={getKey(o)}
-              id={`${baseId}-opt-${i}`}
-              data-index={i}
-              role="option"
-              aria-selected={highlighted}
-              onMouseEnter={() => setHighlight(i)}
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => select(o)}
-              className={cn(
-                'cursor-pointer rounded-xl px-3 py-2.5 text-sm transition-colors',
-                highlighted ? 'bg-accent/15 text-fg' : 'text-fg hover:bg-surface',
-              )}
-            >
-              {renderOption ? (
-                renderOption(o, { highlighted, query: value })
-              ) : (
-                <div className="min-w-0">
-                  <div className="truncate font-semibold">
-                    <HighlightMatch text={getLabel(o)} query={value} />
-                  </div>
-                  {desc && <div className="truncate text-xs text-muted">{desc}</div>}
-                </div>
-              )}
-            </li>
-          );
-        })}
-      </ul>
+      <ComboboxList<T>
+        listRef={listRef}
+        listId={listId}
+        baseId={baseId}
+        ariaLabel={ariaLabel}
+        show={shouldShow}
+        options={options}
+        value={value}
+        typed={typed}
+        highlight={highlight}
+        loading={loading}
+        emptyMessage={emptyMessage}
+        touchAffordance={touchAffordance}
+        submitRow={submitRow}
+        getKey={getKey}
+        getLabel={getLabel}
+        getDescription={getDescription}
+        renderOption={renderOption}
+        onHighlight={setHighlight}
+        onSelect={select}
+        onSubmitTyped={submitTyped}
+      />
     </div>
-  );
-}
-
-/** Bolds occurrences of each query word inside `text`. */
-export function HighlightMatch({ text, query, className }: { text: string; query: string; className?: string }) {
-  const words = query
-    .toLowerCase()
-    .split(/\s+/)
-    .map((w) => w.trim())
-    .filter((w) => w.length > 0);
-  if (words.length === 0) return <span className={className}>{text}</span>;
-  const re = new RegExp(`(${words.map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})`, 'ig');
-  const parts = text.split(re);
-  return (
-    <span className={className}>
-      {parts.map((p, i) =>
-        p && words.includes(p.toLowerCase()) ? (
-          <mark key={i} className="rounded-sm bg-transparent text-accent">
-            {p}
-          </mark>
-        ) : (
-          <span key={i}>{p}</span>
-        ),
-      )}
-    </span>
   );
 }

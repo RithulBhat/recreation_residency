@@ -445,3 +445,45 @@ describe('autoplay policy', () => {
     await expect(again).resolves.toBeUndefined();
   });
 });
+
+describe('preloadStrict + reveal fade-in', () => {
+  it('preloadStrict rejects on a failed fetch (preload never does) and marks the url as failed', async () => {
+    const fetchFn = vi.fn<FetchLike>(async () => {
+      throw new Error('offline');
+    });
+    const { engine } = setup({ fetchFn });
+    await expect(engine.preloadStrict(url(1))).rejects.toThrow('offline');
+    await expect(engine.preload(url(1))).resolves.toBeUndefined();
+    expect(engine.getDuration(url(1))).toBeNull();
+    await expect(engine.preloadStrict('')).rejects.toThrow(/no preview/);
+  });
+
+  it('preloadStrict resolves once the buffer is decoded', async () => {
+    const { engine, fetchFn } = setup();
+    await expect(engine.preloadStrict(url(1))).resolves.toBeUndefined();
+    expect(engine.getDuration(url(1))).toBe(30);
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+  });
+
+  it('playFull({ fadeInMs }) lengthens the attack of the envelope; clips keep the click-free minimum', async () => {
+    const { engine, ctx } = setup();
+    const done = engine.playFull(url(1), 10, { fadeInMs: 400 });
+    await waitForSource(ctx);
+    const [src] = ctx.liveSources;
+    const t0 = src.startedAt ?? 0;
+    const g = clipGainOf(src, masterOf(ctx)).gain;
+    expect(g.calls[0].args).toEqual([0, t0]);
+    expect(g.calls[1].args[0]).toBe(1);
+    expect(g.calls[1].args[1]).toBeCloseTo(t0 + 0.4, 6);
+    src.endNow();
+    await done;
+
+    const clip = engine.playClip({ url: url(1), offset: 0, duration: 0.1 });
+    await waitForSource(ctx);
+    const src2 = ctx.liveSources[ctx.liveSources.length - 1];
+    const g2 = clipGainOf(src2, masterOf(ctx)).gain;
+    expect(g2.calls[1].args[1]).toBeCloseTo((src2.startedAt ?? 0) + 0.003, 6);
+    src2.endNow();
+    await clip;
+  });
+});

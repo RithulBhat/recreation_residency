@@ -11,7 +11,13 @@ export { OpponentPanel, EMOTES, type OpponentPanelProps } from './OpponentPanel'
 export { HotkeysHelp, hotkeyRows, type HotkeysHelpProps } from './HotkeysHelp';
 export { QuitDialog, type QuitDialogProps } from './QuitDialog';
 export { NoGame } from './NoGame';
-export { useGameAudio, applyVolumePrefs, readVolumePref, type GameAudio } from './useGameAudio';
+export { PlaySidebar } from './PlaySidebar';
+export { CoachMarks, COACH_STEPS, type CoachMarksProps, type CoachStep } from './CoachMarks';
+export { useCoachMarks, isCoachDone, markCoachDone, COACH_KEY } from './useCoachMarks';
+export { useFinishGame, isDiscardedGame } from './useFinishGame';
+export { createTapGuard, DOUBLE_TAP_MS, type TapGuard } from './tapGuard';
+export { resolveTrackDetail, withTrackDetail, mergeTrackDetail, rememberTrackDetail, hasTrackDetail } from './trackDetails';
+export { useGameAudio, applyVolumePrefs, readVolumePref, patchRoundTrack, isLiveGame, PREVIEW_FAILED, REVEAL_FADE_MS, type GameAudio } from './useGameAudio';
 export { useGameHost, hostEventFor, type GameHost } from './useGameHost';
 export { useGameClock, TICK_MS } from './useGameClock';
 export { usePlayHotkeys, type PlayHotkeys } from './usePlayHotkeys';

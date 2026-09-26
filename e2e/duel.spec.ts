@@ -62,11 +62,35 @@ async function expectIconButtonsLabelled(page: Page): Promise<void> {
   expect(missing, 'icon buttons without aria-label').toEqual([]);
 }
 
+function gameId(page: Page): Promise<string> {
+  return page.evaluate(() => window.__songooner!.gameStore.getState().state.id);
+}
+
+/** Drive a 5-round race to the end through the dev hook: give up, next, five times. */
+async function finishRace(page: Page): Promise<void> {
+  await page.waitForFunction(() => window.__songooner?.gameStore.getState().state.status === 'playing');
+  for (let i = 0; i < 5; i++) {
+    await page.evaluate(() => {
+      const store = window.__songooner!.gameStore.getState();
+      if (store.state.status === 'playing') store.giveUp();
+    });
+    await page.waitForTimeout(150);
+    await page.evaluate(() => {
+      const store = window.__songooner!.gameStore.getState();
+      if (store.state.status === 'round-over') store.next();
+    });
+    await page.waitForTimeout(150);
+  }
+}
+
 /** Landing → identity → hosting, for one viewport. No opponent needed. */
 for (const [name, vp] of Object.entries({ mobile: MOBILE, desktop: DESKTOP })) {
   test(`duel · lobby states · ${name}`, async ({ page }) => {
     test.setTimeout(90_000);
-    await page.addInitScript(() => localStorage.clear());
+    await page.addInitScript(() => {
+      localStorage.clear();
+      localStorage.setItem('sg:coach:play', 'done');
+    });
     await page.setViewportSize(vp);
     await page.goto(`${BASE}/#/duel`);
     await settle(page);
@@ -117,8 +141,12 @@ test('duel · two browsers race each other', async ({ browser }) => {
   }
 
   try {
-    await a.addInitScript(() => localStorage.clear());
-    await b.addInitScript(() => localStorage.clear());
+    for (const p of [a, b]) {
+      await p.addInitScript(() => {
+        localStorage.clear();
+        localStorage.setItem('sg:coach:play', 'done');
+      });
+    }
 
     /* ---- host opens a room ---- */
     await a.goto(`${BASE}/#/duel`);
@@ -178,9 +206,52 @@ test('duel · two browsers race each other', async ({ browser }) => {
 
     await expect(a).toHaveURL(/#\/play/, { timeout: 20_000 });
     await expect(b).toHaveURL(/#\/play/, { timeout: 20_000 });
+    const firstId = await gameId(a);
+    expect(await gameId(b)).toBe(firstId); // same seed, same pool → same game id on both sides
+
+    /* ---- both race to the end (give up → next, five times) and land on results ---- */
+    await finishRace(a);
+    await finishRace(b);
+    await expect(a).toHaveURL(/#\/results/, { timeout: 30_000 });
+    await expect(b).toHaveURL(/#\/results/, { timeout: 30_000 });
+    const outcomeA = a.getByTestId('duel-outcome');
+    const outcomeB = b.getByTestId('duel-outcome');
+    await expect(outcomeA).toBeVisible({ timeout: 15_000 });
+    await expect(outcomeB).toBeVisible({ timeout: 15_000 });
+    await expect(outcomeA).toContainText(/Dead heat|You win|They got you/, { timeout: 20_000 });
+    await expect(outcomeB).toContainText(/Dead heat|You win|They got you/, { timeout: 20_000 });
+    await settle(a);
+    await settle(b);
+    await a.screenshot({ path: `${OUT}/results-host-desktop.png`, fullPage: true });
+    await b.screenshot({ path: `${OUT}/results-guest-mobile.png`, fullPage: true });
+
+    /* ---- rematch: host offers, guest accepts, both count down and race again (P1-1) ---- */
+    await a.getByTestId('rematch').click();
+    await expect(a.getByTestId('rematch')).toContainText('Waiting for Bee to accept');
+    await expect(b.getByTestId('rematch')).toContainText('Accept rematch', { timeout: 15_000 });
+    await expect(b.getByTestId('rematch-note')).toContainText('Ace wants a rematch');
+    await a.screenshot({ path: `${OUT}/rematch-pending-desktop.png`, fullPage: true });
+    await b.screenshot({ path: `${OUT}/rematch-offer-mobile.png`, fullPage: true });
+    await b.getByTestId('rematch').click();
+    await expect(a.getByTestId('duel-outcome')).toHaveAttribute('data-rematch', /countdown|go/, { timeout: 30_000 });
+    await a.screenshot({ path: `${OUT}/rematch-countdown-desktop.png`, fullPage: true });
+    await expect(a).toHaveURL(/#\/play/, { timeout: 30_000 });
+    await expect(b).toHaveURL(/#\/play/, { timeout: 30_000 });
+    const secondA = await gameId(a);
+    const secondB = await gameId(b);
+    expect(secondA).not.toBe(firstId);
+    expect(secondB).toBe(secondA);
+    await expect(a.getByTestId('round-counter')).toContainText('1/5');
+    await expect(b.getByTestId('round-counter')).toContainText('1/5');
+    // No stale hand-off: nobody is dragged anywhere else once the rematch is running.
+    await a.waitForTimeout(2500);
+    await expect(a).toHaveURL(/#\/play/);
+    await expect(b).toHaveURL(/#\/play/);
 
     /* ---- back to the lobby mid-race: no countdown left on top of it (P1-2) ---- */
-    await a.goBack();
+    await a.evaluate(() => {
+      location.hash = '#/duel';
+    });
     await expect(a).toHaveURL(/#\/duel/, { timeout: 15_000 });
     await settle(a);
     // The overlay is scroll-locked and covers everything, so its absence is what makes the lobby usable.

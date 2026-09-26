@@ -36,9 +36,22 @@ describe('OpponentPanel', () => {
     expect(duel.emote).toHaveBeenCalledWith('😂');
   });
 
-  it('isDuelActive needs an init payload and a live race', () => {
-    expect(isDuelActive({ initPayload: null, status: 'playing' })).toBe(false);
-    expect(isDuelActive({ initPayload: { type: 'init', settings: createInitialState().settings, tracks: [] }, status: 'connected' })).toBe(false);
-    expect(isDuelActive({ initPayload: { type: 'init', settings: createInitialState().settings, tracks: [] }, status: 'finished' })).toBe(true);
+  it('isDuelActive is true while a session exists (role + opponent/init) and not idle, closed or failed', () => {
+    const init = { type: 'init' as const, settings: createInitialState().settings, tracks: [] };
+    const opponent = { id: 'host', name: 'Maya', emoji: '🦊', color: '#f97316' };
+    // no session at all
+    expect(isDuelActive({ role: null, status: 'idle', opponent: null, initPayload: null })).toBe(false);
+    expect(isDuelActive({ role: null, status: 'playing', opponent, initPayload: init })).toBe(false);
+    // hosting alone: nobody to race yet
+    expect(isDuelActive({ role: 'host', status: 'waiting', opponent: null, initPayload: null })).toBe(false);
+    // the rematch handshake passes through 'connected' — still live
+    expect(isDuelActive({ role: 'guest', status: 'connected', opponent, initPayload: init })).toBe(true);
+    expect(isDuelActive({ role: 'host', status: 'connected', opponent, initPayload: null })).toBe(true);
+    expect(isDuelActive({ role: 'guest', status: 'playing', opponent, initPayload: init })).toBe(true);
+    expect(isDuelActive({ role: 'guest', status: 'finished', opponent, initPayload: init })).toBe(true);
+    // over
+    for (const status of ['closed', 'error'] as const) {
+      expect(isDuelActive({ role: 'guest', status, opponent, initPayload: init })).toBe(false);
+    }
   });
 });

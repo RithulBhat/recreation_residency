@@ -23,9 +23,15 @@ async function settle(page: Page, ms = 700) {
   await page.waitForTimeout(ms);
 }
 
-/** Open /play (loads the DEV hook) and start a real game from the given settings. */
-async function startGame(page: Page, settings: Partial<GameSettings>) {
-  await page.addInitScript(() => localStorage.clear());
+/**
+ * Open /play (loads the DEV hook) and start a real game from the given settings. The first-run coach
+ * marks are pre-dismissed unless a test asks for them (`coach: true`).
+ */
+async function startGame(page: Page, settings: Partial<GameSettings>, opts: { coach?: boolean } = {}) {
+  await page.addInitScript((coach) => {
+    localStorage.clear();
+    if (!coach) localStorage.setItem('sg:coach:play', 'done');
+  }, opts.coach ?? false);
   await page.goto('/#/play');
   await expect(page.getByRole('heading', { name: 'No game in progress' })).toBeVisible();
   await page.waitForFunction(() => typeof window.__songooner?.start === 'function');
@@ -38,15 +44,28 @@ async function startGame(page: Page, settings: Partial<GameSettings>) {
 }
 
 async function expectNoHorizontalOverflow(page: Page) {
-  const r = await page.evaluate(() => ({
-    doc: document.documentElement.scrollWidth,
-    inner: window.innerWidth,
-    widest: Array.from(document.querySelectorAll<HTMLElement>('main *'))
-      .filter((el) => getComputedStyle(el).pointerEvents !== 'none')
-      .filter((el) => el.getBoundingClientRect().right > window.innerWidth + 1)
-      .slice(0, 4)
-      .map((el) => `${el.tagName}.${el.className}`.slice(0, 140)),
-  }));
+  const r = await page.evaluate(() => {
+    // Chip rows are deliberately swipeable, so anything clipped by a scroll container is fine.
+    const inScroller = (el: HTMLElement): boolean => {
+      let node: HTMLElement | null = el.parentElement;
+      while (node && node !== document.body) {
+        const ox = getComputedStyle(node).overflowX;
+        if (ox === 'auto' || ox === 'scroll' || ox === 'hidden') return true;
+        node = node.parentElement;
+      }
+      return false;
+    };
+    return {
+      doc: document.documentElement.scrollWidth,
+      inner: window.innerWidth,
+      widest: Array.from(document.querySelectorAll<HTMLElement>('main *'))
+        .filter((el) => getComputedStyle(el).pointerEvents !== 'none')
+        .filter((el) => !inScroller(el))
+        .filter((el) => el.getBoundingClientRect().right > window.innerWidth + 1)
+        .slice(0, 4)
+        .map((el) => `${el.tagName}.${el.className}`.slice(0, 140)),
+    };
+  });
   expect(r.widest, 'elements past the right edge').toEqual([]);
   expect(r.doc, `documentElement.scrollWidth ${r.doc} > innerWidth ${r.inner}`).toBeLessThanOrEqual(r.inner);
 }
@@ -85,12 +104,17 @@ for (const [name, vp] of Object.entries(VIEWPORTS)) {
     await settle(page);
     await page.screenshot({ path: `${OUT}/play-idle-${name}.png`, fullPage: true });
 
-    // Press the record: the clip plays for 1 s, the ring fills, the vinyl ends in "done".
+    // Every hint kind is on offer — the year comes from the /track lookup the round-open does (P2-1).
+    await expect(page.getByRole('button', { name: /Release year hint/ })).toBeVisible({ timeout: 15_000 });
+
+    // Press the record — twice, fast. The double-tap guard swallows the bounce (P3-2): the clip
+    // plays for 1 s, the ring fills, the vinyl ends in "done", and it counted as ONE listen.
     const stage = page.getByTestId('stage');
-    await page.getByRole('button', { name: /play clip/i }).click();
+    await page.getByRole('button', { name: /play clip/i }).dblclick();
     await expect(stage).toHaveAttribute('data-vinyl', 'playing', { timeout: 20_000 });
     await expect(stage).toHaveAttribute('data-vinyl', 'done', { timeout: 20_000 });
     await expect(page.getByRole('button', { name: /replay clip/i })).toBeVisible();
+    expect(await page.evaluate(() => window.__songooner!.gameStore.getState().state.rounds[0].playsThisTry)).toBe(1);
 
     // Wrong guess → feedback + tries strip advances.
     const input = page.getByRole('combobox', { name: 'Your guess' });
@@ -109,8 +133,15 @@ for (const [name, vp] of Object.entries(VIEWPORTS)) {
     await expect(reveal).toBeVisible();
     await expect(reveal.getByRole('link', { name: /Deezer/ })).toHaveAttribute('href', /deezer\.com\/track\/\d+/);
     await expect(reveal.getByRole('button', { name: 'Next song' })).toBeVisible();
+    // The meta line carries the release year now ("2019 · After Hours").
+    await expect(reveal).toContainText(/(19|20)\d{2} · /);
+    // The lost round auto-plays (faded in) with a slim "tap to stop" strip under the record.
+    await expect(stage).toHaveAttribute('data-vinyl', 'playing', { timeout: 20_000 });
+    await expect(stage.getByTestId('reveal-progress')).toBeVisible();
     await settle(page);
     await page.screenshot({ path: `${OUT}/play-reveal-${name}.png`, fullPage: true });
+    await stage.getByTestId('reveal-progress').click();
+    await expect(stage).not.toHaveAttribute('data-vinyl', 'playing');
     await expectNoHorizontalOverflow(page);
 
     // Next → round 2: take a hint, then find the answer through the autocomplete and win.
@@ -233,6 +264,30 @@ test('play · blitz clock counts down and auto-advances', async ({ page }) => {
   await dialog.getByRole('button', { name: 'Quit game' }).click();
   await page.waitForURL(/#\/results/);
   await expect(page.getByTestId('results-hero')).toContainText('Called it early');
+  // Blitz-native copy: songs against the clock, and the clock (not the wall time) as the duration.
+  await expect(page.getByTestId('blitz-summary')).toContainText('0 songs in 40 s');
+  await expect(page.getByTestId('results-hero')).toContainText('40s');
+});
+
+test('play · quitting before touching anything discards the game (nothing recorded)', async ({ page }) => {
+  test.setTimeout(120_000);
+  await page.setViewportSize(VIEWPORTS.desktop);
+  await startGame(page, { packIds: ['pop-hits'], mode: 'classic', rounds: 3, seed: 'e2e-discard' });
+  await page.keyboard.press('Escape');
+  const dialog = page.getByRole('dialog', { name: 'Quit this game?' });
+  await dialog.getByRole('button', { name: 'Quit game' }).click();
+  await page.waitForURL(/#\/setup/);
+  await expect(page.getByText('Game discarded')).toBeVisible();
+  const games = await page.evaluate(() => {
+    const raw = localStorage.getItem('sg:stats');
+    if (!raw) return 0;
+    const parsed = JSON.parse(raw) as { state?: { totals?: { games?: number } } };
+    return parsed.state?.totals?.games ?? 0;
+  });
+  expect(games).toBe(0);
+  // /results has nothing to show for it either.
+  await page.goto('/#/results');
+  await page.waitForURL(/#\/setup/);
 });
 
 test('play · classic stages, host bubble and survival lives', async ({ page }) => {
@@ -263,7 +318,7 @@ test('play · classic stages, host bubble and survival lives', async ({ page }) 
   await expect(page.getByRole('img', { name: '2 of 3 lives left' })).toBeVisible();
 });
 
-test('play · a failed preview makes the record a Retry affordance (click and Space)', async ({ page }) => {
+test('play · a failed preview is announced on round open and makes the record a Retry affordance', async ({ page }) => {
   test.setTimeout(120_000);
   await page.setViewportSize(VIEWPORTS.desktop);
   const previews = /preview[^/]*\.dzcdn\.net/;
@@ -271,12 +326,14 @@ test('play · a failed preview makes the record a Retry affordance (click and Sp
   await startGame(page, { packIds: ['pop-hits'], mode: 'fixed', clipLength: 1, tries: 3, rounds: 2, seed: 'e2e-retry' });
   const stage = page.getByTestId('stage');
 
-  await page.getByRole('button', { name: /play clip/i }).click();
+  // No tap needed: the strict preload already failed, so the round opens in the error state (P2-6).
   await expect(stage).toHaveAttribute('data-error', '', { timeout: 15_000 });
+  await expect(stage).toContainText("Couldn't load this preview");
   await expect(stage).toContainText(/Tap the record or press/);
   const retry = stage.getByRole('button', { name: /Retry clip/ });
   await expect(retry).toBeEnabled();
   await expect(page.getByRole('button', { name: 'Give up & next' })).toBeVisible();
+  await page.screenshot({ path: `${OUT}/play-preview-failed-desktop.png` });
 
   // Unblock the CDN: the record retries and clears the error; Space replays.
   await page.unroute(previews);
@@ -349,4 +406,106 @@ test('play · party pass-the-phone interstitial', async ({ page }) => {
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(bar).toContainText("Octo's turn");
   await expect(page.getByTestId('player-p2')).toHaveAttribute('aria-current', 'true');
+});
+
+for (const vp of [
+  { width: 844, height: 390 },
+  { width: 926, height: 428 },
+]) {
+  test(`play · landscape phone ${vp.width}×${vp.height} keeps the record and the guess box on one screen`, async ({ page }) => {
+    test.setTimeout(120_000);
+    await page.setViewportSize(vp);
+    await startGame(page, { packIds: ['pop-hits'], mode: 'classic', rounds: 3, hintsEnabled: true, seed: 'e2e-landscape' });
+    await expect(page.getByTestId('stage')).toHaveAttribute('data-compact', '');
+    await settle(page);
+    await page.screenshot({ path: `${OUT}/play-landscape-${vp.width}x${vp.height}.png` });
+    await expectNoHorizontalOverflow(page);
+
+    const record = await page.getByRole('button', { name: /play clip/i }).boundingBox();
+    const input = await page.getByRole('combobox', { name: 'Your guess' }).boundingBox();
+    const skip = await page.getByRole('button', { name: /^Skip/ }).boundingBox();
+    for (const [label, box] of [['record', record], ['input', input], ['skip', skip]] as const) {
+      expect(box, `${label} has a box`).not.toBeNull();
+      expect(box!.y, `${label} top`).toBeGreaterThanOrEqual(0);
+      expect(box!.y + box!.height, `${label} bottom within ${vp.height}`).toBeLessThanOrEqual(vp.height + 1);
+    }
+    // The record sits to the LEFT of the guess box, not above it.
+    expect(record!.x + record!.width).toBeLessThanOrEqual(input!.x + 1);
+    const tall = await page.evaluate(() => document.documentElement.scrollHeight - window.innerHeight);
+    expect(tall, 'page height past the viewport').toBeLessThanOrEqual(120);
+
+    // Reveal in landscape: the card lands beside the record.
+    await page.getByRole('button', { name: 'Give up' }).click();
+    await expect(page.getByTestId('reveal').filter({ visible: true })).toBeVisible();
+    await settle(page);
+    await page.screenshot({ path: `${OUT}/play-landscape-reveal-${vp.width}x${vp.height}.png` });
+    await expectNoHorizontalOverflow(page);
+  });
+}
+
+test('play · first-run coach marks show once, walk three steps and never come back', async ({ page }) => {
+  test.setTimeout(120_000);
+  await page.setViewportSize(VIEWPORTS.mobile);
+  await startGame(page, { packIds: ['pop-hits'], mode: 'classic', rounds: 3, seed: 'e2e-coach' }, { coach: true });
+  const marks = page.getByTestId('coach-marks');
+  await expect(marks).toBeVisible();
+  const dialog = marks.getByRole('dialog', { name: 'Tap the record' });
+  await expect(dialog).toBeVisible();
+  await expect(marks).toContainText('1/3');
+  await settle(page, 400);
+  await page.screenshot({ path: `${OUT}/coach-1-mobile.png` });
+
+  // Keyboard: → walks forward, Next walks forward, Esc dismisses for good.
+  await page.keyboard.press('ArrowRight');
+  await expect(marks.getByRole('dialog', { name: 'Type your guess' })).toBeVisible();
+  await marks.getByTestId('coach-next').click();
+  await expect(marks.getByRole('dialog', { name: 'Skip grows the clip' })).toBeVisible();
+  await expect(marks.getByTestId('coach-next')).toHaveText('Got it');
+  await expect(marks.getByRole('listitem').nth(2)).toHaveAttribute('aria-current', 'step');
+  await settle(page, 300);
+  await page.screenshot({ path: `${OUT}/coach-3-mobile.png` });
+  await page.keyboard.press('Escape');
+  await expect(marks).toHaveCount(0);
+  expect(await page.evaluate(() => localStorage.getItem('sg:coach:play'))).toBe('done');
+
+  // Leave and come back through the app: the game is still there, the coach marks are not.
+  await page.evaluate(() => {
+    location.hash = '#/setup';
+  });
+  await expect(page.getByTestId('start-game')).toBeVisible();
+  await page.evaluate(() => {
+    location.hash = '#/play';
+  });
+  await expect(page.getByTestId('stage')).toBeVisible();
+  await settle(page, 400);
+  await expect(page.getByTestId('coach-marks')).toHaveCount(0);
+});
+
+test('play · touch autocomplete offers "Submit as is" on top of 44 px rows', async ({ browser }) => {
+  test.setTimeout(120_000);
+  const ctx = await browser.newContext({ viewport: VIEWPORTS.mobile, hasTouch: true, isMobile: true });
+  const page = await ctx.newPage();
+  try {
+    await startGame(page, { packIds: ['pop-hits'], mode: 'fixed', clipLength: 1, tries: 3, rounds: 2, seed: 'e2e-touch' });
+    const answer = await page.evaluate(() => {
+      const s = window.__songooner!.gameStore.getState().state;
+      return s.rounds[s.currentRound].track.title;
+    });
+    const input = page.getByRole('combobox', { name: 'Your guess' });
+    await input.fill(answer.slice(0, Math.min(4, answer.length)));
+    const submitRow = page.getByTestId('submit-as-is');
+    await expect(submitRow).toBeVisible({ timeout: 10_000 });
+    await expect(submitRow).toContainText('Submit “');
+    const rows = page.getByRole('option').filter({ hasNotText: 'Submit “' });
+    await expect(rows.first()).toBeVisible({ timeout: 10_000 });
+    for (const box of await Promise.all([submitRow.boundingBox(), rows.first().boundingBox()])) {
+      expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
+    }
+    await settle(page, 300);
+    await page.screenshot({ path: `${OUT}/touch-autocomplete-mobile.png` });
+    await submitRow.tap();
+    await expect(page.getByTestId('feedback')).toContainText(/Nope|So close|Correct|Artist/);
+  } finally {
+    await ctx.close();
+  }
 });

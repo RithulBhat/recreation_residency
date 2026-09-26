@@ -189,7 +189,7 @@ export const ACHIEVEMENTS: readonly Achievement[] = [
     emoji: '🏁',
     description: 'Finish your first game.',
     rarity: 'common',
-    check: ({ totals }) => totals.games >= 1,
+    check: ({ record, totals }) => totals.games >= 1 && record.rounds >= 1,
   },
   {
     id: 'point-one',
@@ -363,6 +363,7 @@ export const ACHIEVEMENTS: readonly Achievement[] = [
     description: 'Finish a game between 1am and 4am.',
     rarity: 'common',
     check: ({ record }) => {
+      if (record.rounds < 1) return false;
       const h = hourOf(record);
       return h >= 1 && h < 4;
     },
@@ -374,6 +375,7 @@ export const ACHIEVEMENTS: readonly Achievement[] = [
     description: 'Finish a game between 5am and 7am.',
     rarity: 'common',
     check: ({ record }) => {
+      if (record.rounds < 1) return false;
       const h = hourOf(record);
       return h >= 5 && h < 7;
     },

@@ -10,11 +10,13 @@ export interface HintChipsProps {
   onHint: (kind: HintKind) => void;
   disabled?: boolean;
   className?: string;
+  /** One swipeable row instead of wrapping (short landscape viewports). */
+  scroll?: boolean;
 }
 
 /** Used hints as revealed text, still-available hints as chips with their 15 % cost. */
 export const HintChips = forwardRef<HTMLButtonElement, HintChipsProps>(function HintChips(
-  { settings, round, onHint, disabled, className },
+  { settings, round, onHint, disabled, className, scroll = false },
   firstChipRef,
 ) {
   if (!settings.hintsEnabled || maxHints(settings) === 0) return null;
@@ -39,7 +41,11 @@ export const HintChips = forwardRef<HTMLButtonElement, HintChipsProps>(function 
         </ul>
       )}
       {available.length > 0 && (
-        <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label={`Hints, ${left} left, each costs 15 percent`}>
+        <div
+          className={cn('flex items-center gap-1.5', scroll ? 'flex-nowrap overflow-x-auto pb-0.5 [&>*]:shrink-0' : 'flex-wrap')}
+          role="group"
+          aria-label={`Hints, ${left} left, each costs 15 percent`}
+        >
           {available.map((kind, i) => (
             <Chip
               key={kind}

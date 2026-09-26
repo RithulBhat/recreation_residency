@@ -6,6 +6,7 @@ import { Button, Combobox, HighlightMatch, IconButton, cn } from '@/components/u
 import { MicButton, type UseVoiceGuess } from '@/voice';
 import { isBuzzerDuel } from '@/game/presets';
 import { canGuess, currentRound, nextClipLength } from '@/game/selectors';
+import { useCoarsePointer } from '@/hooks/useMediaQuery';
 import { HintChips } from './HintChips';
 import { clipLabel } from './format';
 
@@ -25,6 +26,8 @@ export interface GuessBoxProps {
   inputRef?: RefObject<HTMLInputElement | null>;
   hintRef?: RefObject<HTMLButtonElement | null>;
   className?: string;
+  /** Short landscape viewports: tighter gaps, hint chips in one swipeable row. */
+  compact?: boolean;
 }
 
 export function skipLabel(state: GameState): string {
@@ -46,13 +49,14 @@ function placeholderFor(state: GameState): string {
   }
 }
 
-function Option({ track, query }: { track: Track; query: string }) {
+function Option({ track, query, big }: { track: Track; query: string; big: boolean }) {
+  const thumb = big ? 'size-10' : 'size-9';
   return (
-    <div className="flex items-center gap-3">
+    <div className="flex min-w-0 items-center gap-3">
       {track.cover ? (
-        <img src={track.cover} alt="" className="size-9 shrink-0 rounded-lg object-cover" loading="lazy" />
+        <img src={track.cover} alt="" className={cn(thumb, 'shrink-0 rounded-lg object-cover')} loading="lazy" />
       ) : (
-        <span className="size-9 shrink-0 rounded-lg bg-gradient-accent" aria-hidden />
+        <span className={cn(thumb, 'shrink-0 rounded-lg bg-gradient-accent')} aria-hidden />
       )}
       <div className="min-w-0">
         <div className="truncate font-semibold">
@@ -82,8 +86,10 @@ export function GuessBox({
   inputRef,
   hintRef,
   className,
+  compact = false,
 }: GuessBoxProps) {
   const reduce = useReducedMotion();
+  const coarse = useCoarsePointer();
   const round = currentRound(state);
   const allowed = canGuess(state);
   const live = state.status === 'playing' && round?.status === 'playing';
@@ -93,7 +99,7 @@ export function GuessBox({
   return (
     <motion.div
       key={shakeKey}
-      className={cn('flex flex-col gap-3', className)}
+      className={cn('flex flex-col', compact ? 'gap-2' : 'gap-3', className)}
       animate={shakeKey > 0 && !reduce ? { x: [0, -10, 9, -7, 5, -2, 0] } : { x: 0 }}
       transition={{ duration: 0.42, ease: 'easeInOut' }}
       data-testid="guess-box"
@@ -109,7 +115,8 @@ export function GuessBox({
           getLabel={(t) => `${t.artist} - ${t.title}`}
           onSelect={(t) => onSubmit(`${t.artist} - ${t.title}`)}
           onSubmit={onSubmit}
-          renderOption={(t, ctx) => <Option track={t} query={ctx.query} />}
+          renderOption={(t, ctx) => <Option track={t} query={ctx.query} big={coarse} />}
+          touchAffordance={coarse}
           placeholder={placeholderFor(state)}
           disabled={!live || !allowed}
           size="lg"
@@ -146,7 +153,7 @@ export function GuessBox({
         )}
       </div>
 
-      <HintChips ref={hintRef} settings={state.settings} round={round} onHint={onHint} disabled={!live || !allowed} />
+      <HintChips ref={hintRef} settings={state.settings} round={round} onHint={onHint} disabled={!live || !allowed} scroll={compact} />
 
       <div className="flex items-center gap-2">
         {state.settings.allowSkip && (

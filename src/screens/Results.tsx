@@ -7,6 +7,8 @@ import { useStartGame } from '@/hooks/useStartGame';
 import { useGameStore } from '@/store/gameStore';
 import { useResultStore } from '@/store/resultStore';
 import { isDuelActive } from '@/components/play/useOnlineDuelSync';
+import { isLiveGame } from '@/components/play/useGameAudio';
+import { isDiscardedGame } from '@/components/play/useFinishGame';
 import {
   ChallengeBanner,
   DailyCard,
@@ -22,7 +24,8 @@ import {
 /** Results screen — the post-game wrap-up: score, progression, standings, every round, and what next. */
 export default function Results() {
   const state = useGameStore((s) => s.state);
-  const finished = state.status === 'finished';
+  // A game quit before anything happened is never shown or recorded (see `useFinishGame`).
+  const finished = state.status === 'finished' && !isDiscardedGame(state);
   const gameId = state.id;
   const stored = useResultStore((s) => (s.gameId === gameId ? s.result : null));
   const challenger = useResultStore((s) => s.challenger);
@@ -37,10 +40,14 @@ export default function Results() {
     if (finished) useResultStore.getState().record(useGameStore.getState().state);
   }, [finished, gameId]);
 
-  // "Play again" flips the store to the new game a moment before it navigates to /play; bouncing
-  // through /setup in that window flashed the lobby and rewrote history. Only a genuinely unfinished
-  // game with no start in flight is sent to Setup.
-  if (!finished || record === null) return loading ? null : <Navigate to="/setup" replace />;
+  // "Play again" (and a duel rematch) flip the store to the new game a moment before they navigate
+  // to /play; bouncing through /setup in that window flashed the lobby and rewrote history. Only a
+  // genuinely unfinished game with no start in flight is sent to Setup.
+  if (!finished || record === null) {
+    if (loading) return null;
+    if (duelActive && isLiveGame(state)) return duel.startAt !== null ? null : <Navigate to="/play" replace />;
+    return <Navigate to="/setup" replace />;
+  }
 
   const { settings } = state;
   const playAgain = () => {

@@ -30,7 +30,18 @@ export interface AudioEngineOptions {
   cacheSize?: number;
 }
 
+export interface PlayFullOptions {
+  /** Ramp the reveal in over this many ms (a lost-round auto-play jumping in at full volume is harsh). */
+  fadeInMs?: number;
+}
+
 export interface SongoonerAudioEngine extends AudioEngine {
+  /**
+   * Like `preload`, but REJECTS when the preview cannot be fetched/decoded — so a round can show
+   * "couldn't load" before the player taps. The url is still marked for the element fallback.
+   */
+  preloadStrict(url: string): Promise<void>;
+  playFull(url: string, offset?: number, opts?: PlayFullOptions): Promise<void>;
   /** Which path the most recent playback used. */
   getBackend(): AudioBackend;
   /** Last emitted state event (what `onState` subscribers would have seen). */
@@ -326,6 +337,14 @@ class EngineImpl implements SongoonerAudioEngine {
     });
   }
 
+  preloadStrict(url: string): Promise<void> {
+    if (!url) return Promise.reject(new Error('This track has no preview'));
+    return this.loadBuffer(url).then(noop, (e: unknown) => {
+      this.failedAt.set(url, Date.now());
+      throw e instanceof Error ? e : new Error(errorMessage(e));
+    });
+  }
+
   getDuration(url: string): number | null {
     return this.cache.get(url)?.duration ?? this.elementDurations.get(url) ?? null;
   }
@@ -394,11 +413,12 @@ class EngineImpl implements SongoonerAudioEngine {
   // ---------------------------------------------------------------- playback
 
   playClip(spec: ClipSpec): Promise<void> {
-    return this.play(spec, false);
+    return this.play(spec, false, 0);
   }
 
-  playFull(url: string, offset = 0): Promise<void> {
-    return this.play({ url, offset, duration: Number.POSITIVE_INFINITY }, true);
+  playFull(url: string, offset = 0, opts: PlayFullOptions = {}): Promise<void> {
+    const fadeIn = Math.max(0, Number.isFinite(opts.fadeInMs) ? (opts.fadeInMs ?? 0) / 1000 : 0);
+    return this.play({ url, offset, duration: Number.POSITIVE_INFINITY }, true, fadeIn);
   }
 
   stop(): void {
@@ -411,7 +431,8 @@ class EngineImpl implements SongoonerAudioEngine {
     if (this.last.state === 'loading') this.emit({ state: 'stopped', progress: 0 });
   }
 
-  private async play(spec: ClipSpec, full: boolean): Promise<void> {
+  /** `fadeIn` (seconds) lengthens the attack of the envelope; 0 keeps the click-free minimum. */
+  private async play(spec: ClipSpec, full: boolean, fadeIn: number): Promise<void> {
     this.stop();
     const gen = ++this.generation;
     this.emit({ state: 'loading', progress: 0 });
@@ -440,9 +461,9 @@ class EngineImpl implements SongoonerAudioEngine {
         this.emit({ state: 'error', progress: 0, error: AUTOPLAY_BLOCKED });
         throw new Error(AUTOPLAY_BLOCKED);
       }
-      return this.playWebAudio(gen, ctx, this.master, buffer, spec, full);
+      return this.playWebAudio(gen, ctx, this.master, buffer, spec, full, fadeIn);
     }
-    return this.playElement(gen, spec, full, failure);
+    return this.playElement(gen, spec, full, failure, fadeIn);
   }
 
   private finish(playback: Playback, progress = playback.progress): void {
@@ -486,6 +507,7 @@ class EngineImpl implements SongoonerAudioEngine {
     buffer: AudioBuffer,
     spec: ClipSpec,
     full: boolean,
+    fadeIn: number,
   ): Promise<void> {
     return new Promise<void>((resolve) => {
       const mods = spec.modifiers ?? DEFAULT_MODIFIERS;
@@ -530,9 +552,11 @@ class EngineImpl implements SongoonerAudioEngine {
       const t0 = ctx.currentTime + SCHEDULE_LEAD;
       const t1 = t0 + wall;
       const fade = fadeFor(wall);
+      // A requested fade-in (the reveal) may be longer than the click-free minimum, never past the midpoint.
+      const attack = Math.min(Math.max(fade, fadeIn), wall / 2);
       const g = clipGain.gain;
       g.setValueAtTime(0, t0);
-      g.linearRampToValueAtTime(1, t0 + fade);
+      g.linearRampToValueAtTime(1, t0 + attack);
       g.setValueAtTime(1, t1 - fade);
       g.linearRampToValueAtTime(0, t1);
       src.start(t0, start, span);
@@ -581,7 +605,7 @@ class EngineImpl implements SongoonerAudioEngine {
    * Fallback when the preview could not be fetched/decoded: a plain <audio> element (no CORS needed).
    * No effects, no reverse; speed/pitch collapse into playbackRate. Clip length is enforced with a timer.
    */
-  private playElement(gen: number, spec: ClipSpec, full: boolean, reason: string): Promise<void> {
+  private playElement(gen: number, spec: ClipSpec, full: boolean, reason: string, fadeIn: number): Promise<void> {
     return new Promise<void>((resolve, reject) => {
       let el: HTMLAudioElement;
       try {
@@ -598,6 +622,7 @@ class EngineImpl implements SongoonerAudioEngine {
       const offset = Math.max(0, Number.isFinite(spec.offset) ? spec.offset : 0);
       const wall = full ? Number.POSITIVE_INFINITY : Math.max(MIN_WALL, spec.duration);
       let timer: ReturnType<typeof setTimeout> | null = null;
+      let ramp: ReturnType<typeof setInterval> | null = null;
       let startedAt = 0;
 
       const playback: Playback = {
@@ -607,6 +632,7 @@ class EngineImpl implements SongoonerAudioEngine {
         stopProgress: noop,
         teardown: () => {
           if (timer) clearTimeout(timer);
+          if (ramp) clearInterval(ramp);
           el.onended = null;
           el.onerror = null;
           el.onloadedmetadata = null;
@@ -629,7 +655,7 @@ class EngineImpl implements SongoonerAudioEngine {
       };
 
       el.preload = 'auto';
-      el.volume = this.volume * this.volume;
+      el.volume = fadeIn > 0 ? 0 : this.volume * this.volume;
       setPreservesPitch(el, false); // let playbackRate shift pitch, like the Web Audio path
       try {
         el.playbackRate = rate;
@@ -667,6 +693,17 @@ class EngineImpl implements SongoonerAudioEngine {
           }
           startedAt = now();
           this.backend = 'element';
+          if (fadeIn > 0) {
+            // No gain automation on an element: step the volume up until the fade is over.
+            ramp = setInterval(() => {
+              const k = Math.min(1, (now() - startedAt) / 1000 / fadeIn);
+              el.volume = this.volume * this.volume * k;
+              if (k >= 1 && ramp) {
+                clearInterval(ramp);
+                ramp = null;
+              }
+            }, 32);
+          }
           if (Number.isFinite(wall)) timer = setTimeout(() => this.finish(playback, 1), wall * 1000);
           playback.stopProgress = this.startProgressLoop(playback, () =>
             Number.isFinite(wall)
