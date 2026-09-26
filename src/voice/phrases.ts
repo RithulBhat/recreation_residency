@@ -209,7 +209,7 @@ const HYPE: Bank = {
     '{title}! {artist}! That one hurt, huh?',
     'The answer: {title}, by {artist}! Brutal!',
     '{artist} had you! The track was {title}!',
-    'Reveal time! {title}! Write that down!',
+    'Reveal time! {title} by {artist}! Write that down!',
     '{title} by {artist}. Remember that name!',
   ],
   skip: [
@@ -308,7 +308,7 @@ const CHILL: Bank = {
     '{title}. {artist}. One for the playlist.',
     'The answer was {title}, from {artist}.',
     '{artist} did that one. {title}.',
-    "It's {title}. Worth a relisten, honestly.",
+    "It's {title} by {artist}. Worth a relisten, honestly.",
     '{title} by {artist}. Now you know.',
   ],
   skip: [
@@ -405,9 +405,9 @@ const SAVAGE: Bank = {
   reveal: [
     'It was {title} by {artist}. Obviously.',
     '{title}. {artist}. Everyone knew but you.',
-    'The answer was {title}. Write it down. Please.',
+    'The answer was {title} by {artist}. Write it down. Please.',
     '{artist}, {title}. That one was free.',
-    "{title}. A child would've got that.",
+    "{title} by {artist}. A child would've got that.",
     '{artist} made {title}. Now you know. Finally.',
   ],
   skip: [
