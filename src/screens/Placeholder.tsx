@@ -1,10 +1,11 @@
 import type { ReactNode } from 'react';
 import { useLocation, useParams } from 'react-router';
-import { CalendarDays, ChartColumn, Home, Library, Link2, Play, SearchX, Settings2, Swords, Trophy } from 'lucide-react';
+import { CalendarDays, ChartColumn, ChevronLeft, Home, Library, Link2, Play, ScanFace, SearchX, Settings2, Swords, Trophy } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Kbd } from '@/components/ui/Kbd';
+import { R, activeGame } from '@/routes';
 
 interface RouteMeta {
   title: string;
@@ -12,15 +13,23 @@ interface RouteMeta {
   icon: ReactNode;
 }
 
+/** Every Highlight Scout screen lands on the same friendly holding card until its screen ships. */
+const SCOUT_SOON: RouteMeta = {
+  title: 'Highlight Scout is warming up',
+  blurb:
+    'Silhouettes, extreme face zooms, redacted play-by-play and team trivia — the NFL guessing game is being wired to real rosters right now. It lands here shortly.',
+  icon: <ScanFace />,
+};
+
 const ROUTES: Record<string, RouteMeta> = {
-  '/packs': { title: 'Pack browser', blurb: 'Browse 150+ curated packs, search, filter by category and mix them into one pool.', icon: <Library /> },
-  '/setup': { title: 'Game setup', blurb: 'Choose a mode, packs, difficulty, clip length, tries, timer and modifiers. Then hit play.', icon: <Settings2 /> },
-  '/play': { title: 'Play', blurb: 'The record, the visualizer, the guess box. Where the magic happens.', icon: <Play /> },
-  '/results': { title: 'Results', blurb: 'Score breakdown, streaks, every track you heard and a share card.', icon: <Trophy /> },
-  '/daily': { title: 'Daily challenge', blurb: 'One seeded run per day with the pack of the day. Compare with friends.', icon: <CalendarDays /> },
-  '/stats': { title: 'Stats', blurb: 'Lifetime accuracy, best streaks, favourite packs and your fastest guesses.', icon: <ChartColumn /> },
-  '/duel': { title: 'Online duel', blurb: 'Create a room, share the code, and buzz in against a friend anywhere.', icon: <Swords /> },
-  '/c': { title: 'Challenge', blurb: 'A friend sent you a challenge. Same songs, same rules — beat their score.', icon: <Link2 /> },
+  [R.songooner.packs]: { title: 'Pack browser', blurb: 'Browse 150+ curated packs, search, filter by category and mix them into one pool.', icon: <Library /> },
+  [R.songooner.setup]: { title: 'Game setup', blurb: 'Choose a mode, packs, difficulty, clip length, tries, timer and modifiers. Then hit play.', icon: <Settings2 /> },
+  [R.songooner.play]: { title: 'Play', blurb: 'The record, the visualizer, the guess box. Where the magic happens.', icon: <Play /> },
+  [R.songooner.results]: { title: 'Results', blurb: 'Score breakdown, streaks, every track you heard and a share card.', icon: <Trophy /> },
+  [R.songooner.daily]: { title: 'Daily challenge', blurb: 'One seeded run per day with the pack of the day. Compare with friends.', icon: <CalendarDays /> },
+  [R.songooner.stats]: { title: 'Stats', blurb: 'Lifetime accuracy, best streaks, favourite packs and your fastest guesses.', icon: <ChartColumn /> },
+  [R.songooner.duel]: { title: 'Online duel', blurb: 'Create a room, share the code, and buzz in against a friend anywhere.', icon: <Swords /> },
+  '/songooner/c': { title: 'Challenge', blurb: 'A friend sent you a challenge. Same songs, same rules — beat their score.', icon: <Link2 /> },
 };
 
 export interface PlaceholderProps {
@@ -36,11 +45,11 @@ export interface PlaceholderProps {
 export default function Placeholder({ name, blurb, icon }: PlaceholderProps) {
   const { pathname } = useLocation();
   const params = useParams();
-  const key = pathname.startsWith('/c/') ? '/c' : pathname;
-  const meta = ROUTES[key];
+  const game = activeGame(pathname);
+  const meta = game === 'scout' ? SCOUT_SOON : ROUTES[pathname.startsWith('/songooner/c/') ? '/songooner/c' : pathname];
   const known = meta !== undefined;
   const title = name ?? meta?.title ?? 'Lost track';
-  const text = blurb ?? meta?.blurb ?? "There's nothing at this address — it may have moved, or the link got cut off. The music is this way.";
+  const text = blurb ?? meta?.blurb ?? "There's nothing at this address — it may have moved, or the link got cut off. The games are this way.";
   const glyph = icon ?? meta?.icon ?? <SearchX />;
 
   return (
@@ -80,11 +89,11 @@ export default function Placeholder({ name, blurb, icon }: PlaceholderProps) {
           )}
           <p className="mt-4 max-w-sm text-sm text-muted">{text}</p>
           <div className="mt-7 flex flex-wrap justify-center gap-2">
-            <Button to="/" variant="secondary" leadingIcon={<Home />}>
-              Home
+            <Button to={R.residency} variant="secondary" leadingIcon={game === 'scout' ? <ChevronLeft /> : <Home />}>
+              Residency
             </Button>
-            <Button to="/setup" leadingIcon={<Play className="fill-current" />}>
-              Play
+            <Button to={R.songooner.setup} leadingIcon={<Play className="fill-current" />}>
+              {game === 'scout' ? 'Play Songooner' : 'Play'}
             </Button>
           </div>
         </div>

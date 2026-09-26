@@ -7,7 +7,7 @@ import type { GameSettings } from '../src/types';
  *
  * Games are started through the DEV hook and each round is resolved through the store (a listen,
  * then the exact title or a give-up) so the outcome is deterministic; the screen under test is
- * everything after `/#/results` lands. Web Share and the clipboard are stubbed per test so the
+ * everything after `/#/songooner/results` lands. Web Share and the clipboard are stubbed per test so the
  * result card (a File) and the challenge link (text) can be captured and inspected in-page.
  */
 
@@ -85,7 +85,7 @@ async function boot(page: Page, opts: { theme?: Theme; share?: 'files' | 'none' 
 
 /** Open /play (loads the DEV hook) and start a real game from the given settings. */
 async function startGame(page: Page, settings: Partial<GameSettings>): Promise<void> {
-  await page.goto('/#/play');
+  await page.goto('/#/songooner/play');
   await expect(page.getByRole('heading', { name: 'No game in progress' })).toBeVisible();
   await page.waitForFunction(() => typeof window.__songooner?.start === 'function');
   await page.evaluate(async (s) => {
@@ -96,7 +96,7 @@ async function startGame(page: Page, settings: Partial<GameSettings>): Promise<v
 
 /**
  * Resolve every round through the store: a listen, then the exact title (win) or a give-up (lose),
- * then `next`. Pass-and-play interstitials are dismissed on the way. Ends on `/#/results`.
+ * then `next`. Pass-and-play interstitials are dismissed on the way. Ends on `/#/songooner/results`.
  */
 async function playOut(page: Page, outcomes: readonly Outcome[]): Promise<void> {
   for (const outcome of outcomes) {
@@ -122,7 +122,7 @@ async function playOut(page: Page, outcomes: readonly Outcome[]): Promise<void> 
       if (store.state.status === 'round-over') store.next();
     });
   }
-  await page.waitForURL(/#\/results/, { timeout: 20_000 });
+  await page.waitForURL(/#\/songooner\/results/, { timeout: 20_000 });
   await expect(page.getByTestId('results-hero')).toBeVisible();
   await settle(page, 1600); // number tickers + entrance springs
 }
@@ -272,7 +272,7 @@ for (const [name, vp] of Object.entries(VIEWPORTS) as [Viewport, { width: number
     await page.waitForFunction(() => (window as unknown as TestWindow).__copied.length > 0);
     const copied = await page.evaluate(() => (window as unknown as TestWindow).__copied.at(-1) ?? '');
     expect(copied).toContain('Think you can beat that?');
-    expect(copied).toMatch(/#\/c\/[A-Za-z0-9_-]+/);
+    expect(copied).toMatch(/#\/songooner\/c\/[A-Za-z0-9_-]+/);
     await expect(page.getByRole('status').filter({ hasText: 'Challenge link copied' })).toBeVisible();
 
     // Daylight: same screen, same card, light tokens.

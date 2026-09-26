@@ -10,6 +10,7 @@ import { useIsMobile } from '@/hooks/useMediaQuery';
 import { SectionHeading } from '@/components/SectionHeading';
 import { Button } from '@/components/ui/Button';
 import { ReplaceGameDialog, ResumeBanner } from '@/components/ResumeGame';
+import { R } from '@/routes';
 import {
   ClipSettings,
   MODE_LABEL,
@@ -92,7 +93,7 @@ export default function Setup() {
         size="lg"
         action={
           <div className="hidden sm:block">
-            <Button variant="ghost" size="sm" to="/packs" leadingIcon={<Library />}>
+            <Button variant="ghost" size="sm" to={R.songooner.packs} leadingIcon={<Library />}>
               Browse packs
             </Button>
           </div>

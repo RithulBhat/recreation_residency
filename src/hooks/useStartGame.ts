@@ -2,10 +2,11 @@ import { useCallback, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { PoolError, startGameFromSettings, type LoadedGame } from '@/lib/startGame';
 import { useGameStore } from '@/store/gameStore';
+import { R } from '@/routes';
 import type { GameSettings, GameStatus } from '@/types';
 
 export interface StartOptions {
-  /** Navigate to /play once the pool is loaded. Default true. */
+  /** Navigate to the Songooner play screen once the pool is loaded. Default true. */
   navigate?: boolean;
   /** Skip the "replace the game in progress?" confirmation (autostart / rematch flows). */
   force?: boolean;
@@ -13,7 +14,8 @@ export interface StartOptions {
 
 export interface UseStartGame {
   /**
-   * Resolve the pool, start the game and (by default) navigate to /play. Returns null on failure.
+   * Resolve the pool, start the game and (by default) navigate to Songooner's play screen.
+   * Returns null on failure.
    * When a game is still live and `opts.force` is not set, the start waits for the player to
    * confirm (render `<ReplaceGameDialog game={...} />`) and resolves null if they decline.
    */
@@ -52,7 +54,7 @@ export function useStartGame(): UseStartGame {
       setError(null);
       try {
         const loaded = await startGameFromSettings(settings);
-        if (opts?.navigate !== false) navigate('/play');
+        if (opts?.navigate !== false) navigate(R.songooner.play);
         return loaded;
       } catch (e) {
         setError(e instanceof PoolError ? e.message : e instanceof Error ? e.message : 'Something went wrong.');

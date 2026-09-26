@@ -4,6 +4,7 @@
  */
 
 import type { ChallengePayload, GameMode, GameSettings, Modifiers } from '@/types';
+import { challengePath } from '@/routes';
 import { DEFAULT_SETTINGS, normalizeSettings } from './presets';
 
 const MODES: readonly GameMode[] = ['classic', 'fixed', 'blitz', 'survival', 'duel', 'party'];
@@ -168,12 +169,12 @@ export function buildChallengeUrl(p: ChallengePayload): string {
   const code = encodeChallenge(p);
   const loc = typeof location !== 'undefined' ? location : undefined;
   const base = loc ? `${loc.origin}${loc.pathname}` : '';
-  return `${base}#/c/${code}`;
+  return `${base}#${challengePath(code)}`;
 }
 
-/** Extract the code from a full challenge URL, a hash, or a bare code. */
+/** Extract the code from a full challenge URL (`…#/songooner/c/<code>`), a hash, or a bare code. */
 export function parseChallengeCode(input: string): string | null {
-  const m = input.match(/#?\/?c\/([A-Za-z0-9_-]+)/);
+  const m = input.match(/\/c\/([A-Za-z0-9_-]+)/) ?? input.match(/^#?\/?c\/([A-Za-z0-9_-]+)/);
   if (m) return m[1];
   return /^[A-Za-z0-9_-]+$/.test(input.trim()) ? input.trim() : null;
 }

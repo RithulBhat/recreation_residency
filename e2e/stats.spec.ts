@@ -53,14 +53,14 @@ for (const [name, vp] of Object.entries(VIEWPORTS)) {
   test(`stats · empty · ${name}`, async ({ page }) => {
     await page.addInitScript(() => localStorage.clear());
     await page.setViewportSize(vp);
-    await page.goto('/#/stats');
+    await page.goto('/#/songooner/stats');
     await settle(page);
 
     await expect(page.getByRole('heading', { name: 'Your musical brain' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Nothing recorded yet' })).toBeVisible();
     const play = page.getByRole('link', { name: 'Play now' });
     await expect(play).toBeVisible();
-    await expect(play).toHaveAttribute('href', /#\/setup$/);
+    await expect(play).toHaveAttribute('href', /#\/songooner\/setup$/);
 
     // The achievement teaser still renders the full roster, all locked.
     await expect(page.getByRole('tab', { name: /^Unlocked/ })).toContainText('0');
@@ -75,7 +75,7 @@ for (const [name, vp] of Object.entries(VIEWPORTS)) {
   test(`stats · demo · ${name}`, async ({ page }) => {
     await page.addInitScript(() => localStorage.clear());
     await page.setViewportSize(vp);
-    await page.goto('/#/stats?demo=1');
+    await page.goto('/#/songooner/stats?demo=1');
     await settle(page);
 
     // Rank hero
@@ -122,7 +122,7 @@ for (const [name, vp] of Object.entries(VIEWPORTS)) {
 test('stats · demo · interactions', async ({ page }) => {
   await page.addInitScript(() => localStorage.clear());
   await page.setViewportSize(VIEWPORTS.desktop);
-  await page.goto('/#/stats?demo=1');
+  await page.goto('/#/songooner/stats?demo=1');
   await settle(page);
 
   // Expanding a game row reveals the stored record detail.
@@ -169,7 +169,7 @@ test('stats · demo · interactions', async ({ page }) => {
 test('stats · one h1, no duplicate ids, fits 320 px', async ({ page }) => {
   await page.addInitScript(() => localStorage.clear());
   await page.setViewportSize({ width: 320, height: 640 });
-  await page.goto('/#/stats?demo=1');
+  await page.goto('/#/songooner/stats?demo=1');
   await settle(page);
   await expect(page.getByText(/Level \d+ \/ 14/)).toBeVisible();
   expect(await page.locator('h1').count(), 'exactly one h1').toBe(1);
@@ -187,7 +187,7 @@ test('stats · demo · reduced motion', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.addInitScript(() => localStorage.clear());
   await page.setViewportSize(VIEWPORTS.mobile);
-  await page.goto('/#/stats?demo=1');
+  await page.goto('/#/songooner/stats?demo=1');
   await settle(page);
   await expect(page.getByText(/Level \d+ \/ 14/)).toBeVisible();
   await expectNoHorizontalOverflow(page);

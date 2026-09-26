@@ -26,11 +26,11 @@ export function useFinishGame(): void {
     const state = useGameStore.getState().state;
     if (isDiscardedGame(state)) {
       toast({ title: 'Game discarded', description: 'Nothing was played, so nothing was recorded.', duration: 2500 });
-      navigate('/setup', { replace: true });
+      navigate('/songooner/setup', { replace: true });
       return;
     }
     useResultStore.getState().record(state);
     useSettingsStore.getState().pushRecentTracks(state.rounds.map((r) => r.track.id));
-    navigate('/results', { replace: true });
+    navigate('/songooner/results', { replace: true });
   }, [status, navigate]);
 }

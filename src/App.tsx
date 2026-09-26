@@ -6,7 +6,9 @@ import { AppShell } from '@/components/AppShell';
 import { PageTransition } from '@/components/PageTransition';
 import { BrandedLoader } from '@/components/BrandedLoader';
 import { useTheme } from '@/hooks/useTheme';
+import { R, isPlayPath } from '@/routes';
 
+const Residency = lazy(() => import('@/screens/Residency'));
 const Home = lazy(() => import('@/screens/Home'));
 // The design-system showcase is a dev tool: not routed (and its chunk not referenced) in production.
 const Gallery = import.meta.env.DEV ? lazy(() => import('@/screens/Gallery')) : null;
@@ -58,7 +60,7 @@ export default function App() {
   const [theme, setTheme] = useTheme();
   const [volume, setVolume, muted, setMuted] = useLocalVolume();
   const location = useLocation();
-  const immersive = location.pathname === '/play';
+  const immersive = isPlayPath(location.pathname);
 
   return (
     <ToastProvider>
@@ -75,16 +77,28 @@ export default function App() {
         <PageTransition>
           <Suspense fallback={<BrandedLoader fullscreen />}>
             <Routes location={location}>
-              <Route path="/" element={<Home />} />
-              <Route path="/packs" element={<Packs />} />
-              <Route path="/setup" element={<Setup />} />
-              <Route path="/play" element={<Play />} />
-              <Route path="/results" element={<Results />} />
-              <Route path="/daily" element={<Daily />} />
-              <Route path="/stats" element={<Stats />} />
-              <Route path="/duel" element={<Duel />} />
-              <Route path="/c/:code" element={<Challenge />} />
-              {Gallery && <Route path="/gallery" element={<Gallery />} />}
+              <Route path={R.residency} element={<Residency />} />
+
+              <Route path={R.songooner.home} element={<Home />} />
+              <Route path={R.songooner.packs} element={<Packs />} />
+              <Route path={R.songooner.setup} element={<Setup />} />
+              <Route path={R.songooner.play} element={<Play />} />
+              <Route path={R.songooner.results} element={<Results />} />
+              <Route path={R.songooner.daily} element={<Daily />} />
+              <Route path={R.songooner.stats} element={<Stats />} />
+              <Route path={R.songooner.duel} element={<Duel />} />
+              <Route path={R.songooner.challenge} element={<Challenge />} />
+
+              {/* Highlight Scout's screens land next; the routes exist now so the links work and
+                  swapping each element in is a one-line change. */}
+              <Route path={R.scout.home} element={<Placeholder />} />
+              <Route path={R.scout.setup} element={<Placeholder />} />
+              <Route path={R.scout.play} element={<Placeholder />} />
+              <Route path={R.scout.results} element={<Placeholder />} />
+              <Route path={R.scout.daily} element={<Placeholder />} />
+              <Route path={R.scout.stats} element={<Placeholder />} />
+
+              {Gallery && <Route path={R.gallery} element={<Gallery />} />}
               <Route path="*" element={<Placeholder />} />
             </Routes>
           </Suspense>

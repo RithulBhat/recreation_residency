@@ -4,6 +4,7 @@ import type { GameState } from '@/types';
 import { Button, toast } from '@/components/ui';
 import { buildChallengeUrl } from '@/game/challenge';
 import { getPack } from '@/lib/catalog';
+import { R } from '@/routes';
 import { rankFor } from '@/stats/rank';
 import { challengeShareText, shareOrCopy } from '@/stats/share';
 import { prepareShareCard, shareCard, type ShareCardOptions } from '@/stats/shareCard';
@@ -35,8 +36,9 @@ export function packLabel(packIds: readonly string[]): string {
   return names.join(' + ');
 }
 
+/** The share card's footer + caption point at the game, not the residency root. */
 function siteUrl(): string {
-  return `${location.origin}${location.pathname}`;
+  return `${location.origin}${location.pathname}#${R.songooner.home}`;
 }
 
 function reportShare(outcome: 'shared' | 'copied' | 'failed', what: string): void {
@@ -121,10 +123,10 @@ export function ResultActions({ state, onPlayAgain, loading }: ResultActionsProp
         <ShareMenu onCard={card} onChallenge={challenge} busy={busy} />
       </div>
       <div className="flex flex-wrap items-center justify-center gap-x-1">
-        <Button variant="ghost" size="sm" leadingIcon={<Settings2 />} to="/setup">
+        <Button variant="ghost" size="sm" leadingIcon={<Settings2 />} to={R.songooner.setup}>
           Change settings
         </Button>
-        <Button variant="ghost" size="sm" leadingIcon={<Home />} to="/">
+        <Button variant="ghost" size="sm" leadingIcon={<Home />} to={R.songooner.home}>
           Home
         </Button>
       </div>

@@ -3,6 +3,7 @@ import type { GameState } from '@/types';
 import type { UseOnlineDuel } from '@/net';
 import { Avatar, Button, cn } from '@/components/ui';
 import { points } from '@/components/play/format';
+import { R } from '@/routes';
 import { useRematch, type RematchPhase } from './useRematch';
 
 export interface DuelOutcomeProps {
@@ -105,7 +106,7 @@ export function DuelOutcome({ duel, state }: DuelOutcomeProps) {
         >
           {label}
         </Button>
-        <Button variant="ghost" onClick={duel.leave} to="/duel">
+        <Button variant="ghost" onClick={duel.leave} to={R.songooner.duel}>
           Leave duel
         </Button>
       </div>

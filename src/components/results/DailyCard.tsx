@@ -3,6 +3,7 @@ import { CalendarDays, Share2 } from 'lucide-react';
 import type { GameState } from '@/types';
 import { Button, toast } from '@/components/ui';
 import { GRID_LEGEND, dailyShareText, formatDailyDate, resultGrid, shareOrCopy } from '@/stats/share';
+import { R } from '@/routes';
 
 export interface DailyCardProps {
   state: GameState;
@@ -34,7 +35,7 @@ export function DailyCard({ state, date }: DailyCardProps) {
   const correct = state.rounds.filter((r) => r.status === 'won').length;
 
   const share = async () => {
-    const text = dailyShareText({ date, score: state.totalScore, correct, rounds: state.rounds.length, grid }, date, `${location.origin}${location.pathname}#/daily`);
+    const text = dailyShareText({ date, score: state.totalScore, correct, rounds: state.rounds.length, grid }, date, `${location.origin}${location.pathname}#${R.songooner.daily}`);
     const outcome = await shareOrCopy(text);
     if (outcome === 'copied') toast.success('Copied to clipboard', 'Paste it anywhere.');
     else if (outcome === 'failed') toast.error("Couldn't share", 'Your browser blocked the clipboard.');

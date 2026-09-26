@@ -90,7 +90,7 @@ test.beforeEach(async ({ page }) => {
 for (const [name, vp] of Object.entries(VIEWPORTS)) {
   test(`setup · ${name}`, async ({ page }) => {
     await page.setViewportSize(vp);
-    await page.goto('/#/setup');
+    await page.goto('/#/songooner/setup');
     await settle(page);
     await expect(page.getByRole('heading', { name: 'Set up your game' })).toBeVisible();
     await expect(page.getByRole('radio', { name: /Classic/ })).toHaveAttribute('aria-checked', 'true');
@@ -102,13 +102,13 @@ for (const [name, vp] of Object.entries(VIEWPORTS)) {
 
   test(`setup?mode=party · ${name}`, async ({ page }) => {
     await page.setViewportSize(vp);
-    await page.goto('/#/setup?mode=party');
+    await page.goto('/#/songooner/setup?mode=party');
     await settle(page);
     await expect(page.getByRole('radio', { name: /Party/ })).toHaveAttribute('aria-checked', 'true');
     await expect(page.getByRole('textbox', { name: 'Player 1 name' })).toBeVisible();
     await expect(page.getByRole('textbox', { name: 'Player 2 name' })).toBeVisible();
     // params are stripped after being applied
-    await expect.poll(() => page.evaluate(() => location.hash)).toBe('#/setup');
+    await expect.poll(() => page.evaluate(() => location.hash)).toBe('#/songooner/setup');
     await expectNoHorizontalOverflow(page);
     await expectIconButtonsLabelled(page);
     await page.screenshot({ path: `${OUT}/setup-party-${name}.png`, fullPage: true });
@@ -116,7 +116,7 @@ for (const [name, vp] of Object.entries(VIEWPORTS)) {
 
   test(`packs · ${name}`, async ({ page }) => {
     await page.setViewportSize(vp);
-    await page.goto('/#/packs');
+    await page.goto('/#/songooner/packs');
     await settle(page);
     await expect(page.getByRole('heading', { name: /packs\. Thousands of songs\./ })).toBeVisible();
     await expectNoHorizontalOverflow(page);
@@ -130,7 +130,7 @@ for (const [name, vp] of Object.entries(VIEWPORTS)) {
     await expect(page.getByRole('button', { name: 'Play 2', exact: true })).toBeVisible();
     await page.screenshot({ path: `${OUT}/packs-selected-${name}.png`, fullPage: false });
     await page.getByRole('button', { name: 'Add to setup' }).click();
-    await expect.poll(() => page.evaluate(() => location.hash)).toBe('#/setup');
+    await expect.poll(() => page.evaluate(() => location.hash)).toBe('#/songooner/setup');
     await expect(page.getByRole('list', { name: 'Selected packs' }).getByRole('listitem')).toHaveCount(2);
     // both packs are named in the summary — nothing hides behind "+1"
     const summary = page.getByTestId('settings-summary');
@@ -138,7 +138,7 @@ for (const [name, vp] of Object.entries(VIEWPORTS)) {
     await expect(summary).not.toContainText('+1');
 
     // category tab + custom tab render
-    await page.goto('/#/packs');
+    await page.goto('/#/songooner/packs');
     await settle(page);
     await page.getByRole('tab', { name: /Decades/ }).click();
     await expect(page.getByTestId('category-blurb')).toContainText('Sixty years');
@@ -150,7 +150,7 @@ for (const [name, vp] of Object.entries(VIEWPORTS)) {
 
   test(`daily · ${name}`, async ({ page }) => {
     await page.setViewportSize(vp);
-    await page.goto('/#/daily');
+    await page.goto('/#/songooner/daily');
     await settle(page);
     await expect(page.getByRole('heading', { name: 'Pack of the day' })).toBeVisible();
     await expect(page.getByTestId('play-daily')).toBeVisible();
@@ -174,7 +174,7 @@ for (const [name, vp] of Object.entries(VIEWPORTS)) {
       };
       localStorage.setItem('sg:stats', JSON.stringify({ state: { totals: {}, records: [], tracks: {}, achievements: [], daily }, version: 1 }));
     });
-    await page.goto('/#/daily');
+    await page.goto('/#/songooner/daily');
     await settle(page);
     await expect(page.getByTestId('daily-score')).toContainText('6,420');
     await expect(page.getByRole('button', { name: 'Share result' })).toBeVisible();
@@ -185,7 +185,7 @@ for (const [name, vp] of Object.entries(VIEWPORTS)) {
 
   test(`challenge · ${name}`, async ({ page }) => {
     await page.setViewportSize(vp);
-    await page.goto('/#/c/invalid');
+    await page.goto('/#/songooner/c/invalid');
     await settle(page);
     await expect(page.getByRole('heading', { name: 'This challenge link is broken', level: 1 })).toBeVisible();
     await expectNoHorizontalOverflow(page);
@@ -193,12 +193,12 @@ for (const [name, vp] of Object.entries(VIEWPORTS)) {
 
     // Links carry played + queued ids (up to 60); the copy counts what the friend will actually hear.
     const exact = challengeCode({ v: 1, s: 'e2e-seed', g: { m: 'classic', p: ['pop-hits'] }, i: Array.from({ length: 12 }, (_, k) => 1000 + k) });
-    await page.goto(`/#/c/${exact}`);
+    await page.goto(`/#/songooner/c/${exact}`);
     await settle(page);
     await expect(page.getByText('Same 10 songs, same order')).toBeVisible();
 
     const code = challengeCode({ v: 1, s: 'e2e-seed', g: { m: 'classic', p: ['pop-hits', 'nope-pack'] }, b: 'Maanu', c: 6420 });
-    await page.goto(`/#/c/${code}`);
+    await page.goto(`/#/songooner/c/${code}`);
     await settle(page);
     await expect(page.getByRole('heading', { name: /Maanu challenged you/ })).toBeVisible();
     await expect(page.getByText('6,420')).toBeVisible();
@@ -218,7 +218,7 @@ test('daily · first daily shows the 1-day streak hook · mobile', async ({ page
     const daily = { [key]: { date: key, score: 4200, correct: 6, rounds: 10, grid: '🟩 0.1s\n🟥 10s' } };
     localStorage.setItem('sg:stats', JSON.stringify({ state: { totals: {}, records: [], tracks: {}, achievements: [], daily }, version: 1 }));
   });
-  await page.goto('/#/daily');
+  await page.goto('/#/songooner/daily');
   await settle(page);
   await expect(page.getByTestId('daily-score')).toContainText('4,200');
   await expect(page.getByTestId('daily-streak')).toContainText('1-day streak · come back tomorrow to keep it');
@@ -228,7 +228,7 @@ test('daily · first daily shows the 1-day streak hook · mobile', async ({ page
 
 test('setup · mode card blurbs follow the draft, not static copy', async ({ page }) => {
   await page.setViewportSize(VIEWPORTS.desktop);
-  await page.goto('/#/setup');
+  await page.goto('/#/songooner/setup');
   await settle(page);
   const classic = page.locator('[data-mode="classic"]');
   const fixed = page.locator('[data-mode="fixed"]');
@@ -250,7 +250,7 @@ test('setup · mode card blurbs follow the draft, not static copy', async ({ pag
 
 test('resume banner + confirmation before replacing a live game · mobile', async ({ page }) => {
   await page.setViewportSize(VIEWPORTS.mobile);
-  await page.goto('/#/setup');
+  await page.goto('/#/songooner/setup');
   await settle(page);
   await page.waitForFunction(() => typeof window.__songooner?.start === 'function');
   const firstId = await page.evaluate(async () => {
@@ -258,18 +258,18 @@ test('resume banner + confirmation before replacing a live game · mobile', asyn
     return window.__songooner!.gameStore.getState().state.id;
   });
 
-  // Home shows the slim banner and it links to the game.
-  await page.goto('/#/');
+  // Songooner's home shows the slim banner and it links to the game.
+  await page.goto('/#/songooner');
   const banner = page.getByTestId('resume-banner');
   await expect(banner).toBeVisible();
   await expect(banner).toContainText('Round 1/10');
   await expect(banner).toContainText('Resume');
-  await expect(banner).toHaveAttribute('href', /#\/play$/);
+  await expect(banner).toHaveAttribute('href', /#\/songooner\/play$/);
   await expectNoHorizontalOverflow(page);
   await page.screenshot({ path: `${OUT}/resume-banner-home-mobile.png`, fullPage: false });
 
   // Setup shows it too, and Start asks before throwing the game away.
-  await page.goto('/#/setup');
+  await page.goto('/#/songooner/setup');
   await expect(page.getByTestId('resume-banner')).toContainText('Round 1/10');
   await page.getByTestId('start-game').click();
   const dialog = page.getByRole('dialog', { name: 'Replace the game in progress?' });
@@ -279,19 +279,19 @@ test('resume banner + confirmation before replacing a live game · mobile', asyn
   await page.screenshot({ path: `${OUT}/replace-game-dialog-mobile.png`, fullPage: false });
   await dialog.getByRole('button', { name: 'Keep it' }).click();
   await expect(dialog).toBeHidden();
-  expect(await page.evaluate(() => location.hash)).toBe('#/setup');
+  expect(await page.evaluate(() => location.hash)).toBe('#/songooner/setup');
   expect(await page.evaluate(() => window.__songooner!.gameStore.getState().state.id)).toBe(firstId);
 
   // Confirming starts a fresh game.
   await page.getByTestId('start-game').click();
   await page.getByTestId('confirm-replace-game').click();
-  await expect.poll(() => page.evaluate(() => location.hash), { timeout: 45_000 }).toBe('#/play');
+  await expect.poll(() => page.evaluate(() => location.hash), { timeout: 45_000 }).toBe('#/songooner/play');
   expect(await page.evaluate(() => window.__songooner!.gameStore.getState().state.id)).not.toBe(firstId);
 });
 
 test('setup · clip mode, slider keyboard, stages, custom artist pack, start', async ({ page }) => {
   await page.setViewportSize(VIEWPORTS.desktop);
-  await page.goto('/#/setup');
+  await page.goto('/#/songooner/setup');
   await settle(page);
 
   // Classic → Fixed clip flips the mode too
@@ -341,14 +341,14 @@ test('setup · clip mode, slider keyboard, stages, custom artist pack, start', a
   await page.screenshot({ path: `${OUT}/setup-custom-pack-desktop.png`, fullPage: false });
   await page.getByRole('button', { name: 'Done' }).click();
 
-  // Start → navigates to #/play (Play may still be a stub)
+  // Start → navigates to #/songooner/play (Play may still be a stub)
   await page.getByTestId('start-game').click();
-  await expect.poll(() => page.evaluate(() => location.hash), { timeout: 45_000 }).toBe('#/play');
+  await expect.poll(() => page.evaluate(() => location.hash), { timeout: 45_000 }).toBe('#/songooner/play');
 });
 
 test('setup · mobile mix packs sheet + collapsible sections', async ({ page }) => {
   await page.setViewportSize(VIEWPORTS.mobile);
-  await page.goto('/#/setup');
+  await page.goto('/#/songooner/setup');
   await settle(page);
   // rounds section starts collapsed on mobile and remembers being opened
   const rounds = page.getByRole('button', { name: /Rounds & rules/ });
@@ -374,7 +374,7 @@ test('setup · mobile mix packs sheet + collapsible sections', async ({ page }) 
 
 test('setup · party with 8 players fits a 390 px phone', async ({ page }) => {
   await page.setViewportSize(VIEWPORTS.mobile);
-  await page.goto('/#/setup?mode=party');
+  await page.goto('/#/songooner/setup?mode=party');
   await settle(page);
   const add = page.getByRole('button', { name: 'Add player' });
   for (let i = 0; i < 6; i++) await add.click();
@@ -396,7 +396,7 @@ test.describe('home · featured pack autostart', () => {
 
   test('a featured pack\u2019s play button asks before replacing a live game', async ({ page }) => {
     await page.setViewportSize(VIEWPORTS.mobile);
-    await page.goto('/#/setup');
+    await page.goto('/#/songooner/setup');
     await settle(page);
     await page.waitForFunction(() => typeof window.__songooner?.start === 'function');
     const firstId = await page.evaluate(async () => {
@@ -404,7 +404,7 @@ test.describe('home · featured pack autostart', () => {
       return window.__songooner!.gameStore.getState().state.id;
     });
 
-    await page.goto('/#/');
+    await page.goto('/#/songooner');
     await settle(page);
     const featured = page.locator('section[aria-labelledby="packs-title"]');
     const playPack = featured.locator('button[aria-label^="Play "]').first();
@@ -417,10 +417,10 @@ test.describe('home · featured pack autostart', () => {
     await expect(dialog).toContainText('Round 1/10');
     await page.screenshot({ path: `${OUT}/home-autostart-replace-dialog-mobile.png`, fullPage: false });
 
-    // "Keep it" declines: the live game survives and nothing navigated to /play.
+    // "Keep it" declines: the live game survives and nothing navigated to the play screen.
     await dialog.getByRole('button', { name: 'Keep it' }).click();
     await expect(dialog).toBeHidden();
-    expect(await page.evaluate(() => location.hash)).toBe('#/setup');
+    expect(await page.evaluate(() => location.hash)).toBe('#/songooner/setup');
     expect(await page.evaluate(() => window.__songooner!.gameStore.getState().state.id)).toBe(firstId);
     expect(await page.evaluate(() => window.__songooner!.gameStore.getState().state.status)).toBe('playing');
     // the tapped pack was still applied to the lobby, so Start is one tap away
@@ -433,7 +433,7 @@ test.describe('setup · touch targets on a coarse pointer', () => {
 
   test('pack chips, stage chips and every other lobby control reach 44 px', async ({ page }) => {
     await page.setViewportSize(VIEWPORTS.mobile);
-    await page.goto('/#/setup');
+    await page.goto('/#/songooner/setup');
     await settle(page);
 
     // The pack chips' Remove \u2715 was the worst offender in the app at 28\u00d728.
@@ -454,7 +454,7 @@ test.describe('setup · touch targets on a coarse pointer', () => {
     await expectTouchTargets(page, '[aria-label="Selected packs"] button');
 
     // The pack browser's own small controls (Clear / Surprise me / tag chips / selection bar).
-    await page.goto('/#/packs');
+    await page.goto('/#/songooner/packs');
     await settle(page);
     await page.getByRole('button', { name: /^Add / }).first().click();
     await expect(page.getByRole('button', { name: 'Play 1', exact: true })).toBeVisible();

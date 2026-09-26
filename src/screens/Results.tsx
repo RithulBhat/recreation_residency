@@ -9,6 +9,7 @@ import { useResultStore } from '@/store/resultStore';
 import { isDuelActive } from '@/components/play/useOnlineDuelSync';
 import { isLiveGame } from '@/components/play/useGameAudio';
 import { isDiscardedGame } from '@/components/play/useFinishGame';
+import { R } from '@/routes';
 import {
   ChallengeBanner,
   DailyCard,
@@ -45,8 +46,8 @@ export default function Results() {
   // genuinely unfinished game with no start in flight is sent to Setup.
   if (!finished || record === null) {
     if (loading) return null;
-    if (duelActive && isLiveGame(state)) return duel.startAt !== null ? null : <Navigate to="/play" replace />;
-    return <Navigate to="/setup" replace />;
+    if (duelActive && isLiveGame(state)) return duel.startAt !== null ? null : <Navigate to={R.songooner.play} replace />;
+    return <Navigate to={R.songooner.setup} replace />;
   }
 
   const { settings } = state;

@@ -5,6 +5,7 @@ import { weakestPacks } from '@/stats/aggregate';
 import type { PackStanding, StatsTotals } from '@/stats/types';
 import { Button } from '@/components/ui/Button';
 import { cn } from '@/components/ui/cn';
+import { R } from '@/routes';
 import { pct } from './format';
 
 export interface PackStandingsProps {
@@ -40,7 +41,7 @@ function Row({ standing, tone }: { standing: PackStanding; tone: 'good' | 'bad' 
   return (
     <li className="flex items-center gap-3">
       <Link
-        to={`/setup?packs=${encodeURIComponent(standing.packId)}`}
+        to={`${R.songooner.setup}?packs=${encodeURIComponent(standing.packId)}`}
         className="flex min-w-0 flex-1 items-center gap-3 rounded-2xl py-1 transition-colors hover:text-fg"
       >
         <span className="grid size-9 shrink-0 place-items-center rounded-2xl bg-surface-strong text-lg leading-none" aria-hidden>
@@ -110,7 +111,7 @@ export function PackStandings({ totals, className }: PackStandingsProps) {
       <div className={cn('glass rounded-4xl p-4 sm:p-6', showWeakest && 'lg:col-span-2')}>
         <div className="mb-3 flex items-center justify-between gap-3">
           <h3 className="font-display text-base font-bold text-fg">Most played</h3>
-          <Button variant="ghost" size="sm" to="/packs" trailingIcon={<ArrowRight />}>
+          <Button variant="ghost" size="sm" to={R.songooner.packs} trailingIcon={<ArrowRight />}>
             All packs
           </Button>
         </div>

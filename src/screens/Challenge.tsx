@@ -10,6 +10,7 @@ import { formatScore } from '@/stats/share';
 import { useResultStore } from '@/store/resultStore';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
+import { R } from '@/routes';
 import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { MODE_LABEL, clipSummary, modifierLabels, roundsSummary } from '@/components/setup/summary';
@@ -27,7 +28,7 @@ async function acceptChallenge(payload: ChallengePayload): Promise<void> {
   startLoadedGame({ settings, tracks });
 }
 
-/** `#/c/<code>` — decode, show who challenged you, accept → same songs, same rules. */
+/** `#/songooner/c/<code>` — decode, show who challenged you, accept → same songs, same rules. */
 export default function Challenge() {
   const { code = '' } = useParams();
   const navigate = useNavigate();
@@ -52,10 +53,10 @@ export default function Challenge() {
             description="The code could not be read — it may have been cut off when it was copied. Ask your friend to send it again."
             action={
               <div className="flex flex-wrap justify-center gap-2">
-                <Button to="/" variant="secondary" leadingIcon={<Home />}>
+                <Button to={R.residency} variant="secondary" leadingIcon={<Home />}>
                   Home
                 </Button>
-                <Button to="/setup" leadingIcon={<Play className="fill-current" />}>
+                <Button to={R.songooner.setup} leadingIcon={<Play className="fill-current" />}>
                   Play anyway
                 </Button>
               </div>
@@ -82,7 +83,7 @@ export default function Challenge() {
     setError(null);
     try {
       await acceptChallenge(payload);
-      navigate('/play');
+      navigate(R.songooner.play);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not load the challenge.');
     } finally {
@@ -168,7 +169,7 @@ export default function Challenge() {
             <Button variant="glow" size="xl" leadingIcon={<Play className="fill-current" />} loading={loading} disabled={blocked} onClick={() => void accept()} className="w-full sm:w-auto" data-testid="accept-challenge">
               {loading ? 'Loading songs…' : error ? 'Try again' : 'Accept'}
             </Button>
-            <Link to="/" className="px-2 py-2 text-center text-sm font-semibold text-muted hover:text-fg">
+            <Link to={R.songooner.home} className="px-2 py-2 text-center text-sm font-semibold text-muted hover:text-fg">
               Maybe later
             </Link>
           </div>

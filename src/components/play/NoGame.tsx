@@ -1,5 +1,6 @@
 import { CalendarDays, Disc3, Play } from 'lucide-react';
 import { Button, Card } from '@/components/ui';
+import { R } from '@/routes';
 
 /** Shown when `/play` is opened without a game in the store. */
 export function NoGame() {
@@ -14,10 +15,10 @@ export function NoGame() {
           <h1 className="mt-5 font-display text-2xl font-bold text-fg">No game in progress</h1>
           <p className="mt-2 max-w-xs text-sm text-muted">Pick a mode and some packs first, then the record starts spinning.</p>
           <div className="mt-7 flex flex-wrap justify-center gap-2">
-            <Button to="/setup" variant="glow" size="lg" leadingIcon={<Play className="fill-current" />}>
+            <Button to={R.songooner.setup} variant="glow" size="lg" leadingIcon={<Play className="fill-current" />}>
               Set up a game
             </Button>
-            <Button to="/daily" variant="secondary" size="lg" leadingIcon={<CalendarDays />}>
+            <Button to={R.songooner.daily} variant="secondary" size="lg" leadingIcon={<CalendarDays />}>
               Daily challenge
             </Button>
           </div>

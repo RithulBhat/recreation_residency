@@ -80,15 +80,33 @@ async function expectTouchTargets(page: Page, selector: string) {
 }
 
 const NARROW = { width: 320, height: 640 } as const;
-const NARROW_ROUTES = ['/', '/setup', '/packs', '/daily', '/stats', '/duel'] as const;
-const H1_ROUTES = ['/', '/packs', '/setup', '/daily', '/stats', '/c/invalid'] as const;
+const NARROW_ROUTES = [
+  '/',
+  '/songooner',
+  '/songooner/setup',
+  '/songooner/packs',
+  '/songooner/daily',
+  '/songooner/stats',
+  '/songooner/duel',
+  '/scout',
+] as const;
+const H1_ROUTES = [
+  '/',
+  '/songooner',
+  '/songooner/packs',
+  '/songooner/setup',
+  '/songooner/daily',
+  '/songooner/stats',
+  '/songooner/c/invalid',
+  '/scout',
+] as const;
 
 const slug = (route: string) => route.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '') || 'home';
 
 for (const [name, vp] of Object.entries(VIEWPORTS)) {
   test(`home · ${name}`, async ({ page }) => {
     await page.setViewportSize(vp);
-    await page.goto('/#/');
+    await page.goto('/#/songooner');
     await settle(page);
     await expectNoHorizontalOverflow(page);
     await expectIconButtonsLabelled(page);
@@ -98,17 +116,60 @@ for (const [name, vp] of Object.entries(VIEWPORTS)) {
 
   test(`placeholder · ${name}`, async ({ page }) => {
     await page.setViewportSize(vp);
-    await page.goto('/#/setup');
+    await page.goto('/#/scout');
     await settle(page);
+    await expect(page.getByRole('heading', { name: 'Highlight Scout is warming up', level: 1 })).toBeVisible();
     await expectNoHorizontalOverflow(page);
     await page.screenshot({ path: `${OUT}/placeholder-${name}.png`, fullPage: false });
+  });
+
+  test(`residency hub · ${name}`, async ({ page }) => {
+    await page.setViewportSize(vp);
+    await page.goto('/#/');
+    await settle(page);
+    await expect(page.getByRole('heading', { name: "Rithul's Recreation Residency", level: 1 })).toBeVisible();
+    // Both games are on the hub and each card carries its pitch.
+    const games = page.getByTestId('residency-games');
+    await expect(games.getByRole('link')).toHaveCount(2);
+    await expect(games.getByRole('heading', { level: 2 })).toHaveText(['Songooner', 'Highlight Scout']);
+    await expect(page.getByText('Name the track from 0.1 seconds')).toBeVisible();
+    await expect(page.getByText('Name the NFL player from a silhouette')).toBeVisible();
+    await expect(page.getByText('New', { exact: true })).toBeVisible();
+    // No game nav belongs to the hub.
+    await expect(page.getByRole('navigation', { name: 'Primary' })).toHaveCount(0);
+    await expect(page.getByRole('navigation', { name: 'Primary mobile' })).toHaveCount(0);
+    await expectNoHorizontalOverflow(page);
+    await expectIconButtonsLabelled(page);
+    await page.screenshot({ path: `${OUT}/residency-${name}.png`, fullPage: true });
+    await page.screenshot({ path: `${OUT}/residency-${name}-fold.png`, fullPage: false });
+  });
+
+  test(`residency hub · each card opens its game · ${name}`, async ({ page }) => {
+    await page.setViewportSize(vp);
+    await page.goto('/#/');
+    await settle(page);
+    const games = page.getByTestId('residency-games');
+    await games.getByRole('link', { name: /^Songooner/ }).click();
+    await expect.poll(() => page.evaluate(() => location.hash)).toBe('#/songooner');
+    await expect(page.getByRole('heading', { level: 1, name: /Name the track from/ })).toBeVisible();
+    // The brand reads "Residency / Songooner" and the residency half goes back to the hub.
+    const header = page.locator('header');
+    await expect(header.getByRole('link', { name: 'Songooner home' })).toBeVisible();
+    await header.getByRole('link', { name: "Rithul's Recreation Residency" }).click();
+    await expect.poll(() => page.evaluate(() => location.hash)).toBe('#/');
+
+    // The card's accessible name starts with its "New" badge, so match anywhere in it.
+    await games.getByRole('link', { name: /Highlight Scout/ }).click();
+    await expect.poll(() => page.evaluate(() => location.hash)).toBe('#/scout');
+    await expect(page.getByRole('heading', { name: 'Highlight Scout is warming up', level: 1 })).toBeVisible();
+    await expect(header.getByRole('link', { name: 'Highlight Scout home' })).toBeVisible();
   });
 
   for (const theme of THEMES) {
     test(`home fold · ${theme} · ${name}`, async ({ page }) => {
       await page.addInitScript((t) => localStorage.setItem('sg:theme', t), theme);
       await page.setViewportSize(vp);
-      await page.goto('/#/');
+      await page.goto('/#/songooner');
       await settle(page);
       await expectNoHorizontalOverflow(page);
       await page.screenshot({ path: `${OUT}/home-${theme}-${name}-fold.png`, fullPage: false });
@@ -159,7 +220,7 @@ test('gallery · overlays open · mobile', async ({ page }) => {
 test('reduced motion renders', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.setViewportSize(VIEWPORTS.mobile);
-  await page.goto('/#/');
+  await page.goto('/#/songooner');
   await settle(page);
   await expectNoHorizontalOverflow(page);
   await page.screenshot({ path: `${OUT}/home-reduced-motion.png`, fullPage: false });
@@ -224,7 +285,7 @@ for (const route of H1_ROUTES) {
   });
 }
 
-for (const route of ['/', '/stats', '/stats?demo=1'] as const) {
+for (const route of ['/', '/songooner', '/songooner/stats', '/songooner/stats?demo=1'] as const) {
   test(`no duplicate ids · ${route}`, async ({ page }) => {
     await page.addInitScript(() => localStorage.clear());
     await page.setViewportSize(VIEWPORTS.desktop);
@@ -243,15 +304,15 @@ test.describe('touch targets · coarse pointer', () => {
     await page.addInitScript(() => localStorage.clear());
     await page.setViewportSize(VIEWPORTS.mobile);
 
-    await page.goto('/#/packs');
+    await page.goto('/#/songooner/packs');
     await settle(page);
     await expectTouchTargets(page, '[role="tab"], [aria-label="Tags"] button, [aria-label="Sort packs"] [role="radio"], button[aria-label^="Play "], header button');
 
-    await page.goto('/#/setup');
+    await page.goto('/#/songooner/setup');
     await settle(page);
     await expectTouchTargets(page, '[aria-label="Presets"] button, [aria-label="Clip mode"] [role="radio"], [aria-label="Categories"] button, header button');
 
-    await page.goto('/#/');
+    await page.goto('/#/songooner');
     await settle(page);
     await expectTouchTargets(page, 'footer nav a, header a, header button, [aria-label="Highlights"] ~ * button');
 

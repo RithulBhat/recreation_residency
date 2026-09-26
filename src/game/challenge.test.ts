@@ -68,11 +68,13 @@ describe('challenge codes', () => {
     expect(s.players).toEqual([]);
   });
 
-  it('buildChallengeUrl uses the hash route and parseChallengeCode reads it back', () => {
+  it('buildChallengeUrl uses the namespaced hash route and parseChallengeCode reads it back', () => {
     const url = buildChallengeUrl(payload);
-    expect(url.startsWith(`${location.origin}${location.pathname}#/c/`)).toBe(true);
+    expect(url.startsWith(`${location.origin}${location.pathname}#/songooner/c/`)).toBe(true);
     const code = parseChallengeCode(url)!;
     expect(decodeChallenge(code)).toEqual(payload);
+    expect(parseChallengeCode('#/songooner/c/abc_-123')).toBe('abc_-123');
+    // Links shared before the residency split (and bare codes) still resolve.
     expect(parseChallengeCode('#/c/abc_-123')).toBe('abc_-123');
     expect(parseChallengeCode('abc123')).toBe('abc123');
     expect(parseChallengeCode('not a code!')).toBeNull();

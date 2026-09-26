@@ -1,5 +1,5 @@
 /**
- * DEV-only demo data for `/#/stats?demo=1`.
+ * DEV-only demo data for `/#/songooner/stats?demo=1`.
  *
  * Loaded with a dynamic import behind `import.meta.env.DEV`, so
  * `@/stats/testFactory` never reaches a production bundle. Seeding goes through

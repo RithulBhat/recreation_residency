@@ -105,7 +105,7 @@ describe('useRematch', () => {
     duel = duelStub({ initPayload: fresh, opponentReady: true, countdown: 0, start: duel.start });
     act(() => rerender({ d: duel }));
     expect(startLoadedGame).toHaveBeenCalledWith(fresh);
-    expect(navigate).toHaveBeenCalledWith('/play');
+    expect(navigate).toHaveBeenCalledWith('/songooner/play');
   });
 
   it('guest: acknowledges a new init with ready(), ignores the one already played', () => {

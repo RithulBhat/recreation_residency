@@ -11,6 +11,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
+import { R } from '@/routes';
 import { motion, useReducedMotion } from 'motion/react';
 import {
   ArrowRight,
@@ -156,7 +157,7 @@ export default function Duel() {
     const live = useGameStore.getState().state;
     const sameGame = live.settings.seed === initPayload.settings.seed && live.status !== 'idle' && live.status !== 'finished';
     if (!sameGame) startLoadedGame(initPayload);
-    navigate('/play');
+    navigate(R.songooner.play);
   }, [countdown, initPayload, duel.startAt, navigate]);
 
   /* ----------------------------------------------------- actions */
@@ -261,7 +262,7 @@ export default function Duel() {
           <p className="min-w-0 flex-1 text-sm text-fg">
             Still connecting… some networks block peer-to-peer. Try a phone hotspot or play same-device.
           </p>
-          <Button variant="secondary" size="sm" to="/setup?mode=duel" leadingIcon={<Smartphone />}>
+          <Button variant="secondary" size="sm" to={`${R.songooner.setup}?mode=duel`} leadingIcon={<Smartphone />}>
             Same device
           </Button>
         </div>
@@ -321,7 +322,7 @@ export default function Duel() {
           </button>
 
           <Link
-            to="/setup?mode=duel"
+            to={`${R.songooner.setup}?mode=duel`}
             className="glass group flex flex-col gap-3 rounded-4xl p-5 no-underline transition-[border-color,box-shadow] hover:border-border-strong hover:shadow-glow sm:min-h-64 sm:p-7"
             data-testid="duel-same-device"
           >

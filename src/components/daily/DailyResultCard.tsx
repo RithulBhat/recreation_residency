@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { NumberTicker } from '@/components/ui/NumberTicker';
 import { toast } from '@/components/ui/Toast';
+import { R } from '@/routes';
 
 export interface DailyResultCardProps {
   result: DailyResult;
@@ -31,7 +32,7 @@ export function DailyResultCard({ result, streak }: DailyResultCardProps) {
   const perfect = result.rounds > 0 && result.correct === result.rounds;
 
   const share = async () => {
-    const url = typeof location !== 'undefined' ? `${location.origin}${location.pathname}#/daily` : undefined;
+    const url = typeof location !== 'undefined' ? `${location.origin}${location.pathname}#${R.songooner.daily}` : undefined;
     const outcome = await shareOrCopy(dailyShareText(result, result.date, url));
     if (outcome === 'copied') {
       setCopied(true);

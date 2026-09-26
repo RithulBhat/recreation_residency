@@ -10,6 +10,7 @@ import { PackGrid } from '@/components/PackGrid';
 import { SectionHeading } from '@/components/SectionHeading';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { R } from '@/routes';
 import { Tabs, type TabItem } from '@/components/ui/Tabs';
 import { CustomPackList, CustomPackTools, PackSelectionBar, useCustomPacks } from '@/components/setup';
 import { ReplaceGameDialog } from '@/components/ResumeGame';
@@ -46,7 +47,7 @@ export default function Packs() {
 
   const toggle = (id: string) => setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   const play = (ids: string[]) => void game.start({ ...settings, packIds: ids });
-  const addToSetup = () => navigate(`/setup?packs=${selected.map(encodeURIComponent).join(',')}`);
+  const addToSetup = () => navigate(`${R.songooner.setup}?packs=${selected.map(encodeURIComponent).join(',')}`);
   const surprise = () => {
     const pool = shown.filter((p) => !settings.explicitFilter || !p.explicitHeavy);
     const picks = [...pool].sort(() => Math.random() - 0.5).slice(0, 3).map((p) => p.id);

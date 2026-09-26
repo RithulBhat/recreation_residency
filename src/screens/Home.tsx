@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import type { Pack } from '@/types';
 import type { LoadedGame } from '@/lib/startGame';
+import { R } from '@/routes';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useStartGame } from '@/hooks/useStartGame';
 import { Button } from '@/components/ui/Button';
@@ -53,14 +54,14 @@ export const FALLBACK_PACKS: Pack[] = [
 /* ------------------------------------------------------------------ */
 
 export const MODES = [
-  { icon: <Disc3 />, name: 'Classic', blurb: 'Heardle-style. The clip grows every try.', how: '0.1s → 10s · 6 tries', to: '/setup?mode=classic', accent: '#a855f7' },
-  { icon: <Timer />, name: 'Fixed clip', blurb: 'One clip length for every song. You pick it.', how: 'Any length 0.1–10s', to: '/setup?mode=fixed', accent: '#22d3ee' },
-  { icon: <Zap />, name: 'Blitz', blurb: 'Sixty seconds. How many can you name?', how: 'Wrong guess −3s', to: '/setup?mode=blitz', accent: '#fbbf24' },
-  { icon: <Flame />, name: 'Survival', blurb: 'Three lives. Clips shrink as you win.', how: '−15% per correct', to: '/setup?mode=survival', accent: '#fb7185' },
-  { icon: <Swords />, name: 'Duel', blurb: 'Two players, one buzzer, same device — or online.', how: 'A vs L keys · room codes', to: '/setup?mode=duel', accent: '#f472b6' },
-  { icon: <PartyPopper />, name: 'Party', blurb: 'Two to eight players. Pass the phone.', how: 'Turn-based · scoreboard', to: '/setup?mode=party', accent: '#34d399' },
-  { icon: <CalendarDays />, name: 'Daily', blurb: 'One seeded run a day. Same songs for everyone.', how: 'Resets at midnight', to: '/daily', accent: '#818cf8' },
-  { icon: <Share2 />, name: 'Challenge a friend', blurb: 'Send a link. Same tracks, same rules, beat my score.', how: 'Share code · no account', to: '/setup?share=1', accent: '#fb923c' },
+  { icon: <Disc3 />, name: 'Classic', blurb: 'Heardle-style. The clip grows every try.', how: '0.1s → 10s · 6 tries', to: `${R.songooner.setup}?mode=classic`, accent: '#a855f7' },
+  { icon: <Timer />, name: 'Fixed clip', blurb: 'One clip length for every song. You pick it.', how: 'Any length 0.1–10s', to: `${R.songooner.setup}?mode=fixed`, accent: '#22d3ee' },
+  { icon: <Zap />, name: 'Blitz', blurb: 'Sixty seconds. How many can you name?', how: 'Wrong guess −3s', to: `${R.songooner.setup}?mode=blitz`, accent: '#fbbf24' },
+  { icon: <Flame />, name: 'Survival', blurb: 'Three lives. Clips shrink as you win.', how: '−15% per correct', to: `${R.songooner.setup}?mode=survival`, accent: '#fb7185' },
+  { icon: <Swords />, name: 'Duel', blurb: 'Two players, one buzzer, same device — or online.', how: 'A vs L keys · room codes', to: `${R.songooner.setup}?mode=duel`, accent: '#f472b6' },
+  { icon: <PartyPopper />, name: 'Party', blurb: 'Two to eight players. Pass the phone.', how: 'Turn-based · scoreboard', to: `${R.songooner.setup}?mode=party`, accent: '#34d399' },
+  { icon: <CalendarDays />, name: 'Daily', blurb: 'One seeded run a day. Same songs for everyone.', how: 'Resets at midnight', to: R.songooner.daily, accent: '#818cf8' },
+  { icon: <Share2 />, name: 'Challenge a friend', blurb: 'Send a link. Same tracks, same rules, beat my score.', how: 'Share code · no account', to: `${R.songooner.setup}?share=1`, accent: '#fb923c' },
 ] as const;
 
 const FEATURES = [
@@ -223,10 +224,10 @@ export default function Home({ packs }: HomeProps) {
               Play now
             </Button>
             <div className="flex items-center justify-center gap-1 sm:justify-start">
-              <Button variant="ghost" size="md" to="/setup" leadingIcon={<SlidersHorizontal />}>
+              <Button variant="ghost" size="md" to={R.songooner.setup} leadingIcon={<SlidersHorizontal />}>
                 Customise
               </Button>
-              <Button variant="ghost" size="md" to="/daily" leadingIcon={<CalendarDays />}>
+              <Button variant="ghost" size="md" to={R.songooner.daily} leadingIcon={<CalendarDays />}>
                 Daily
               </Button>
             </div>
@@ -234,7 +235,7 @@ export default function Home({ packs }: HomeProps) {
           {game.error && (
             <p className="order-5 text-sm font-semibold text-danger" role="alert">
               {game.error}{' '}
-              <Link to="/setup" className="font-semibold text-fg underline-offset-2 hover:underline">
+              <Link to={R.songooner.setup} className="font-semibold text-fg underline-offset-2 hover:underline">
                 Change the setup
               </Link>
             </p>
@@ -281,7 +282,7 @@ export default function Home({ packs }: HomeProps) {
           title={<span id="packs-title">Start with a vibe</span>}
           description="Mix as many as you like. Difficulty tiers keep it fair."
           action={
-            <Button variant="ghost" size="sm" to="/packs" trailingIcon={<ArrowRight />}>
+            <Button variant="ghost" size="sm" to={R.songooner.packs} trailingIcon={<ArrowRight />}>
               All packs
             </Button>
           }
@@ -295,12 +296,12 @@ export default function Home({ packs }: HomeProps) {
               size="sm"
               showFeatured={false}
               className="w-44 shrink-0 snap-start sm:w-52"
-              onToggle={(id) => navigate(`/setup?packs=${encodeURIComponent(id)}`)}
-              onPlay={(id) => navigate(`/setup?packs=${encodeURIComponent(id)}&autostart=1`)}
+              onToggle={(id) => navigate(`${R.songooner.setup}?packs=${encodeURIComponent(id)}`)}
+              onPlay={(id) => navigate(`${R.songooner.setup}?packs=${encodeURIComponent(id)}&autostart=1`)}
             />
           ))}
           <Link
-            to="/packs"
+            to={R.songooner.packs}
             className="glass flex w-36 shrink-0 snap-start flex-col items-center justify-center gap-2 rounded-3xl text-sm font-semibold text-muted transition-colors hover:text-fg"
           >
             <span className="grid size-10 place-items-center rounded-full bg-surface-strong">
@@ -326,7 +327,7 @@ export default function Home({ packs }: HomeProps) {
             <Button variant="glow" size="lg" onClick={() => void playNow()} loading={game.loading} leadingIcon={<Play className="fill-current" />}>
               Play now
             </Button>
-            <Button variant="secondary" size="lg" to="/duel" leadingIcon={<Swords />}>
+            <Button variant="secondary" size="lg" to={R.songooner.duel} leadingIcon={<Swords />}>
               Start a duel
             </Button>
           </div>

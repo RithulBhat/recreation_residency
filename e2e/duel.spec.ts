@@ -6,7 +6,7 @@ import { mkdirSync } from 'node:fs';
  *
  * The race test drives TWO browser contexts: page A hosts a room, page B joins with the code it
  * read out of the DOM, the host sends a real Deezer-backed pool, the guest readies up and the host
- * starts — both pages must land on `#/play`.
+ * starts — both pages must land on `#/songooner/play`.
  */
 
 const OUT = 'test-results/duel';
@@ -92,7 +92,7 @@ for (const [name, vp] of Object.entries({ mobile: MOBILE, desktop: DESKTOP })) {
       localStorage.setItem('sg:coach:play', 'done');
     });
     await page.setViewportSize(vp);
-    await page.goto(`${BASE}/#/duel`);
+    await page.goto(`${BASE}/#/songooner/duel`);
     await settle(page);
 
     await expect(page.getByRole('heading', { name: 'Duel a friend' })).toBeVisible();
@@ -149,7 +149,7 @@ test('duel · two browsers race each other', async ({ browser }) => {
     }
 
     /* ---- host opens a room ---- */
-    await a.goto(`${BASE}/#/duel`);
+    await a.goto(`${BASE}/#/songooner/duel`);
     await a.getByTestId('duel-online').click();
     await a.getByTestId('duel-name').fill('Ace');
     await a.getByTestId('duel-create').click();
@@ -159,7 +159,7 @@ test('duel · two browsers race each other', async ({ browser }) => {
     expect(code).toMatch(/^[A-Z2-9]{6}$/);
 
     /* ---- guest joins through a share link ---- */
-    await b.goto(`${BASE}/#/duel?join=${code}`);
+    await b.goto(`${BASE}/#/songooner/duel?join=${code}`);
     await expect(b.getByTestId('duel-code-input')).toHaveValue(code);
     await b.getByTestId('duel-name').fill('Bee');
     await b.getByTestId('duel-join').click();
@@ -204,16 +204,16 @@ test('duel · two browsers race each other', async ({ browser }) => {
     await a.screenshot({ path: `${OUT}/countdown-desktop.png` });
     await b.screenshot({ path: `${OUT}/countdown-mobile.png` });
 
-    await expect(a).toHaveURL(/#\/play/, { timeout: 20_000 });
-    await expect(b).toHaveURL(/#\/play/, { timeout: 20_000 });
+    await expect(a).toHaveURL(/#\/songooner\/play/, { timeout: 20_000 });
+    await expect(b).toHaveURL(/#\/songooner\/play/, { timeout: 20_000 });
     const firstId = await gameId(a);
     expect(await gameId(b)).toBe(firstId); // same seed, same pool → same game id on both sides
 
     /* ---- both race to the end (give up → next, five times) and land on results ---- */
     await finishRace(a);
     await finishRace(b);
-    await expect(a).toHaveURL(/#\/results/, { timeout: 30_000 });
-    await expect(b).toHaveURL(/#\/results/, { timeout: 30_000 });
+    await expect(a).toHaveURL(/#\/songooner\/results/, { timeout: 30_000 });
+    await expect(b).toHaveURL(/#\/songooner\/results/, { timeout: 30_000 });
     const outcomeA = a.getByTestId('duel-outcome');
     const outcomeB = b.getByTestId('duel-outcome');
     await expect(outcomeA).toBeVisible({ timeout: 15_000 });
@@ -235,8 +235,8 @@ test('duel · two browsers race each other', async ({ browser }) => {
     await b.getByTestId('rematch').click();
     await expect(a.getByTestId('duel-outcome')).toHaveAttribute('data-rematch', /countdown|go/, { timeout: 30_000 });
     await a.screenshot({ path: `${OUT}/rematch-countdown-desktop.png`, fullPage: true });
-    await expect(a).toHaveURL(/#\/play/, { timeout: 30_000 });
-    await expect(b).toHaveURL(/#\/play/, { timeout: 30_000 });
+    await expect(a).toHaveURL(/#\/songooner\/play/, { timeout: 30_000 });
+    await expect(b).toHaveURL(/#\/songooner\/play/, { timeout: 30_000 });
     const secondA = await gameId(a);
     const secondB = await gameId(b);
     expect(secondA).not.toBe(firstId);
@@ -245,19 +245,19 @@ test('duel · two browsers race each other', async ({ browser }) => {
     await expect(b.getByTestId('round-counter')).toContainText('1/5');
     // No stale hand-off: nobody is dragged anywhere else once the rematch is running.
     await a.waitForTimeout(2500);
-    await expect(a).toHaveURL(/#\/play/);
-    await expect(b).toHaveURL(/#\/play/);
+    await expect(a).toHaveURL(/#\/songooner\/play/);
+    await expect(b).toHaveURL(/#\/songooner\/play/);
 
     /* ---- back to the lobby mid-race: no countdown left on top of it (P1-2) ---- */
     await a.evaluate(() => {
-      location.hash = '#/duel';
+      location.hash = '#/songooner/duel';
     });
-    await expect(a).toHaveURL(/#\/duel/, { timeout: 15_000 });
+    await expect(a).toHaveURL(/#\/songooner\/duel/, { timeout: 15_000 });
     await settle(a);
     // The overlay is scroll-locked and covers everything, so its absence is what makes the lobby usable.
     await expect(a.getByTestId('duel-countdown')).toHaveCount(0);
     await expect(a.getByTestId('room-code')).toBeVisible();
-    await expect(a).toHaveURL(/#\/duel/); // and no second hand-off drags us back to /play
+    await expect(a).toHaveURL(/#\/songooner\/duel/); // and no second hand-off drags us back to /play
     await a.screenshot({ path: `${OUT}/back-to-lobby-desktop.png`, fullPage: true });
     await expectNoHorizontalOverflow(a);
 

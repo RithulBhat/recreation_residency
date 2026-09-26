@@ -1,14 +1,15 @@
 import type { ReactNode } from 'react';
-import { Link, NavLink } from 'react-router';
-import { CalendarDays, ChartColumn, Gamepad2, Home, Library, SlidersHorizontal } from 'lucide-react';
+import { Link, NavLink, useLocation } from 'react-router';
+import { CalendarDays, ChartColumn, Gamepad2, Home, Library, Play, SlidersHorizontal } from 'lucide-react';
 import type { ThemeName } from '@/hooks/useTheme';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { GAME_HOME, GAME_LABEL, R, RESIDENCY_NAME, RESIDENCY_SHORT, activeGame, type GameKey } from '@/routes';
 import { cn } from './ui/cn';
 import { IconButton } from './ui/IconButton';
 import { Popover } from './ui/Popover';
 import { Slider } from './ui/Slider';
 import { Switch } from './ui/Switch';
-import { Logo } from './Logo';
+import { LogoGlyph } from './Logo';
 import { ThemeGrid, ThemeSwitcher } from './ThemeSwitcher';
 import { VolumeControl } from './VolumeControl';
 
@@ -31,15 +32,33 @@ export interface AppShellProps {
   width?: 'narrow' | 'wide' | 'full';
 }
 
-const NAV = [
-  // "Lobby", not "Play": the tab opens the setup screen, while "Play now" CTAs start a game.
-  { to: '/setup', label: 'Lobby', icon: <Gamepad2 /> },
-  { to: '/packs', label: 'Packs', icon: <Library /> },
-  { to: '/daily', label: 'Daily', icon: <CalendarDays /> },
-  { to: '/stats', label: 'Stats', icon: <ChartColumn /> },
-];
+interface NavItem {
+  to: string;
+  label: string;
+  icon: ReactNode;
+}
 
-const MOBILE_NAV = [{ to: '/', label: 'Home', icon: <Home />, end: true }, ...NAV.map((n) => ({ ...n, end: false }))];
+/**
+ * One nav per game — the shell reads the active game off the pathname, so the tabs always belong to
+ * the game you are inside and the hub shows none at all.
+ */
+const GAME_NAV: Record<GameKey, readonly NavItem[]> = {
+  // "Lobby", not "Play": the tab opens the setup screen, while "Play now" CTAs start a game.
+  songooner: [
+    { to: R.songooner.setup, label: 'Lobby', icon: <Gamepad2 /> },
+    { to: R.songooner.packs, label: 'Packs', icon: <Library /> },
+    { to: R.songooner.daily, label: 'Daily', icon: <CalendarDays /> },
+    { to: R.songooner.stats, label: 'Stats', icon: <ChartColumn /> },
+  ],
+  scout: [
+    { to: R.scout.setup, label: 'Play', icon: <Play /> },
+    { to: R.scout.daily, label: 'Daily', icon: <CalendarDays /> },
+    { to: R.scout.stats, label: 'Stats', icon: <ChartColumn /> },
+  ],
+};
+
+/** Tailwind needs the column count as a literal class, so the two shapes are spelled out. */
+const MOBILE_COLS: Record<number, string> = { 4: 'grid-cols-4', 5: 'grid-cols-5' };
 
 const widths = { narrow: 'max-w-3xl', wide: 'max-w-6xl', full: 'max-w-none' } as const;
 
@@ -75,6 +94,50 @@ function CompactControls({ theme, onThemeChange, volume, onVolumeChange, muted, 
   );
 }
 
+/**
+ * `Residency / Songooner` — the residency always links home, and the game name next to it is the
+ * way back to the game's own lobby. The residency half never shrinks; the game name truncates, so
+ * even "Highlight Scout" on a 320 px phone cannot push the row wider than the screen.
+ */
+function Brand({ game, compact }: { game: GameKey | null; compact: boolean }) {
+  return (
+    <div className="flex min-w-0 items-center gap-1.5 sm:gap-2">
+      <Link
+        to={R.residency}
+        aria-label={RESIDENCY_NAME}
+        className="flex min-h-11 shrink-0 items-center gap-1.5 rounded-xl focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent-2 sm:gap-2"
+      >
+        <LogoGlyph size={compact ? 22 : 28} />
+        <span
+          className={cn(
+            'wordmark text-gradient font-display font-black leading-none tracking-tight',
+            compact ? 'text-sm' : 'text-lg sm:text-2xl',
+          )}
+        >
+          {RESIDENCY_SHORT}
+        </span>
+      </Link>
+      {game && (
+        <>
+          <span className="shrink-0 text-base font-light text-muted/60 sm:text-xl" aria-hidden>
+            /
+          </span>
+          <Link
+            to={GAME_HOME[game]}
+            aria-label={`${GAME_LABEL[game]} home`}
+            className={cn(
+              'flex min-h-11 min-w-0 items-center rounded-xl font-display font-bold leading-none tracking-tight text-fg focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent-2',
+              compact ? 'text-xs' : 'text-sm sm:text-lg',
+            )}
+          >
+            <span className="truncate">{GAME_LABEL[game]}</span>
+          </Link>
+        </>
+      )}
+    </div>
+  );
+}
+
 export function AppShell({
   theme,
   onThemeChange,
@@ -90,6 +153,13 @@ export function AppShell({
   width = 'wide',
 }: AppShellProps) {
   const compact = useCompactHeader();
+  const { pathname } = useLocation();
+  const game = activeGame(pathname);
+  const nav = game ? GAME_NAV[game] : null;
+  const mobileNav: readonly NavItem[] | null = game
+    ? [{ to: GAME_HOME[game], label: 'Home', icon: <Home /> }, ...GAME_NAV[game]]
+    : null;
+
   return (
     <div className="flex min-h-dvh flex-col px-safe">
       <a
@@ -104,13 +174,11 @@ export function AppShell({
       <header className={cn('sticky top-0 z-40 pt-safe', immersive && 'landscape-phone:hidden')}>
         <div className="glass border-x-0 border-t-0 bg-bg/90">
           <div className={cn('mx-auto flex h-16 w-full items-center gap-3 px-4 sm:px-6', widths[width])}>
-            <Link to="/" className="flex min-h-11 min-w-0 items-center rounded-xl focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent-2" aria-label="Songooner home">
-              <Logo size="md" />
-            </Link>
+            <Brand game={game} compact={compact} />
 
-            {!immersive && (
+            {!immersive && nav && (
               <nav className="ml-4 hidden items-center gap-1 md:flex" aria-label="Primary">
-                {NAV.map((n) => (
+                {nav.map((n) => (
                   <NavLink
                     key={n.to}
                     to={n.to}
@@ -144,20 +212,27 @@ export function AppShell({
       </header>
 
       {/* Content */}
-      <main id="main" className={cn('mx-auto w-full flex-1 px-4 pt-6 sm:px-6 sm:pt-8', widths[width], immersive ? 'pb-safe' : 'pb-safe-nav md:pb-12')}>
+      <main
+        id="main"
+        className={cn(
+          'mx-auto w-full flex-1 px-4 pt-6 sm:px-6 sm:pt-8',
+          widths[width],
+          immersive ? 'pb-safe' : mobileNav ? 'pb-safe-nav md:pb-12' : 'pb-12',
+        )}
+      >
         {children}
       </main>
 
-      {/* Mobile bottom tab bar */}
-      {!immersive && (
+      {/* Mobile bottom tab bar — a game's tabs; the hub has none, so it stays out of the way. */}
+      {!immersive && mobileNav && (
         <nav className="fixed inset-x-0 bottom-0 z-40 md:hidden" aria-label="Primary mobile">
           <div className="glass-strong border-x-0 border-b-0 bg-bg/97 pb-safe">
-            <ul className="grid h-[4.5rem] grid-cols-5 px-1">
-              {MOBILE_NAV.map((n) => (
+            <ul className={cn('grid h-[4.5rem] px-1', MOBILE_COLS[mobileNav.length] ?? 'grid-cols-5')}>
+              {mobileNav.map((n, i) => (
                 <li key={n.to} className="min-w-0">
                   <NavLink
                     to={n.to}
-                    end={n.end}
+                    end={i === 0}
                     className={({ isActive }) =>
                       cn(
                         'flex h-full flex-col items-center justify-center gap-1 rounded-2xl text-[10px] font-semibold transition-colors [&>svg]:size-5',

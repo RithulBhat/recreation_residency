@@ -47,10 +47,10 @@ afterEach(() => {
   document.body.style.overflow = '';
 });
 
-/** Mounting the screen, as a fresh navigation to `#/duel` would. */
+/** Mounting the screen, as a fresh navigation to `#/songooner/duel` would. */
 function lobby() {
   return render(
-    <MemoryRouter initialEntries={['/duel']}>
+    <MemoryRouter initialEntries={['/songooner/duel']}>
       <ToastProvider>
         <Duel />
       </ToastProvider>
@@ -109,7 +109,7 @@ describe('/duel — countdown hand-off', () => {
     expect(startLoadedGame).toHaveBeenCalledTimes(1);
     expect(startLoadedGame).toHaveBeenCalledWith(api.current.initPayload);
     expect(navigate).toHaveBeenCalledTimes(1);
-    expect(navigate).toHaveBeenCalledWith('/play');
+    expect(navigate).toHaveBeenCalledWith('/songooner/play');
     // "GO" is still up for a beat, which is the whole point of the 0 frame.
     expect(screen.getByTestId('duel-countdown')).toBeInTheDocument();
 

@@ -3,6 +3,7 @@ import { Check, Copy, Share2 } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { useToast } from '../ui/Toast';
 import { cn } from '../ui/cn';
+import { R } from '@/routes';
 
 export interface RoomCodeCardProps {
   code: string;
@@ -11,11 +12,11 @@ export interface RoomCodeCardProps {
   className?: string;
 }
 
-/** The share link for a room: `…/#/duel?join=CODE`, safe to paste anywhere. */
+/** The share link for a room: `…/#/songooner/duel?join=CODE`, safe to paste anywhere. */
 export function duelShareUrl(code: string): string {
-  if (typeof window === 'undefined') return `#/duel?join=${code}`;
+  if (typeof window === 'undefined') return `#${R.songooner.duel}?join=${code}`;
   const { origin, pathname, search } = window.location;
-  return `${origin}${pathname}${search}#/duel?join=${code}`;
+  return `${origin}${pathname}${search}#${R.songooner.duel}?join=${code}`;
 }
 
 async function copyText(text: string): Promise<boolean> {

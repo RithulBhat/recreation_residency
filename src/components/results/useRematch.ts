@@ -60,7 +60,7 @@ export function useRematch(duel: UseOnlineDuel, enabled: boolean): RematchPhase 
     if (!enabled || countdown !== 0 || prev === null || prev <= 0 || !initPayload || launched.current) return;
     launched.current = true;
     startLoadedGame(initPayload);
-    navigate('/play');
+    navigate('/songooner/play');
   }, [enabled, countdown, initPayload, navigate]);
 
   if (countdown !== null && countdown > 0) return 'countdown';

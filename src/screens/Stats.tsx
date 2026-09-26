@@ -8,6 +8,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { SectionHeading } from '@/components/SectionHeading';
 import { Footer } from '@/components/Footer';
+import { R } from '@/routes';
 import {
   AchievementGrid,
   ClipBucketChart,
@@ -19,7 +20,7 @@ import {
   RecentGames,
 } from '@/components/stats';
 
-/** Dev affordance: `/#/stats?demo=1` seeds fake games so the page can be reviewed. */
+/** Dev affordance: `/#/songooner/stats?demo=1` seeds fake games so the page can be reviewed. */
 function useDemoSeed(): boolean {
   const [params] = useSearchParams();
   const wanted = import.meta.env.DEV && params.get('demo') === '1';
@@ -91,7 +92,7 @@ export default function Stats() {
             // there. The wrapper does the hiding — `Button` already sets
             // `inline-flex`, and `cn` does not merge conflicting utilities.
             <span className="hidden sm:block">
-              <Button variant="glow" to="/setup" leadingIcon={<Play className="fill-current" />}>
+              <Button variant="glow" to={R.songooner.setup} leadingIcon={<Play className="fill-current" />}>
                 Play
               </Button>
             </span>
@@ -118,7 +119,7 @@ export default function Stats() {
                 title="Nothing recorded yet"
                 description="Play one round and this page fills up — your rank, accuracy at every clip length, best streak, pack standings, 53 achievements and a history of every song you've heard."
                 action={
-                  <Button variant="glow" size="lg" to="/setup" leadingIcon={<Play className="fill-current" />}>
+                  <Button variant="glow" size="lg" to={R.songooner.setup} leadingIcon={<Play className="fill-current" />}>
                     Play now
                   </Button>
                 }
@@ -126,7 +127,7 @@ export default function Stats() {
               {import.meta.env.DEV && (
                 <p className="mt-4 text-center font-mono text-xs text-muted">
                   dev:{' '}
-                  <Link to="/stats?demo=1" className="text-accent underline-offset-2 hover:underline">
+                  <Link to={`${R.songooner.stats}?demo=1`} className="text-accent underline-offset-2 hover:underline">
                     ?demo=1
                   </Link>{' '}
                   seeds sample games

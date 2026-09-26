@@ -1,6 +1,7 @@
 import { Link } from 'react-router';
 import { ArrowRight, Play } from 'lucide-react';
 import type { GameState } from '@/types';
+import { R } from '@/routes';
 import { useGameStore } from '@/store/gameStore';
 import { isGameLive, type UseStartGame } from '@/hooks/useStartGame';
 import { MODE_LABEL } from '@/components/setup/summary';
@@ -20,7 +21,7 @@ export function ResumeBanner({ className }: { className?: string }) {
   if (!isGameLive(state.status)) return null;
   return (
     <Link
-      to="/play"
+      to={R.songooner.play}
       data-testid="resume-banner"
       className={cn(
         'glass group flex items-center gap-3 rounded-2xl border-accent/40 px-4 py-2.5 text-sm text-fg transition-colors hover:bg-surface-strong',
@@ -68,7 +69,7 @@ export function ReplaceGameDialog({ game }: ReplaceGameDialogProps) {
         </>
       }
     >
-      <Link to="/play" onClick={game.cancelPending} className="inline-flex items-center gap-1 text-sm font-semibold text-accent hover:underline">
+      <Link to={R.songooner.play} onClick={game.cancelPending} className="inline-flex items-center gap-1 text-sm font-semibold text-accent hover:underline">
         Resume that game instead
         <ArrowRight className="size-4" aria-hidden />
       </Link>

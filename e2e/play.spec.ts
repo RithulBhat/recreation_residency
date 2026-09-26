@@ -24,7 +24,7 @@ async function settle(page: Page, ms = 700) {
 }
 
 /**
- * Open /play (loads the DEV hook) and start a real game from the given settings. The first-run coach
+ * Open /songooner/play (loads the DEV hook) and start a real game from the given settings. The first-run coach
  * marks are pre-dismissed unless a test asks for them (`coach: true`).
  */
 async function startGame(page: Page, settings: Partial<GameSettings>, opts: { coach?: boolean; stats?: unknown } = {}) {
@@ -36,7 +36,7 @@ async function startGame(page: Page, settings: Partial<GameSettings>, opts: { co
     },
     { coach: opts.coach ?? false, stats: opts.stats },
   );
-  await page.goto('/#/play');
+  await page.goto('/#/songooner/play');
   await expect(page.getByRole('heading', { name: 'No game in progress' })).toBeVisible();
   await page.waitForFunction(() => typeof window.__songooner?.start === 'function');
   await page.evaluate(async (s) => {
@@ -85,15 +85,15 @@ async function expectIconButtonsLabelled(page: Page) {
 
 test('play · no game in progress card', async ({ page }) => {
   await page.setViewportSize(VIEWPORTS.mobile);
-  await page.goto('/#/play');
+  await page.goto('/#/songooner/play');
   await expect(page.getByRole('heading', { name: 'No game in progress' })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Set up a game' })).toHaveAttribute('href', /#\/setup$/);
+  await expect(page.getByRole('link', { name: 'Set up a game' })).toHaveAttribute('href', /#\/songooner\/setup$/);
   await page.screenshot({ path: `${OUT}/no-game-mobile.png` });
 });
 
 test('results · redirects to setup without a finished game', async ({ page }) => {
-  await page.goto('/#/results');
-  await page.waitForURL(/#\/setup/);
+  await page.goto('/#/songooner/results');
+  await page.waitForURL(/#\/songooner\/setup/);
 });
 
 for (const [name, vp] of Object.entries(VIEWPORTS)) {
@@ -217,7 +217,7 @@ for (const [name, vp] of Object.entries(VIEWPORTS)) {
     await expect(last.getByRole('button', { name: 'See results' })).toBeVisible();
     await last.getByRole('button', { name: 'See results' }).click();
 
-    await page.waitForURL(/#\/results/);
+    await page.waitForURL(/#\/songooner\/results/);
     await expect(page.getByTestId('results-hero')).toBeVisible();
     await expect(page.getByTestId('final-score')).toBeVisible();
     await expect(page.getByTestId('round-row')).toHaveCount(2);
@@ -313,7 +313,7 @@ test('play · blitz clock counts down and auto-advances', async ({ page }) => {
   const dialog = page.getByRole('dialog', { name: 'Quit this game?' });
   await expect(dialog).toBeVisible();
   await dialog.getByRole('button', { name: 'Quit game' }).click();
-  await page.waitForURL(/#\/results/);
+  await page.waitForURL(/#\/songooner\/results/);
   await expect(page.getByTestId('results-hero')).toContainText('Called it early');
   // Blitz-native copy: songs against the clock, and the clock (not the wall time) as the duration.
   await expect(page.getByTestId('blitz-summary')).toContainText('0 songs in 40 s');
@@ -327,7 +327,7 @@ test('play · quitting before touching anything discards the game (nothing recor
   await page.keyboard.press('Escape');
   const dialog = page.getByRole('dialog', { name: 'Quit this game?' });
   await dialog.getByRole('button', { name: 'Quit game' }).click();
-  await page.waitForURL(/#\/setup/);
+  await page.waitForURL(/#\/songooner\/setup/);
   await expect(page.getByText('Game discarded')).toBeVisible();
   const games = await page.evaluate(() => {
     const raw = localStorage.getItem('sg:stats');
@@ -336,9 +336,9 @@ test('play · quitting before touching anything discards the game (nothing recor
     return parsed.state?.totals?.games ?? 0;
   });
   expect(games).toBe(0);
-  // /results has nothing to show for it either.
-  await page.goto('/#/results');
-  await page.waitForURL(/#\/setup/);
+  // The results screen has nothing to show for it either.
+  await page.goto('/#/songooner/results');
+  await page.waitForURL(/#\/songooner\/setup/);
 });
 
 test('play · classic stages, host bubble and survival lives', async ({ page }) => {
@@ -525,11 +525,11 @@ test('play · first-run coach marks show once, walk three steps and never come b
 
   // Leave and come back through the app: the game is still there, the coach marks are not.
   await page.evaluate(() => {
-    location.hash = '#/setup';
+    location.hash = '#/songooner/setup';
   });
   await expect(page.getByTestId('start-game')).toBeVisible();
   await page.evaluate(() => {
-    location.hash = '#/play';
+    location.hash = '#/songooner/play';
   });
   await expect(page.getByTestId('stage')).toBeVisible();
   await settle(page, 400);
