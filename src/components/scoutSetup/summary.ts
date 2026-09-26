@@ -107,6 +107,24 @@ export function scoutPackNames(ids: readonly string[]): string[] {
 }
 
 /**
+ * Does the difficulty tier change anything for these settings?
+ *
+ * `buildPool` filters PLAYERS by {@link tierOf}; franchises have no fame score, so a run that only
+ * ever deals teams (Franchise IQ, Logo Zoom) returns all 32 clubs at every tier. The lobby uses this
+ * to hide the control rather than leave a dial that turns nothing — and the summaries below use it
+ * so a tier left over from a player mode is not advertised on a run that ignores it.
+ */
+export function scoutDifficultyApplies(s: Pick<ScoutSettings, 'mode' | 'mixModes'>): boolean {
+  return poolKind(s) !== 'team';
+}
+
+/** The tier label for a summary line, or `null` when the tier does nothing for these settings. */
+export function scoutDifficultyLabel(s: Pick<ScoutSettings, 'mode' | 'mixModes' | 'difficulty'>): string | null {
+  if (s.difficulty === 'any' || !scoutDifficultyApplies(s)) return null;
+  return SCOUT_DIFFICULTY_INFO[s.difficulty].label;
+}
+
+/**
  * The start-bar one-liner: `10 rounds · Silhouette · Superstars · Superstars · 4 tries · 30s timer`.
  * Mode first when it is a single mode; `Mixed bag` when the run shuffles them.
  */
@@ -117,7 +135,8 @@ export function scoutSettingsSummary(s: ScoutSettings, packNames?: readonly stri
     s.mixModes ? 'Mixed bag' : scoutModeName(s.mode),
     scoutPacksSummary(names),
   ];
-  if (s.difficulty !== 'any') parts.push(SCOUT_DIFFICULTY_INFO[s.difficulty].label);
+  const tier = scoutDifficultyLabel(s);
+  if (tier !== null) parts.push(tier);
   parts.push(triesLabel(s.tries));
   if (s.roundTimer > 0) parts.push(timerLabel(s.roundTimer));
   if (!s.hintsEnabled) parts.push('no hints');
@@ -141,8 +160,10 @@ export function poolKind(s: Pick<ScoutSettings, 'mode' | 'mixModes'>): 'player' 
 export function emptyPoolMessage(s: ScoutSettings): string {
   const names = scoutPackNames(s.packIds);
   const where = names.length > 0 ? scoutPacksSummary(names) : 'these packs';
-  const tier = s.difficulty === 'any' ? '' : ` at ${SCOUT_DIFFICULTY_INFO[s.difficulty].label}`;
-  return `Nobody in ${where}${tier} can be played as ${scoutModeName(s.mode)}. Add a pack or drop the difficulty.`;
+  const label = scoutDifficultyLabel(s);
+  const tier = label === null ? '' : ` at ${label}`;
+  const fix = label === null ? 'Add a pack.' : 'Add a pack or drop the difficulty.';
+  return `Nobody in ${where}${tier} can be played as ${scoutModeName(s.mode)}. ${fix}`;
 }
 
 /** `0.82` → `82%`. */

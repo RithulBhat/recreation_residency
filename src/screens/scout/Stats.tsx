@@ -4,7 +4,6 @@ import { Activity, Binoculars, Crosshair, Flame, Ghost, Library, Play, Timer, Tr
 import { formatScore } from '@/stats/share';
 import { SectionHeading } from '@/components/SectionHeading';
 import { StatTile } from '@/components/StatTile';
-import { Footer } from '@/components/Footer';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Dialog } from '@/components/ui/Dialog';
@@ -13,6 +12,7 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { formatDuration } from '@/components/stats/format';
 import { R } from '@/routes';
 import {
+  ScoutFooter,
   ScoutModeChart,
   ScoutNemesisList,
   ScoutPackStandings,
@@ -324,7 +324,8 @@ export default function ScoutStats() {
         </>
       )}
 
-      <Footer className="mt-0" />
+      {/* ESPN, not Deezer: Highlight Scout has no audio. See ScoutFooter. */}
+      <ScoutFooter className="mt-0" />
     </div>
   );
 }

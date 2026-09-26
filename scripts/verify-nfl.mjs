@@ -46,6 +46,14 @@ function table(rows) {
 }
 
 const json = async (file) => JSON.parse(await readFile(join(DATA, file), 'utf8'));
+/** An INPUT file the sync script never writes. Absence must not fail the run, only narrow it. */
+const optionalJson = async (file) => {
+  try {
+    return JSON.parse(await readFile(join(DATA, file), 'utf8'));
+  } catch {
+    return undefined;
+  }
+};
 
 /** Ground truth since the 2002 realignment. */
 const DIVISIONS = {
@@ -106,12 +114,15 @@ function dupes(values) {
 // ---------------------------------------------------------------------------------------------
 
 async function main() {
-  const [meta, teams, players, highlights, statlines] = await Promise.all([
+  const [meta, teams, players, highlights, statlines, fameSignals] = await Promise.all([
     json('meta.json'),
     json('teams.json'),
     json('players.json'),
     json('highlights.json'),
     json('statlines.json'),
+    // A hand-verified INPUT, not an output: it carries the recognition evidence ESPN has no field
+    // for. Read here so the fame checks can police the score's own inputs, never required.
+    optionalJson('fame-signals.json'),
   ]);
 
   const lastCompletedSeason = meta.season - 1;
@@ -236,19 +247,31 @@ async function main() {
   // --- fame -----------------------------------------------------------------------------------
   //
   // Fame is a RECOGNISABILITY score — "would a general NFL fan name this face?" — and NOT a measure
-  // of statistical volume. Every assertion below names a concrete failure it prevents, because two
-  // versions of this field have already been rejected. A volume-ranked score put 15 quarterbacks in
-  // the top 25, no defender and one tight end in the whole `star` tier (the game's EASY difficulty),
-  // Jared Goff above Patrick Mahomes and Travis Kelce around 70th. Ranking inside each position
-  // group and mapping onto per-group ceilings then fixed the shape and broke the meaning: the leader
-  // of a thin group landed near its ceiling regardless of public profile, so Dallas Goedert (zero
-  // Pro Bowls), Kevin Byard, Trey McBride, James Cook III, Danielle Hunter, Derek Stingley Jr. and
-  // Keenan Allen filled the top 40 while Joe Burrow sat 43rd after turf-toe surgery, Jayden Daniels
-  // 248th, Travis Hunter 736th and only 8 quarterbacks made the top 40 at all.
+  // of statistical volume. Every assertion below names a concrete failure it prevents, because three
+  // versions of this field have already been rejected.
+  //
+  //  v1 ranked statistical volume: 15 quarterbacks in the top 25, no defender and one tight end in
+  //     the whole `star` tier, Jared Goff above Patrick Mahomes, Travis Kelce around 70th.
+  //  v2 ranked inside each position group and mapped onto per-group ceilings. That fixed the shape
+  //     and broke the meaning — the leader of a thin group landed near its ceiling regardless of
+  //     public profile — so Dallas Goedert (zero Pro Bowls), Kevin Byard, Trey McBride, James Cook
+  //     III, Danielle Hunter, Derek Stingley Jr. and Keenan Allen filled the top 40 while Joe Burrow
+  //     sat 43rd after turf-toe surgery, Jayden Daniels 248th and Travis Hunter 736th.
+  //  v3 summed voted honors and fixed the LEADERBOARD only. All three judges passed its top 40 and
+  //     refused its `star` tier, which is the only thing that ships: EASY mode filters by tier and
+  //     shuffles UNIFORMLY (`buildPool`, src/scout/subjects.ts), so rank 41 and rank 109 are equally
+  //     likely rounds. Six of the seven names v2 was rejected for were still inside that tier, just
+  //     lower down the page, next to a ten-time Pro Bowl FULLBACK at fame 84, seventeen defensive
+  //     linemen and thirteen defensive backs — 45 of its 109 players with a VERIFIED
+  //     `nationalProfile: 0`.
+  //
+  // So the checks below police the TIER as hard as the top 40: its size, its position mix, its
+  // quarterback count against the 32 that actually start, and how much of it has no evidence of a
+  // public profile at all.
   //
   // If one of these goes red the score has regressed — fix `scoreFame` in scripts/sync-nfl.mjs and
   // rerun `NFL_FAME_ONLY=1 npm run nfl:sync`. Do not relax a bound; `src/data/nfl/nfl.test.ts`
-  // mirrors all seven criteria and would still catch it.
+  // mirrors every criterion and would still catch it.
   const tier = (f) => (f >= 80 ? 'star' : f >= 55 ? 'starter' : f >= 30 ? 'rotation' : 'deepCut');
   const tiers = { star: 0, starter: 0, rotation: 0, deepCut: 0 };
   for (const p of players) tiers[tier(p.fame)]++;
@@ -278,6 +301,31 @@ async function main() {
       team: abbrOf.get(p.teamId) ?? '?',
       draft: p.draft ? `${p.draft.year} R${p.draft.round}P${p.draft.pick}` : 'UDFA',
     })),
+  );
+
+  // The WHOLE star tier, because that set IS easy mode: `buildPool` filters by tier and shuffles
+  // uniformly, so every row below is an equally likely round. v3 was refused on rows 41-109.
+  const starTier = ranked.filter((p) => p.fame >= 80);
+  const signalOf = (p) => fameSignals?.players?.[p.id];
+  console.log(`the full star tier (EASY mode draws uniformly from all ${starTier.length}):`);
+  table(
+    starTier.map((p, i) => {
+      const a = signalOf(p) ?? {};
+      const merch = (a.profileFrom ?? []).find((x) => /^nflpa-merch-#/.test(x)) ?? '';
+      return {
+        '#': i + 1,
+        fame: p.fame,
+        player: p.name,
+        pos: p.pos,
+        team: abbrOf.get(p.teamId) ?? '?',
+        profile: a.nationalProfile ?? '?',
+        pb: a.proBowls ?? '?',
+        ap: a.allPros ?? '?',
+        heisman: a.heisman ? 'yes' : '',
+        merch: merch.replace('nflpa-merch-', ''),
+        awards: (a.majorAwards ?? []).map((x) => x.award).join(', '),
+      };
+    }),
   );
 
   // Position-group histogram per tier — the shape that the old score got wrong.
@@ -424,6 +472,67 @@ async function main() {
     );
   }
   table(excludedRows);
+
+  // --- the same seven must be out of the TIER, not merely out of the leaderboard ----------------
+  // This is the check v3 did not have and was rejected for. Six of these seven were moved from the
+  // top 40 into ranks 71-88 of a 109-player EASY pool, which changed their draw probability by
+  // exactly zero. Only Dallas Goedert actually left. Being outside the top 40 is necessary; being
+  // outside the tier a general fan actually plays is the point.
+  const starIds = new Set(starTier.map((p) => p.id));
+  const stillInTier = NOT_TOP_40_NAMES.map(([id]) => playerById.get(id)).filter((p) => p && starIds.has(p.id));
+  check(
+    'fame: none of the seven production-not-fame names is in the star tier either',
+    stillInTier.length === 0,
+    stillInTier.map((p) => `${p.name} ${p.fame} (#${rankOf.get(p.id)})`).join(', ') ||
+      NOT_TOP_40_NAMES.map(([id]) => {
+        const p = playerById.get(id);
+        return p ? `${p.name} ${p.fame}` : '';
+      })
+        .filter(Boolean)
+        .join(', '),
+  );
+
+  // --- college awards must never lift anybody into EASY mode -------------------------------------
+  // `fame-signals.json` parses the Wikipedia infobox verbatim, and a college award carries the same
+  // name as the NFL one. `honorUnits` drops every award year that predates the player's draft year;
+  // these three are the ones a judge caught by hand, each of which had floated to exactly fame 80.
+  const COLLEGE_AWARD_NAMES = [
+    ['4243256', 'Devin Lloyd', 'Defensive Player of the Year 2021 is the Pac-12 Pat Tillman award at Utah'],
+    ['14012', 'Andy Dalton', 'Offensive Player of the Year 2009/2010 is the Mountain West award at TCU'],
+    ['4430737', 'Kyren Williams', 'Offensive Rookie of the Year 2020 is a Notre Dame honour'],
+  ];
+  const collegeRows = [];
+  for (const [id, name, why] of COLLEGE_AWARD_NAMES) {
+    const p = playerById.get(id);
+    if (!p) {
+      skip(`fame: ${name} is not in the star tier`, `id ${id} is not on an NFL roster`);
+      continue;
+    }
+    if (p.name !== name) warn(`fame: id ${id} is "${p.name}" on file, expected "${name}"`);
+    collegeRows.push({ player: p.name, fame: p.fame, rank: rankOf.get(p.id), why });
+    check(`fame: ${p.name} is not in the star tier`, !starIds.has(p.id), `fame ${p.fame} — ${why}`);
+  }
+  table(collegeRows);
+  // Informational: every pre-draft award row still in the file, so a re-harvest cannot hide new ones.
+  if (fameSignals?.players) {
+    const preDraft = [];
+    for (const [id, a] of Object.entries(fameSignals.players)) {
+      const p = playerById.get(id);
+      const draftYear = p?.draft?.year ?? a?.draft?.year;
+      if (!p || draftYear === undefined) continue;
+      for (const award of a.majorAwards ?? []) {
+        for (const y of award.years ?? []) {
+          if (y < draftYear) preDraft.push(`${p.name} ${award.award} ${y} (drafted ${draftYear})`);
+        }
+      }
+    }
+    if (preDraft.length) {
+      warn(
+        `fame-signals.json holds ${preDraft.length} award year(s) predating the player's draft — ` +
+          `college honours, dropped by scoreFame: ${preDraft.slice(0, 4).join('; ')}…`,
+      );
+    }
+  }
 
   // --- sustained excellence beats one loud season -----------------------------------------------
   // Goff/Mayfield/Stafford/Darnold all out-ranked Mahomes under the volume score. Whoever has the

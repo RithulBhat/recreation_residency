@@ -10,6 +10,7 @@ export * from './pool';
 export * from './scoutAggregate';
 export { useStartScout, isScoutRunLive } from './useStartScout';
 export type { StartScoutOptions, UseStartScout } from './useStartScout';
+export { ScoutFooter } from './ScoutFooter';
 export { ScoutResumeBanner, ScoutReplaceDialog } from './ScoutResumeGame';
 export { ScoutModePicker, SCOUT_MODE_ACCENT } from './ScoutModePicker';
 export { ScoutPackPicker, SCOUT_PACK_CATEGORIES } from './ScoutPackPicker';

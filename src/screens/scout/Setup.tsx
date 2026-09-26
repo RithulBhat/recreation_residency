@@ -11,8 +11,8 @@ import { Button } from '@/components/ui/Button';
 import { SetupSection } from '@/components/setup/SetupSection';
 import { R } from '@/routes';
 import {
-  SCOUT_DIFFICULTY_INFO,
   SCOUT_DIFFICULTY_ORDER,
+  ScoutFooter,
   ScoutModePicker,
   ScoutPackPicker,
   ScoutPresetRow,
@@ -21,6 +21,7 @@ import {
   ScoutRules,
   ScoutStartBar,
   roundsLabel,
+  scoutDifficultyLabel,
   scoutModeName,
   scoutPackCounts,
   scoutPackNames,
@@ -108,6 +109,11 @@ export default function ScoutSetup() {
 
   const packNames = scoutPackNames(settings.packIds);
   const modeInfo = SCOUT_MODES.find((m) => m.id === settings.mode);
+  // `null` on a franchise-only run: the tier filters players, so it is not part of these rules.
+  const tierLabel = scoutDifficultyLabel(settings);
+  const rulesSummary = [tierLabel, roundsLabel(settings.rounds), triesLabel(settings.tries), timerLabel(settings.roundTimer)]
+    .filter((part): part is string => part !== null)
+    .join(' · ');
 
   return (
     <div className="flex flex-col gap-4 pb-36 sm:gap-6 sm:pb-32">
@@ -162,8 +168,9 @@ export default function ScoutSetup() {
         >
           <span className="font-semibold">Nothing to scout with these settings.</span>
           <span className="text-muted">
-            {scoutPacksSummary(packNames)} has nobody at {SCOUT_DIFFICULTY_INFO[settings.difficulty].label} who can be
-            played as {scoutModeName(settings.mode)}. Add a pack, or set the difficulty back to Any.
+            {scoutPacksSummary(packNames)} has nobody{tierLabel !== null ? ` at ${tierLabel}` : ''} who can be played
+            as {scoutModeName(settings.mode)}.{' '}
+            {tierLabel !== null ? 'Add a pack, or set the difficulty back to Any.' : 'Add a pack.'}
           </span>
         </div>
       )}
@@ -172,8 +179,13 @@ export default function ScoutSetup() {
 
       <ScoutPresetRow />
 
+      {/*
+        Two columns that end near each other. The pack picker is by far the tallest block, so it
+        carries a column on its own with the short explainer under it; mode + rules share the other.
+        (Mode + Packs together left ~750 px of dead right column at 1440.)
+      */}
       <div className="grid gap-4 lg:grid-cols-2 lg:items-start">
-        <div className="flex min-w-0 flex-col gap-4">
+        <div className="flex min-w-0 flex-col gap-4" data-col="left">
           <SetupSection
             id="scout-mode"
             icon={<Binoculars />}
@@ -187,23 +199,23 @@ export default function ScoutSetup() {
             <ScoutModePicker />
           </SetupSection>
           <SetupSection
+            id="scout-rules"
+            icon={<ListChecks />}
+            title={tierLabel !== null ? 'Difficulty & rules' : 'Rules'}
+            summary={rulesSummary}
+            defaultOpen={!mobile}
+          >
+            <ScoutRules tierCounts={tierCounts} />
+          </SetupSection>
+        </div>
+        <div className="flex min-w-0 flex-col gap-4" data-col="right">
+          <SetupSection
             id="scout-packs"
             icon={<Library />}
             title="Packs"
             summary={`${scoutPacksSummary(packNames)}${poolSize !== null ? ` · ${poolSize.toLocaleString()} in the pool` : ''}`}
           >
             <ScoutPackPicker counts={counts} poolSize={poolSize} loading={loading} />
-          </SetupSection>
-        </div>
-        <div className="flex min-w-0 flex-col gap-4">
-          <SetupSection
-            id="scout-rules"
-            icon={<ListChecks />}
-            title="Difficulty & rules"
-            summary={`${SCOUT_DIFFICULTY_INFO[settings.difficulty].label} · ${roundsLabel(settings.rounds)} · ${triesLabel(settings.tries)} · ${timerLabel(settings.roundTimer)}`}
-            defaultOpen={!mobile}
-          >
-            <ScoutRules tierCounts={tierCounts} />
           </SetupSection>
 
           <div className="glass rounded-3xl p-4 sm:p-5">
@@ -239,6 +251,8 @@ export default function ScoutSetup() {
           </div>
         </div>
       </div>
+
+      <ScoutFooter className="mt-6 sm:mt-10" />
 
       <ScoutStartBar game={game} poolSize={poolSize} datasetLoading={loading} />
       <ScoutReplaceDialog game={game} />

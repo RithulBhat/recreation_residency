@@ -543,73 +543,104 @@ async function enrichDrafts(players) {
 // 3. Fame
 // ---------------------------------------------------------------------------------------------
 /**
- * Fame answers exactly one question: **how likely is a general NFL fan to recognise this face?**
+ * Fame answers exactly one question: **how likely is a general NFL fan to name this face?**
  *
- * It is NOT a measure of production. Two versions of this field have already been rejected for
- * confusing the two. A pure stat-volume score put fifteen quarterbacks in the top twenty-five and
- * no defender in the whole `star` tier. Ranking players inside their own position group and mapping
- * that standing onto a per-group ceiling fixed the shape but broke the meaning: because every group
- * was normalised against its own best three résumés, the leader of a thin group landed near its
- * ceiling whether or not anybody outside a fantasy league had heard of him — that is how Dallas
- * Goedert (no Pro Bowls, no All-Pros), Kevin Byard, Trey McBride and James Cook III reached the top
- * forty while Jayden Daniels sat 248th for missing snaps and Travis Hunter — Heisman winner, second
- * overall pick — sat 736th.
+ * Three versions of this field have now been rejected, each for the same underlying mistake in a
+ * new disguise, so the SHAPE of the fix matters as much as the numbers.
  *
- * The score below is built from what actually makes a face recognisable, in descending order of
- * weight.
+ *  - v1 ranked statistical volume. Fifteen quarterbacks filled the top twenty-five, no defender
+ *    reached the `star` tier at all and Travis Kelce sat around 70th.
+ *  - v2 ranked players inside their own position group and mapped that standing onto a per-group
+ *    ceiling. The leader of a thin group landed near its ceiling whether or not anybody outside a
+ *    fantasy league had heard of him: Dallas Goedert (no Pro Bowls, no All-Pros), Kevin Byard,
+ *    Trey McBride and James Cook III filled the top forty while Jayden Daniels sat 248th for
+ *    missing snaps and Travis Hunter — Heisman winner, second overall pick — sat 736th.
+ *  - v3 replaced that with an honors sum and fixed the visible leaderboard only. Its top forty was
+ *    accepted by all three judges; its `star` TIER was refused, and the tier is the only thing that
+ *    ships. Six of the seven names v2 was rejected for were still inside it, just further down the
+ *    page.
  *
- *  1. **Honors, because they are voted on by fans and peers.** Pro Bowl and first-team All-Pro
- *     selections are ballots, not box scores: being picked IS recognition, which is why they carry
- *     more weight here than any leaderboard placing. They accumulate over a whole career and never
- *     decay — nobody forgets an eleven-time Pro Bowler — but `HONOR_CURVE` is deliberately concave,
- *     so the eleventh selection adds far less than the first (it is also what stops a twelve-time
- *     Pro Bowl left tackle or a ten-time Pro Bowl fullback from reading as a household name).
- *     Major awards (MVP, Super Bowl MVP, DPOY/OPOY, the two Rookies of the Year, Comeback) are
- *     folded in per win, with a shallow recency decay floored at `MAJOR_AWARD_FLOOR`: an MVP trophy is
- *     remembered for well over a decade, but a 2011 MVP is not quite a 2024 one.
+ * Two structural lessons from v3 are baked into the code below.
  *
- *  2. **National profile, as a multiplier.** `fame-signals.json` carries a 0-3 `nationalProfile`
- *     rating — the only input that speaks directly about public recognition rather than football.
- *     It is anchored, not guessed: every one of the 32 current starting quarterbacks has a floor of
- *     1, as does every player on the NFLPA's top-50 merchandise-sales list, with 2 for its top ten.
- *     It both scales the résumé (`PROFILE_MULT`) and adds a floor to it (`PROFILE_ADD`), because a
- *     rookie who is already on billboards has a public profile before he has a résumé at all.
- *     The starting-quarterback anchor is also the direct fix for "injury reads as obscurity": a
- *     starting quarterback is famous whether or not he threw a pass this month.
+ * **The tier is the product; the top forty is not.** EASY mode is `fame >= 80` sampled UNIFORMLY
+ * (`buildPool` in `src/scout/subjects.ts` filters by tier and shuffles), so rank 41 and rank 109
+ * are equally likely rounds and moving a name from 38th to 76th changes its draw probability by
+ * exactly zero. v3's tier held 109 players, forty-five of them with a *verified*
+ * `nationalProfile: 0`. `RANK_ANCHORS` therefore crosses 80 at rank 60 — `star` is ~65 players and
+ * ends before the safety / interior-defender tail begins.
  *
- *  3. **Draft pedigree and rookie narrative.** A first or second overall pick, a Heisman winner or
- *     a Rookie of the Year is famous the day he is drafted, years before any leaderboard notices.
- *     `PEDIGREE_*` front-loads that and then lets it fade to a permanent floor, because a bust from
- *     2014 is not famous for having been picked third.
+ * **A Pro Bowl is not a fame measurement; it is a per-position ballot.** The NFC elects one
+ * fullback a year, so the only good one collects ten selections and outscores every receiver in the
+ * league — that is how v3 seated a fullback at fame 84, above A.J. Brown, DK Metcalf and Odell
+ * Beckham Jr., plus seventeen defensive linemen and thirteen defensive backs. Selections are
+ * therefore scaled by `HONOR_VISIBILITY`: how much of a ballot slot at that position converts into
+ * public recognition, before anything else happens to it.
  *
- *  4. **Statistics, as corroboration only.** The leaderboard walk is still here and still career-
- *     cumulative across `FAME_SEASONS_BACK` seasons with a shallow `SEASON_DECAY`, so a missed
- *     season can only ever dilute a career total, never reset it. But it is now a supporting term
- *     (`STAT_*`) roughly a third the size of the honors term. It earns its place by ranking the
+ * The terms, in descending order of weight:
+ *
+ *  1. **National profile.** `fame-signals.json` carries a 0-3 `nationalProfile` — the only input in
+ *     the whole pipeline that speaks about the general public rather than about football, and it is
+ *     anchored, not guessed (a floor of 1 for each of the 32 current starting quarterbacks and for
+ *     the NFLPA's top-50 merchandise sellers, 2 for its top ten, editorial above that with a
+ *     written note). It leads: `PROFILE_BASE` is recognition a player owns before any résumé
+ *     exists, `PROFILE_MULT` scales the résumé he does have, and `MERCH_UNIT` reads the ordinal
+ *     sales rank out of `profileFrom` ("nflpa-merch-#13") for resolution the 0-3 rating lacks.
+ *     A verified `nationalProfile: 0` means the harvest looked for evidence of a public profile and
+ *     found none, so the 0 → 1 step is deliberately the largest in the table.
+ *
+ *  2. **Narrative — awards, draft pedigree, a Heisman.** A number one or two overall pick, a
+ *     Heisman winner, a Rookie of the Year or a Super Bowl MVP is famous the day it happens, years
+ *     before a leaderboard notices. `MAJOR_AWARD_UNIT` is heavy and decays slowly (fame is sticky);
+ *     `PEDIGREE_*` is loudest for rookies and fades to a permanent floor, because a bust from 2014
+ *     is not famous for having been picked third.
+ *
+ *  3. **Voted honors, scaled by position visibility.** Pro Bowls and first-team All-Pros are
+ *     ballots rather than box scores, and being picked IS a kind of recognition — but only as much
+ *     as the position's own ballot is watched, hence `HONOR_VISIBILITY` and its raw-position
+ *     overrides. `HONOR_CURVE` is concave on top of that, so the eleventh selection adds far less
+ *     than the first.
+ *
+ *  4. **Statistics, as corroboration only.** The leaderboard walk is career-cumulative across
+ *     `FAME_SEASONS_BACK` seasons with a shallow `SEASON_DECAY` and a floored `PEAK_FLOOR`, so a
+ *     season lost to injury can only dilute a career total, never reset it — the direct fix for
+ *     "injury reads as obscurity". It is a supporting term: it earns its place by ordering the
  *     ~1,570 players `fame-signals.json` does not cover, and by separating starters from backups
  *     down where nobody has any honors at all.
  *
- * Position enters in two places, and neither of them normalises a group against itself:
- *   - `GROUP_WEIGHT` nudges the résumé before the league-wide sort (a linebacker is a shade less
- *     recognisable than an edge rusher with the same honors; a guard far less). Quarterbacks need
- *     no thumb on the scale beyond 1.05, because the `nationalProfile` starting-QB anchor already
- *     encodes "quarterback is the most famous position in the sport" from real evidence.
- *   - `GROUP_CEILING` (and `UNGUESSABLE_CEILING`, applied by raw ESPN position so a mislabelled
- *     guard cannot slip through) is a hard cap. `star` begins at 80, so offensive linemen, kickers,
- *     punters and long snappers cannot reach EASY mode by construction rather than by luck.
+ * Position enters in three places and none of them normalises a group against itself:
+ * `HONOR_VISIBILITY`/`STAT_VISIBILITY` discount evidence that does not travel outside the sport,
+ * `GROUP_WEIGHT` is a small thumb on the résumé before ONE league-wide sort, and `GROUP_CEILING`
+ * (plus `UNGUESSABLE_CEILING`, applied by RAW ESPN position so a mislabelled guard cannot slip
+ * through) is a hard cap. `star` begins at 80, so offensive linemen, kickers, punters and long
+ * snappers cannot reach EASY mode by construction rather than by luck. Quarterbacks need only a
+ * 1.08 thumb plus `STARTING_QB_UNIT`, because the starting-quarterback anchor inside
+ * `nationalProfile` already encodes "quarterback is the most famous position in the sport" from
+ * real evidence — and it ties the floor to actually being the starter, so a third-string veteran
+ * does not float into EASY on position weight alone.
  *
- * The final mapping is `RANK_ANCHORS`: league-wide rank → 0-100. One global order means a thin
- * position simply produces no stars, and tier sizes are a property of the curve rather than an
- * accident of the data — ~110 players land in `star`, which is what keeps EASY mode both easy and
- * large enough to play twenty rounds.
+ * The final mapping is `RANK_ANCHORS`: one league-wide rank → 0-100. A thin position therefore
+ * produces no stars, and tier sizes are a property of that table rather than an accident of data.
  *
- * `fame-signals.json` is loaded defensively, exactly as its `_meta.absentMeans` demands: **a
- * missing id means UNKNOWN, never zero**, and such a player still scores from the leaderboard walk,
- * his draft slot and his experience. A present entry with `proBowls: 0` is a verified zero. The one
- * guard on top of the file is `resolveProfileCollisions`: an editorial `notes` line is written
- * about one person, so two rostered players sharing one is a name collision (the 2026 rookie
- * linebacker Justin Jefferson inherits the receiver's merchandise rank), and only the stronger
- * résumé keeps the rating.
+ * `fame-signals.json` is loaded defensively, exactly as its own `_meta.absentMeans` demands: **a
+ * missing id means UNKNOWN, never zero.** Such a player still scores from the leaderboard walk, his
+ * draft slot and his experience, and takes no penalty. A present entry with `proBowls: 0` is a
+ * verified zero.
+ *
+ * Two data guards live here rather than in the signals file, because that file is a hand-verified
+ * INPUT this script never writes:
+ *   - `resolveProfileCollisions` — an editorial `notes` line argues one specific person's public
+ *     profile, so two rostered players sharing one verbatim is a name collision (the 2026
+ *     fifth-round rookie linebacker Justin Jefferson inherits the Vikings receiver's merchandise
+ *     rank and Griddy note). Only the stronger résumé keeps the rating; the loser falls back to
+ *     UNKNOWN, and his own harvested Pro Bowls and draft slot are untouched.
+ *   - `honorUnits` drops any major-award year that PREDATES the player's draft year, because an
+ *     award of that name won before he was drafted is the college award of the same name. Twenty-
+ *     three rows in the file are college honors and three of them were floating their man onto the
+ *     EASY cutoff: Devin Lloyd's "Defensive Player of the Year 2021" is the Pac-12 Pat Tillman
+ *     award at Utah, Andy Dalton's "Offensive Player of the Year 2009/2010" the Mountain West award
+ *     at TCU, and Kyren Williams's "Offensive Rookie of the Year 2020" a Notre Dame honor. Jared
+ *     Verse's entry carries both kinds — 2020 (college) is dropped, 2024 (the real NFL Defensive
+ *     Rookie of the Year) is kept.
  */
 
 /** Seasons of leaderboards + awards to walk, counting back from the current one. */
@@ -673,66 +704,116 @@ const AWARD_WEIGHT = {
 const AWARD_DECAY = 0.93;
 const AWARD_RECENCY_FLOOR = 0.45;
 
-// --- honors: the heaviest term, because Pro Bowls and All-Pros are ballots -------------------
-/** Recognition units for one Pro Bowl / one first-team All-Pro, before the concave curve. */
-const PRO_BOWL_UNIT = 2.0;
-const ALL_PRO_UNIT = 3.4;
-/** Concavity of the selection count. The 11th Pro Bowl adds far less recognition than the 1st. */
-const HONOR_CURVE = 0.66;
+// --- 1. national profile: the dominant term, the only direct evidence about the public ---------
+/**
+ * Recognition a player owns before any résumé exists, by `nationalProfile` 0-3. The 0 → 1 step is
+ * the largest in the table on purpose: a present entry with 0 is a VERIFIED zero — the harvest read
+ * the article, looked for a public profile and found none — and v3's tier was refused for holding
+ * forty-five of them.
+ */
+const PROFILE_BASE = [0, 3, 9.5, 19];
+/** …and a multiplier on the football résumé, so profile and production compound. */
+const PROFILE_MULT = [1, 1.3, 1.75, 2.15];
+/**
+ * The NFLPA sales rank inside `profileFrom` ("nflpa-merch-#13") is an ORDINAL measure of public
+ * recognition — how many people bought this man's jersey — and the finest-grained fame signal in the
+ * file. It resolves ties inside a `nationalProfile` level, which the 0-3 rating cannot.
+ */
+const MERCH_UNIT = 5;
+const MERCH_DEPTH = 50;
+/**
+ * Taking the snaps for one of thirty-two franchises is its own kind of famous, and `profileFrom`
+ * names the anchor ("starting-qb") so the floor is tied to actually starting. v3 had thirty-five
+ * quarterbacks in a thirty-two-starter league inside EASY mode; a blanket QB weight is what put
+ * third-stringers there.
+ */
+const STARTING_QB_UNIT = 1;
 
-/** Recognition units per major award win, from `fame-signals.json` (Wikipedia, with years). */
+// --- 2. narrative: awards, draft pedigree, a Heisman ------------------------------------------
+/**
+ * Recognition units per major award win, from `fame-signals.json` (Wikipedia, with years). Heavier
+ * than any number of Pro Bowls because these are singular, league-wide and televised: one man a
+ * year. Years predating the draft are college awards and are dropped — see `honorUnits`.
+ */
 const MAJOR_AWARD_UNIT = {
-  'NFL MVP': 5.2,
-  'Super Bowl MVP': 4.5,
-  'Defensive Player of the Year': 3.2,
-  'Offensive Player of the Year': 2.5,
-  'Offensive Rookie of the Year': 1.9,
-  'Defensive Rookie of the Year': 1.7,
-  'Comeback Player of the Year': 1.0,
+  'NFL MVP': 7.5,
+  'Super Bowl MVP': 7,
+  'Defensive Player of the Year': 4.5,
+  'Offensive Player of the Year': 3.6,
+  'Offensive Rookie of the Year': 2.8,
+  'Defensive Rookie of the Year': 2.2,
+  'Comeback Player of the Year': 1.2,
 };
-/** Repeat wins are concave too: a second MVP matters, a fourth adds less. */
+/** Repeat wins are concave: a second MVP matters, a fourth adds less. */
 const MAJOR_AWARD_CURVE = 0.75;
-/** Per-win recency, floored: fame is sticky, so a 2011 MVP still counts for most of a 2024 one. */
-const MAJOR_AWARD_DECAY = 0.96;
-const MAJOR_AWARD_FLOOR = 0.55;
+/** Per-win recency, floored: fame is sticky, so a 2011 MVP still counts for most of a 2025 one. */
+const MAJOR_AWARD_DECAY = 0.94;
+const MAJOR_AWARD_FLOOR = 0.45;
 
-// --- national profile: the only signal that speaks about the general public directly ----------
-/** Additive floor by `nationalProfile` 0-3 — a billboard face is famous with no résumé at all. */
-const PROFILE_ADD = [0, 2.5, 5.5, 9];
-/** …and a multiplier on the whole résumé, which is where most of its force lives. */
-const PROFILE_MULT = [1, 1.25, 1.65, 2.1];
-
-// --- draft pedigree and rookie narrative ------------------------------------------------------
-const PEDIGREE_TOP = 5.5;
-/** Recognition halves roughly every 17 picks: pick 1 ≫ pick 13 ≫ pick 60. */
-const PEDIGREE_K = 25;
-/** "Number one or two overall" is its own kind of famous. */
-const PEDIGREE_TOP3_BONUS = 1.8;
-const PEDIGREE_TOP5_BONUS = 0.9;
-const HEISMAN_BONUS = 3.0;
-/** Pedigree is loudest for rookies and then fades to a permanent floor — busts stop trading on it. */
-const PEDIGREE_DECAY = 0.9;
-const PEDIGREE_FLOOR = 0.4;
+const PEDIGREE_TOP = 6;
+/** Recognition halves roughly every 15 picks: pick 1 >> pick 12 >> pick 60. */
+const PEDIGREE_K = 22;
+/** "Number one or two overall" is its own kind of famous, and so is "top five". */
+const PEDIGREE_TOP2_BONUS = 2.6;
+const PEDIGREE_TOP5_BONUS = 1.2;
+const PEDIGREE_TOP10_BONUS = 0.5;
+/** Pedigree is loudest for rookies and fades to a floor — a bust stops trading on his draft slot. */
+const PEDIGREE_DECAY = 0.88;
+const PEDIGREE_FLOOR = 0.35;
 /** Undrafted players are scored as if picked here: effectively no pedigree at all. */
 const UNDRAFTED_PICK = 270;
+/** A Heisman is a network broadcast with the player's name on it; it fades far more slowly. */
+const HEISMAN_BONUS = 5;
+const HEISMAN_DECAY = 0.94;
+const HEISMAN_FLOOR = 0.55;
 
-// --- statistics: supporting evidence, about a third the weight of honors ----------------------
-const STAT_CAREER = 0.3;
+// --- 3. voted honors, scaled by how far a position's ballot travels ---------------------------
+/** Recognition units for one Pro Bowl / one first-team All-Pro, before curve and visibility. */
+const PRO_BOWL_UNIT = 2.6;
+const ALL_PRO_UNIT = 4;
+/** Concavity of the selection count. The 11th Pro Bowl adds far less recognition than the 1st. */
+const HONOR_CURVE = 0.55;
+/**
+ * How much of a Pro Bowl or All-Pro selection converts into PUBLIC recognition, by position group.
+ * A selection is a ballot cast inside one position, so the scarcity of the slot — not the fame of
+ * the man — decides how many a career collects. This is the single biggest correction in v4: it is
+ * why a ten-time Pro Bowl fullback no longer outranks the receivers, and why seventeen defensive
+ * linemen and thirteen defensive backs no longer fill a tier advertised as household names. It is
+ * also honest about the game itself, since interior defenders and safeties are the least
+ * identifiable silhouettes in the sport.
+ */
+const HONOR_VISIBILITY = { QB: 1, WR: 0.95, RB: 0.9, TE: 0.9, DL: 0.55, LB: 0.44, DB: 0.3, OL: 0.16, ST: 0.12 };
+/**
+ * By RAW ESPN position where the group is too coarse to be fair. One fullback is elected per
+ * conference per year (ten selections for the only good one); an edge rusher is filmed on every
+ * highlight reel while an interior lineman is not; corners are pictured in coverage, safeties are
+ * a number in the deep third.
+ */
+const HONOR_VISIBILITY_POS = { FB: 0.1, DE: 0.62, DT: 0.42, CB: 0.34, S: 0.26 };
+
+// --- 4. statistics: corroboration, roughly a third the weight of the terms above --------------
+const STAT_CAREER = 0.28;
 const STAT_PEAK = 0.9;
-const STAT_BREADTH = 1.8;
+const STAT_BREADTH = 1.5;
 const BREADTH_FULL = 7;
 /** ESPN's own award score, used ONLY for players `fame-signals.json` does not cover. */
 const ESPN_AWARD_FALLBACK = 2.5;
+/**
+ * Leading a board is worth less off the ball, for the same reason a ballot slot is: nobody learns
+ * the name of the man who led the league in tackles. Gentler than `HONOR_VISIBILITY` because
+ * `CATEGORY_WEIGHT` has already discounted the least famous categories.
+ */
+const STAT_VISIBILITY = { QB: 0.8, WR: 0.95, RB: 0.95, TE: 0.9, DL: 0.7, LB: 0.6, DB: 0.5, OL: 0.4, ST: 0.3 };
 
 /** A fifteen-year veteran has simply been on television more often. Smallest term in the score. */
-const LONGEVITY = 1.5;
+const LONGEVITY = 1;
 const LONGEVITY_FULL = 10;
 
 /**
- * Nudge applied to the résumé before the single league-wide sort. Small by design: this is a
- * thumb, not a normaliser, and it is what the previous attempt got structurally wrong.
+ * Nudge applied to the résumé before the single league-wide sort. Small by design: this is a thumb,
+ * not a normaliser, and normalising is what v2 got structurally wrong.
  */
-const GROUP_WEIGHT = { QB: 1.05, RB: 1, WR: 1, TE: 1, DL: 1, LB: 0.97, DB: 0.95, OL: 0.72, ST: 0.6 };
+const GROUP_WEIGHT = { QB: 1, RB: 1, WR: 1, TE: 1, DL: 0.98, LB: 0.95, DB: 0.92, OL: 0.7, ST: 0.6 };
 /**
  * Hard cap per position group: the highest fame anybody at that position may hold. `star` is 80,
  * so OL and ST cannot reach the game's EASY tier at all — which is the point.
@@ -751,28 +832,34 @@ const UNGUESSABLE_CEILING = 62;
 /**
  * League-wide rank → raw fame, linear between anchors. One global order (not one per position) is
  * what stops a thin position from manufacturing stars, and it makes the tier sizes a property of
- * this table: ~110 players clear 80 (`star`), ~520 clear 55 (`starter`), ~1,370 clear 30.
+ * this table rather than of the data.
+ *
+ * The anchor that matters most is `[60, 80]`: EASY mode draws UNIFORMLY from `fame >= 80`, so the
+ * size of that set IS the difficulty. v3 put ~110 players there and was refused because ranks
+ * 41-109 were full of film-room names; rounding makes this table's `star` tier ~65 — large enough
+ * for a twenty-round game with no repeats, small enough to end before the tail begins.
  */
 const RANK_ANCHORS = [
   [1, 100],
   [3, 98],
   [6, 96],
-  [12, 93],
-  [20, 90],
+  [10, 94],
+  [16, 92],
+  [24, 89],
   [32, 87],
-  [45, 85],
-  [70, 82],
-  [110, 80],
-  [160, 76],
-  [240, 70],
-  [340, 64],
-  [460, 57],
-  [620, 50],
-  [820, 43],
-  [1050, 37],
-  [1350, 30],
-  [1700, 22],
-  [2100, 12],
+  [44, 84],
+  [60, 80],
+  [95, 77],
+  [150, 72],
+  [230, 66],
+  [330, 60],
+  [450, 55],
+  [600, 48],
+  [800, 42],
+  [1050, 36],
+  [1370, 30],
+  [1750, 21],
+  [2150, 12],
   [2600, 1],
 ];
 
@@ -987,48 +1074,75 @@ function rawFameFromRank(rank) {
   return a[a.length - 1][1];
 }
 
-/** Career recognition units from voted honors: Pro Bowls, first-team All-Pros, major awards. */
-function honorUnits(accolade, season) {
-  if (!accolade) return { units: 0, proBowls: 0, allPros: 0, awards: [] };
+/**
+ * Career recognition units from voted honors and major awards.
+ *
+ * Selections are scaled by `HONOR_VISIBILITY` (a Pro Bowl is a ballot cast inside one position, and
+ * some of those ballots are watched far more than others). Major awards are NOT scaled — MVP,
+ * DPOY and a Super Bowl MVP are singular, league-wide and televised regardless of position — but
+ * every award year that predates the player's draft year is DROPPED as the college award of the
+ * same name, which is what "Defensive Player of the Year 2021" is on a linebacker drafted in 2022.
+ */
+function honorUnits(accolade, player, season) {
+  const empty = { units: 0, selections: 0, awardUnits: 0, proBowls: 0, allPros: 0, awards: [], dropped: [] };
+  if (!accolade) return empty;
   const proBowls = Math.max(0, accolade.proBowls ?? 0);
   const allPros = Math.max(0, accolade.allPros ?? 0);
+  const visibility =
+    HONOR_VISIBILITY_POS[String(player.pos).toUpperCase()] ?? HONOR_VISIBILITY[player.group] ?? 0.4;
+  const selections =
+    visibility * (PRO_BOWL_UNIT * concave(proBowls, HONOR_CURVE) + ALL_PRO_UNIT * concave(allPros, HONOR_CURVE));
+
+  const draftYear = player.draft?.year ?? accolade.draft?.year;
   let awardUnits = 0;
   const awards = [];
+  const dropped = [];
   for (const award of accolade.majorAwards ?? []) {
     const unit = MAJOR_AWARD_UNIT[award.award];
     if (unit === undefined) continue;
-    const years = Array.isArray(award.years) && award.years.length ? award.years : null;
-    const wins = Math.max(1, award.count ?? years?.length ?? 1);
+    const listed = Array.isArray(award.years) ? award.years : [];
+    // A win in a season before the player entered the league is the college award of that name.
+    const years = draftYear === undefined ? listed : listed.filter((y) => y >= draftYear);
+    for (const y of listed) if (!years.includes(y)) dropped.push(`${award.award} ${y}`);
+    if (listed.length && !years.length) continue;
+    const wins = years.length || Math.max(1, award.count ?? 1);
     // Each win is discounted by its own age, floored — fame is sticky, memory is not perfect.
-    const effective = years
-      ? years.reduce(
-          (n, y) => n + Math.max(MAJOR_AWARD_FLOOR, MAJOR_AWARD_DECAY ** Math.max(0, season - y)),
-          0,
-        )
+    const effective = years.length
+      ? years.reduce((n, y) => n + Math.max(MAJOR_AWARD_FLOOR, MAJOR_AWARD_DECAY ** Math.max(0, season - y)), 0)
       : wins * MAJOR_AWARD_FLOOR;
     awardUnits += unit * concave(effective, MAJOR_AWARD_CURVE);
-    awards.push(wins > 1 ? `${award.award} ×${wins}` : award.award);
+    awards.push(wins > 1 ? `${award.award} x${wins}` : award.award);
   }
-  return {
-    units:
-      PRO_BOWL_UNIT * concave(proBowls, HONOR_CURVE) +
-      ALL_PRO_UNIT * concave(allPros, HONOR_CURVE) +
-      awardUnits,
-    proBowls,
-    allPros,
-    awards,
-  };
+  return { units: selections + awardUnits, selections, awardUnits, proBowls, allPros, awards, dropped };
 }
 
-/** Draft slot + Heisman, front-loaded for rookies and fading to `PEDIGREE_FLOOR`. */
+/** Draft slot + Heisman: famous the day it happens, fading to `PEDIGREE_FLOOR` for the draft slot. */
 function pedigreeUnits(player, accolade, season) {
-  const pick = player.draft?.pick ?? UNDRAFTED_PICK;
-  let units = PEDIGREE_TOP * Math.exp(-(pick - 1) / PEDIGREE_K);
-  if (pick <= 3) units += PEDIGREE_TOP3_BONUS;
-  else if (pick <= 5) units += PEDIGREE_TOP5_BONUS;
-  if (accolade?.heisman) units += HEISMAN_BONUS;
-  const age = Math.max(0, season - (player.draft?.year ?? season));
-  return units * Math.max(PEDIGREE_FLOOR, PEDIGREE_DECAY ** age);
+  const pick = player.draft?.pick ?? accolade?.draft?.pick ?? UNDRAFTED_PICK;
+  let slot = PEDIGREE_TOP * Math.exp(-(pick - 1) / PEDIGREE_K);
+  if (pick <= 2) slot += PEDIGREE_TOP2_BONUS;
+  else if (pick <= 5) slot += PEDIGREE_TOP5_BONUS;
+  else if (pick <= 10) slot += PEDIGREE_TOP10_BONUS;
+  const draftYear = player.draft?.year ?? accolade?.draft?.year ?? season;
+  const age = Math.max(0, season - draftYear);
+  let units = slot * Math.max(PEDIGREE_FLOOR, PEDIGREE_DECAY ** age);
+  if (accolade?.heisman) units += HEISMAN_BONUS * Math.max(HEISMAN_FLOOR, HEISMAN_DECAY ** age);
+  return units;
+}
+
+/**
+ * Public-recognition units from the NFLPA merchandise-sales rank recorded in `profileFrom`
+ * ("nflpa-merch-#13" → 13th best-selling jersey in the league). Additive alongside `PROFILE_BASE`,
+ * never multiplied by the football résumé: it IS the profile, not a scale on production.
+ */
+function merchUnits(accolade) {
+  let best = Infinity;
+  for (const from of accolade?.profileFrom ?? []) {
+    const m = /^nflpa-merch-#(\d+)$/.exec(String(from));
+    if (m) best = Math.min(best, Number(m[1]));
+  }
+  if (!Number.isFinite(best) || best < 1) return 0;
+  return MERCH_UNIT * Math.max(0, 1 - (best - 1) / MERCH_DEPTH);
 }
 
 /**
@@ -1038,16 +1152,25 @@ function pedigreeUnits(player, accolade, season) {
  * behind every player, for the report tables.
  */
 function scoreFame(players, signals, accolades, season) {
-  const table = accolades ?? {};
-  const demoted = resolveProfileCollisions(players, table);
+  // Not named `table`: that is this file's console-table helper, used a few lines below.
+  const signalTable = accolades ?? {};
+  const demoted = resolveProfileCollisions(players, signalTable);
   const evidence = players.map((p) => signals.get(p.id) ?? emptyEvidence());
+  const droppedAwards = [];
 
   const parts = players.map((p, i) => {
     const e = evidence[i];
-    const a = table[p.id];
+    const a = signalTable[p.id];
+    /** A demoted collision is treated as UNKNOWN for profile only; his honors are his own. */
+    const known = a !== undefined && !demoted.has(p.id);
+    const profile = known ? Math.min(3, Math.max(0, Math.round(a.nationalProfile ?? 0))) : 0;
 
-    const honors = honorUnits(a, season);
+    const honors = honorUnits(a, p, season);
+    if (honors.dropped.length) droppedAwards.push({ player: p.name, pos: p.pos, dropped: honors.dropped.join(', ') });
     const pedigree = pedigreeUnits(p, a, season);
+    const merch = known ? merchUnits(a) : 0;
+    const startingQb =
+      known && p.group === 'QB' && (a.profileFrom ?? []).includes('starting-qb') ? STARTING_QB_UNIT : 0;
 
     // Statistics corroborate; they do not lead. `career` already sums every season walked, so a
     // season lost to injury dilutes a career total rather than resetting it.
@@ -1055,25 +1178,34 @@ function scoreFame(players, signals, accolades, season) {
     let stat = STAT_CAREER * e.career + STAT_PEAK * e.peak + STAT_BREADTH * breadth;
     // ESPN's award list is the only award signal for a player fame-signals.json never saw.
     if (!a) stat += ESPN_AWARD_FALLBACK * e.awardScore;
+    stat *= STAT_VISIBILITY[p.group] ?? 0.6;
 
     const longevity = LONGEVITY * Math.min(1, (p.exp ?? 0) / LONGEVITY_FULL);
 
-    // Absent entry → profile 0 → multiplier 1 and no additive floor: unknown, never a penalty.
-    const profile = a && !demoted.has(p.id) ? Math.min(3, Math.max(0, Math.round(a.nationalProfile ?? 0))) : 0;
-    const resume = PROFILE_MULT[profile] * (honors.units + pedigree + stat + longevity) + PROFILE_ADD[profile];
+    const football = honors.units + pedigree + stat + longevity + startingQb;
+    // Absent entry → profile 0 → no base and a multiplier of 1: UNKNOWN is never a penalty.
+    const resume = PROFILE_BASE[profile] + merch + PROFILE_MULT[profile] * football;
 
     return {
       /** The sort key: the whole résumé, nudged by position group. */
       resume: resume * (GROUP_WEIGHT[p.group] ?? 0.9),
-      honors: honors.units,
+      honors: honors.selections,
+      awardUnits: honors.awardUnits,
       proBowls: honors.proBowls,
       allPros: honors.allPros,
       awards: honors.awards,
       profile,
+      merch,
+      startingQb,
       pedigree,
       stat,
     };
   });
+
+  if (droppedAwards.length) {
+    log(`college awards dropped (a win in a season before the player was drafted): ${droppedAwards.length}`);
+    table(droppedAwards);
+  }
 
   // ONE league-wide order. No per-group normalisation, so a position with nobody famous in it
   // produces nobody famous — which is the whole fix.
