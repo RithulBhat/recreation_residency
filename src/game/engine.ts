@@ -477,7 +477,10 @@ function onTick(state: GameState, now: number): GameState {
     return finish(state, 'time', now);
   }
   const round = activeRound(state);
-  if (round && state.settings.roundTimer > 0 && now >= round.startedAt + state.settings.roundTimer * 1000) {
+  // The round timer only runs once the player has actually listened (startedAt is reset on the
+  // first play); before that, a slow preview load must not burn the round.
+  const hasListened = round !== undefined && (round.playsThisTry > 0 || round.tryIndex > 0 || round.guesses.length > 0);
+  if (round && hasListened && state.settings.roundTimer > 0 && now >= round.startedAt + state.settings.roundTimer * 1000) {
     return onGiveUp(state, now, 'timeout');
   }
   return state;
