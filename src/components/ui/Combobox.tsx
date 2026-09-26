@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode, type Ref } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode, type Ref } from 'react';
 import { LoaderCircle, Search } from 'lucide-react';
 import { cn } from './cn';
 import { inputSizeClasses } from './Input';
@@ -105,12 +105,39 @@ export function Combobox<T>({
   }, [highlight, shouldShow]);
 
   useEffect(() => {
-    const onDown = (e: PointerEvent) => {
+    // `click` (not pointerdown): a swipe/scroll gesture that starts outside must not dismiss the list.
+    const onClick = (e: MouseEvent) => {
       if (rootRef.current && e.target instanceof Node && !rootRef.current.contains(e.target)) setOpen(false);
     };
-    document.addEventListener('pointerdown', onDown);
-    return () => document.removeEventListener('pointerdown', onDown);
+    document.addEventListener('click', onClick);
+    return () => document.removeEventListener('click', onClick);
   }, []);
+
+  // Open upward when the list would run off the bottom of the (visual) viewport — the guess box
+  // sits low on phones, especially with the keyboard up.
+  const [placement, setPlacement] = useState<'below' | 'above'>('below');
+  useLayoutEffect(() => {
+    if (!shouldShow) return;
+    const measure = () => {
+      const r = rootRef.current?.getBoundingClientRect();
+      if (!r) return;
+      const vv = window.visualViewport;
+      const viewportBottom = vv ? vv.offsetTop + vv.height : window.innerHeight;
+      const below = viewportBottom - r.bottom;
+      const above = r.top - (vv ? vv.offsetTop : 0);
+      setPlacement(below < 300 && above > below ? 'above' : 'below');
+    };
+    measure();
+    const vv = window.visualViewport;
+    vv?.addEventListener('resize', measure);
+    vv?.addEventListener('scroll', measure);
+    window.addEventListener('resize', measure);
+    return () => {
+      vv?.removeEventListener('resize', measure);
+      vv?.removeEventListener('scroll', measure);
+      window.removeEventListener('resize', measure);
+    };
+  }, [shouldShow]);
 
   const select = (o: T) => {
     onSelect(o);
@@ -195,7 +222,10 @@ export function Combobox<T>({
             onChange(e.target.value);
             setOpen(true);
           }}
-          onFocus={() => setOpen(true)}
+          onFocus={(e) => {
+            setOpen(true);
+            if (touchAffordance) e.currentTarget.scrollIntoView({ block: 'center', behavior: 'smooth' });
+          }}
           onKeyDown={onKeyDown}
           className={cn(
             'w-full min-w-0 border border-border-strong bg-surface text-fg placeholder:text-muted/70 backdrop-blur-md',
@@ -223,6 +253,7 @@ export function Combobox<T>({
         loading={loading}
         emptyMessage={emptyMessage}
         touchAffordance={touchAffordance}
+        placement={placement}
         submitRow={submitRow}
         getKey={getKey}
         getLabel={getLabel}

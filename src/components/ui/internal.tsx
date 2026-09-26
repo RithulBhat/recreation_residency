@@ -10,17 +10,26 @@ export function Portal({ children }: { children: ReactNode }) {
 }
 
 let lockCount = 0;
-let prevOverflow = '';
+let prevHtmlOverflow = '';
+let prevBodyOverflow = '';
 let prevPaddingRight = '';
 
-/** Body scroll lock with reference counting so nested overlays behave. */
+/**
+ * Page scroll lock with reference counting so nested overlays behave.
+ * The viewport scroller is <html> (index.css puts overflow-x/overscroll on html only, so wheel
+ * gestures chain correctly); body's overflow does NOT propagate to the viewport in that setup,
+ * so the lock must be applied to the root element as well as body.
+ */
 export function useScrollLock(active: boolean): void {
   useLayoutEffect(() => {
     if (!active || typeof document === 'undefined') return;
+    const root = document.documentElement;
     if (lockCount === 0) {
-      const scrollbar = window.innerWidth - document.documentElement.clientWidth;
-      prevOverflow = document.body.style.overflow;
+      const scrollbar = window.innerWidth - root.clientWidth;
+      prevHtmlOverflow = root.style.overflow;
+      prevBodyOverflow = document.body.style.overflow;
       prevPaddingRight = document.body.style.paddingRight;
+      root.style.overflow = 'hidden';
       document.body.style.overflow = 'hidden';
       if (scrollbar > 0) document.body.style.paddingRight = `${scrollbar}px`;
     }
@@ -28,7 +37,8 @@ export function useScrollLock(active: boolean): void {
     return () => {
       lockCount -= 1;
       if (lockCount === 0) {
-        document.body.style.overflow = prevOverflow;
+        root.style.overflow = prevHtmlOverflow;
+        document.body.style.overflow = prevBodyOverflow;
         document.body.style.paddingRight = prevPaddingRight;
       }
     };

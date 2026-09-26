@@ -49,7 +49,7 @@ export function Tabs<T extends string>({ tabs, value, onChange, 'aria-label': ar
       role="tablist"
       aria-label={ariaLabel}
       onKeyDown={onKeyDown}
-      className={cn('scrollbar-none relative flex gap-1 overflow-x-auto border-b border-border', className)}
+      className={cn('scrollbar-none relative flex gap-1 overflow-x-auto overflow-y-hidden border-b border-border', className)}
     >
       {tabs.map((t) => {
         const selected = t.value === value;

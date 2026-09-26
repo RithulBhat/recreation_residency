@@ -162,14 +162,14 @@ export function GuessBox({
       </div>
 
       {/* Action row: the hint panel anchors to this row (relative), so it never leaves a phone's viewport. */}
-      <div className="relative flex items-center gap-2">
+      <div className="relative flex min-w-0 flex-wrap items-center gap-2">
         {state.settings.allowSkip && (
           <Button variant="secondary" size="md" leadingIcon={<SkipForward />} onClick={onSkip} disabled={!live} className="min-w-0 flex-1 sm:flex-none" data-coach="skip">
             {skip}
           </Button>
         )}
         <HintMenu ref={hintRef} settings={state.settings} round={round} onHint={onHint} onSelected={refocus} disabled={!live || !allowed} className={state.settings.allowSkip ? undefined : 'flex-1 sm:flex-none'} />
-        <Button variant="ghost" size="md" leadingIcon={<Flag />} onClick={onGiveUp} disabled={!live} aria-label="Give up" className="ml-auto shrink-0 text-muted">
+        <Button variant="ghost" size="md" leadingIcon={<Flag />} onClick={onGiveUp} disabled={!live} aria-label="Give up" className="ml-auto min-w-0 shrink text-muted">
           <span className="hidden sm:inline">Give up</span>
         </Button>
       </div>

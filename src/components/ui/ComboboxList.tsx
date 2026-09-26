@@ -16,6 +16,8 @@ export interface ComboboxListProps<T> {
   loading: boolean;
   emptyMessage: ReactNode;
   touchAffordance: boolean;
+  /** Where the list opens relative to the input. */
+  placement?: 'below' | 'above';
   /** Render the sticky "Submit “…” as is" row (touch + free-text submit available + something typed). */
   submitRow: boolean;
   getKey: (o: T) => string;
@@ -49,6 +51,7 @@ export function ComboboxList<T>({
   onHighlight,
   onSelect,
   onSubmitTyped,
+  placement = 'below',
 }: ComboboxListProps<T>) {
   const hasOptions = options.length > 0;
   return (
@@ -60,7 +63,8 @@ export function ComboboxList<T>({
       hidden={!show}
       onMouseLeave={() => onHighlight(-1)}
       className={cn(
-        'glass-strong absolute inset-x-0 top-full z-40 mt-2 max-h-72 overflow-y-auto rounded-2xl bg-bg-elevated/95 p-1.5 shadow-xl',
+        'glass-strong absolute inset-x-0 z-40 max-h-72 overflow-y-auto overscroll-contain rounded-2xl bg-bg-elevated/95 p-1.5 shadow-xl',
+        placement === 'above' ? 'bottom-full mb-2' : 'top-full mt-2',
         show ? 'animate-fade-in' : '',
       )}
     >

@@ -44,7 +44,7 @@ export function Dialog({
   const reduce = useReducedMotion();
   useScrollLock(open);
   useFocusTrap(panelRef, open);
-  useEscape(onClose, open);
+  useEscape(onClose, open && dismissible);
 
   return (
     <Portal>
@@ -59,7 +59,7 @@ export function Dialog({
             transition={{ duration: reduce ? 0 : 0.18 }}
           >
             <div
-              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+              className="absolute inset-0 touch-none bg-black/60 backdrop-blur-sm"
               onClick={dismissible ? onClose : undefined}
               aria-hidden
             />

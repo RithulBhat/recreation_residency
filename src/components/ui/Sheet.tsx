@@ -76,7 +76,7 @@ export function Sheet({
             exit={{ opacity: 0 }}
             transition={{ duration: reduce ? 0 : 0.18 }}
           >
-            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={dismissible ? onClose : undefined} aria-hidden />
+            <div className="absolute inset-0 touch-none bg-black/60 backdrop-blur-sm" onClick={dismissible ? onClose : undefined} aria-hidden />
             <motion.div
               ref={panelRef}
               role="dialog"
@@ -119,7 +119,7 @@ export function Sheet({
                   {!hideClose && <IconButton aria-label="Close" icon={<X />} size="sm" onClick={onClose} className="-mr-1 -mt-1" />}
                 </div>
               )}
-              <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4 sm:px-6">{children}</div>
+              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-4 sm:px-6">{children}</div>
               {footer && <div className="flex flex-wrap items-center justify-end gap-2 border-t border-border px-5 py-4 sm:px-6">{footer}</div>}
             </motion.div>
           </motion.div>
