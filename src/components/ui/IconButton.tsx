@@ -44,7 +44,7 @@ export function IconButton({
       type={type}
       aria-pressed={active}
       className={cn(
-        'inline-flex shrink-0 items-center justify-center transition-[background-color,color,transform,filter] duration-150 active:scale-95 disabled:opacity-50 disabled:pointer-events-none',
+        'touch-hit-44 inline-flex shrink-0 items-center justify-center transition-[background-color,color,transform,filter] duration-150 active:scale-95 disabled:opacity-50 disabled:pointer-events-none',
         shape === 'round' ? 'rounded-full' : 'rounded-xl',
         sizes[size],
         variants[variant],

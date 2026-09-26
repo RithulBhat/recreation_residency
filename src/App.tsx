@@ -8,7 +8,8 @@ import { BrandedLoader } from '@/components/BrandedLoader';
 import { useTheme } from '@/hooks/useTheme';
 
 const Home = lazy(() => import('@/screens/Home'));
-const Gallery = lazy(() => import('@/screens/Gallery'));
+// The design-system showcase is a dev tool: not routed (and its chunk not referenced) in production.
+const Gallery = import.meta.env.DEV ? lazy(() => import('@/screens/Gallery')) : null;
 const Placeholder = lazy(() => import('@/screens/Placeholder'));
 const Packs = lazy(() => import('@/screens/Packs'));
 const Setup = lazy(() => import('@/screens/Setup'));
@@ -83,7 +84,7 @@ export default function App() {
               <Route path="/stats" element={<Stats />} />
               <Route path="/duel" element={<Duel />} />
               <Route path="/c/:code" element={<Challenge />} />
-              <Route path="/gallery" element={<Gallery />} />
+              {Gallery && <Route path="/gallery" element={<Gallery />} />}
               <Route path="*" element={<Placeholder name="Not found" />} />
             </Routes>
           </Suspense>

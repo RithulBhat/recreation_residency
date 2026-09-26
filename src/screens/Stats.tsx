@@ -80,6 +80,7 @@ export default function Stats() {
   return (
     <div className="flex flex-col gap-10 pb-4 sm:gap-14">
       <SectionHeading
+        as="h1"
         eyebrow="Local · private · yours"
         title={<span id="stats-title">Your musical brain</span>}
         description="Every round you play sharpens this page: how short a clip you can name a song from, which packs own you, and every track you've ever met."

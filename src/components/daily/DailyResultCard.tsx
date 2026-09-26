@@ -58,11 +58,13 @@ export function DailyResultCard({ result, streak }: DailyResultCardProps) {
                 {result.correct}/{result.rounds}
               </span>{' '}
               songs named
-              {streak > 1 && (
+              {streak >= 1 && (
                 <>
                   {' · '}
-                  <span className="font-semibold text-warn" data-testid="daily-streak">
-                    🔥 {streak}-day streak
+                  <span data-testid="daily-streak">
+                    <span className="font-semibold text-warn">🔥 {streak}-day streak</span>
+                    {/* Day one is where streaks die — give the hook right away. */}
+                    {streak === 1 && <span> · come back tomorrow to keep it</span>}
                   </span>
                 </>
               )}

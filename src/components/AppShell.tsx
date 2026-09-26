@@ -1,10 +1,15 @@
 import type { ReactNode } from 'react';
 import { Link, NavLink } from 'react-router';
-import { CalendarDays, ChartColumn, Home, Library, Play } from 'lucide-react';
+import { CalendarDays, ChartColumn, Home, Library, Play, SlidersHorizontal } from 'lucide-react';
 import type { ThemeName } from '@/hooks/useTheme';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { cn } from './ui/cn';
+import { IconButton } from './ui/IconButton';
+import { Popover } from './ui/Popover';
+import { Slider } from './ui/Slider';
+import { Switch } from './ui/Switch';
 import { Logo } from './Logo';
-import { ThemeSwitcher } from './ThemeSwitcher';
+import { ThemeGrid, ThemeSwitcher } from './ThemeSwitcher';
 import { VolumeControl } from './VolumeControl';
 
 export interface AppShellProps {
@@ -37,6 +42,38 @@ const MOBILE_NAV = [{ to: '/', label: 'Home', icon: <Home />, end: true }, ...NA
 
 const widths = { narrow: 'max-w-3xl', wide: 'max-w-6xl', full: 'max-w-none' } as const;
 
+/** Below 360 px the wordmark plus two icon buttons no longer fit on one row. */
+const useCompactHeader = () => useMediaQuery('(max-width: 359px)');
+
+type CompactControlsProps = Pick<AppShellProps, 'theme' | 'onThemeChange' | 'volume' | 'onVolumeChange' | 'muted' | 'onMutedChange'>;
+
+/** Volume + theme folded into a single popover for very narrow screens. */
+function CompactControls({ theme, onThemeChange, volume, onVolumeChange, muted, onMutedChange }: CompactControlsProps) {
+  const effective = muted ? 0 : volume;
+  return (
+    <Popover aria-label="Sound & theme" width={256} trigger={<IconButton aria-label="Sound & theme" icon={<SlidersHorizontal />} />}>
+      <div className="flex flex-col gap-3 p-2">
+        <Slider
+          label="Volume"
+          value={Math.round(effective * 100)}
+          onChange={(v) => {
+            onVolumeChange(v / 100);
+            if (muted && v > 0) onMutedChange?.(false);
+          }}
+          min={0}
+          max={100}
+          step={1}
+          format={(v) => `${v}%`}
+        />
+        {onMutedChange && <Switch size="sm" label="Mute" checked={!!muted} onChange={onMutedChange} />}
+        <div className="border-t border-border pt-3">
+          <ThemeGrid theme={theme} onChange={onThemeChange} />
+        </div>
+      </div>
+    </Popover>
+  );
+}
+
 export function AppShell({
   theme,
   onThemeChange,
@@ -51,6 +88,7 @@ export function AppShell({
   children,
   width = 'wide',
 }: AppShellProps) {
+  const compact = useCompactHeader();
   return (
     <div className="flex min-h-dvh flex-col px-safe">
       <a
@@ -64,7 +102,7 @@ export function AppShell({
       <header className="sticky top-0 z-40 pt-safe">
         <div className="glass border-x-0 border-t-0 bg-bg/60">
           <div className={cn('mx-auto flex h-16 w-full items-center gap-3 px-4 sm:px-6', widths[width])}>
-            <Link to="/" className="flex items-center rounded-xl focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent-2" aria-label="Songooner home">
+            <Link to="/" className="flex min-h-11 min-w-0 items-center rounded-xl focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent-2" aria-label="Songooner home">
               <Logo size="md" />
             </Link>
 
@@ -76,7 +114,7 @@ export function AppShell({
                     to={n.to}
                     className={({ isActive }) =>
                       cn(
-                        'inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm font-semibold transition-colors [&>svg]:size-4',
+                        'touch-hit-44 inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm font-semibold transition-colors [&>svg]:size-4',
                         isActive ? 'bg-accent/15 text-accent' : 'text-muted hover:bg-surface hover:text-fg',
                       )
                     }
@@ -88,10 +126,16 @@ export function AppShell({
               </nav>
             )}
 
-            <div className="ml-auto flex items-center gap-1">
+            <div className="ml-auto flex shrink-0 items-center gap-1">
               {extra}
-              <VolumeControl volume={volume} onVolumeChange={onVolumeChange} muted={muted} onMutedChange={onMutedChange} sfx={sfx} onSfxChange={onSfxChange} />
-              <ThemeSwitcher theme={theme} onChange={onThemeChange} />
+              {compact ? (
+                <CompactControls theme={theme} onThemeChange={onThemeChange} volume={volume} onVolumeChange={onVolumeChange} muted={muted} onMutedChange={onMutedChange} />
+              ) : (
+                <>
+                  <VolumeControl volume={volume} onVolumeChange={onVolumeChange} muted={muted} onMutedChange={onMutedChange} sfx={sfx} onSfxChange={onSfxChange} />
+                  <ThemeSwitcher theme={theme} onChange={onThemeChange} />
+                </>
+              )}
             </div>
           </div>
         </div>

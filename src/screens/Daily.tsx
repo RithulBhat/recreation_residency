@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { DailyCalendarStrip, DailyResultCard, MidnightCountdown, dailyStreak, formatLongDate, formatShortDate, lastNDays } from '@/components/daily';
 import { stagesSentence } from '@/components/setup/summary';
+import { ReplaceGameDialog } from '@/components/ResumeGame';
 
 /** One seeded classic run a day with the pack of the day — same songs for everyone. */
 export default function Daily() {
@@ -32,6 +33,7 @@ export default function Daily() {
   return (
     <div className="flex flex-col gap-8 pb-8 sm:gap-10">
       <SectionHeading
+        as="h1"
         eyebrow={
           <span className="inline-flex items-center gap-1.5">
             <CalendarDays className="size-3.5" aria-hidden />
@@ -110,6 +112,7 @@ export default function Daily() {
         <SectionHeading size="sm" title={<span id="daily-history">Last two weeks</span>} description="Keep the streak alive — one daily a day." className="mb-3" />
         <DailyCalendarStrip days={days} daily={daily} today={today} />
       </section>
+      <ReplaceGameDialog game={game} />
     </div>
   );
 }

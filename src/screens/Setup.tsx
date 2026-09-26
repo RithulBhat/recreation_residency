@@ -9,10 +9,10 @@ import { useStartGame } from '@/hooks/useStartGame';
 import { useIsMobile } from '@/hooks/useMediaQuery';
 import { SectionHeading } from '@/components/SectionHeading';
 import { Button } from '@/components/ui/Button';
+import { ReplaceGameDialog, ResumeBanner } from '@/components/ResumeGame';
 import {
   ClipSettings,
   MODE_LABEL,
-  MODE_OPTIONS,
   ModeExtras,
   ModePicker,
   ModifierSettings,
@@ -23,6 +23,7 @@ import {
   StartBar,
   clipSummary,
   isGameMode,
+  modeHow,
   modifierLabels,
   packsSummary,
   poolEstimate,
@@ -71,18 +72,19 @@ export default function Setup() {
     if (preset) store.applyPreset(preset);
     if (Object.keys(patch).length) store.update(patch);
     if (params.get('share') === '1') setNotice('Finish any game and share the challenge link from the results screen — your friend gets the same songs.');
-    if (params.get('autostart') === '1') void start(useSettingsStore.getState().settings);
+    // Autostart is an explicit "play this pack now" tap, so it never asks about a live game.
+    if (params.get('autostart') === '1') void start(useSettingsStore.getState().settings, { force: true });
     setParams({}, { replace: true });
   }, [params, setParams, start]);
 
   const packs = useMemo(() => resolvePacks(settings.packIds), [settings.packIds]);
   const songs = poolEstimate(packs.map((p) => p.approxSize));
-  const modeMeta = MODE_OPTIONS.find((m) => m.id === settings.mode);
   const mods = modifierLabels(settings.modifiers);
 
   return (
     <div className="flex flex-col gap-6 pb-36 sm:pb-32">
       <SectionHeading
+        as="h1"
         eyebrow="Lobby"
         title={<span id="setup-title">Set up your game</span>}
         description="Pick a mode and some packs, dial in the clip length, then hit Start. Everything is remembered."
@@ -106,11 +108,13 @@ export default function Setup() {
         </div>
       )}
 
+      <ResumeBanner />
+
       <PresetRow />
 
       <div className="grid gap-4 lg:grid-cols-2 lg:items-start">
-        <div className="flex flex-col gap-4">
-          <SetupSection id="mode" icon={<Disc3 />} title="Mode" summary={`${MODE_LABEL[settings.mode]} · ${modeMeta?.how ?? ''}`}>
+        <div className="flex min-w-0 flex-col gap-4">
+          <SetupSection id="mode" icon={<Disc3 />} title="Mode" summary={`${MODE_LABEL[settings.mode]} · ${modeHow(settings, settings.mode)}`}>
             <ModePicker />
           </SetupSection>
           <SetupSection
@@ -125,7 +129,7 @@ export default function Setup() {
             <ClipSettings />
           </SetupSection>
         </div>
-        <div className="flex flex-col gap-4">
+        <div className="flex min-w-0 flex-col gap-4">
           <SetupSection
             id="rounds"
             icon={<ListChecks />}
@@ -151,6 +155,7 @@ export default function Setup() {
       </div>
 
       <StartBar game={game} />
+      <ReplaceGameDialog game={game} />
     </div>
   );
 }

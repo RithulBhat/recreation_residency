@@ -35,7 +35,7 @@ export function PresetRow() {
         <Sparkles className="size-3.5" aria-hidden />
         Quick presets
       </div>
-      <div className="scrollbar-none -mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:px-0" role="group" aria-label="Presets">
+      <div className="scrollbar-none -mx-4 -my-1 flex gap-2 overflow-x-auto px-4 py-1 sm:mx-0 sm:flex-wrap sm:px-0" role="group" aria-label="Presets">
         {PRESETS.map((p) => (
           <Tooltip key={p.id} content={p.blurb}>
             <Chip

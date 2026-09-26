@@ -65,7 +65,7 @@ export function Tabs<T extends string>({ tabs, value, onChange, 'aria-label': ar
             disabled={t.disabled}
             onClick={() => onChange(t.value)}
             className={cn(
-              'relative inline-flex h-11 shrink-0 items-center gap-2 whitespace-nowrap px-3 text-sm font-semibold transition-colors disabled:opacity-40',
+              'touch-hit-44 relative inline-flex h-11 shrink-0 items-center gap-2 whitespace-nowrap px-3 text-sm font-semibold transition-colors disabled:opacity-40',
               fullWidth && 'flex-1 justify-center',
               selected ? 'text-fg' : 'text-muted hover:text-fg',
             )}

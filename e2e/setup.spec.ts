@@ -103,6 +103,10 @@ for (const [name, vp] of Object.entries(VIEWPORTS)) {
     await page.getByRole('button', { name: 'Add to setup' }).click();
     await expect.poll(() => page.evaluate(() => location.hash)).toBe('#/setup');
     await expect(page.getByRole('list', { name: 'Selected packs' }).getByRole('listitem')).toHaveCount(2);
+    // both packs are named in the summary — nothing hides behind "+1"
+    const summary = page.getByTestId('settings-summary');
+    await expect(summary).toContainText(' + ');
+    await expect(summary).not.toContainText('+1');
 
     // category tab + custom tab render
     await page.goto('/#/packs');
@@ -154,9 +158,15 @@ for (const [name, vp] of Object.entries(VIEWPORTS)) {
     await page.setViewportSize(vp);
     await page.goto('/#/c/invalid');
     await settle(page);
-    await expect(page.getByRole('heading', { name: 'This challenge link is broken' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'This challenge link is broken', level: 1 })).toBeVisible();
     await expectNoHorizontalOverflow(page);
     await page.screenshot({ path: `${OUT}/challenge-invalid-${name}.png`, fullPage: false });
+
+    // Links carry played + queued ids (up to 60); the copy counts what the friend will actually hear.
+    const exact = challengeCode({ v: 1, s: 'e2e-seed', g: { m: 'classic', p: ['pop-hits'] }, i: Array.from({ length: 12 }, (_, k) => 1000 + k) });
+    await page.goto(`/#/c/${exact}`);
+    await settle(page);
+    await expect(page.getByText('Same 10 songs, same order')).toBeVisible();
 
     const code = challengeCode({ v: 1, s: 'e2e-seed', g: { m: 'classic', p: ['pop-hits', 'nope-pack'] }, b: 'Maanu', c: 6420 });
     await page.goto(`/#/c/${code}`);
@@ -170,6 +180,85 @@ for (const [name, vp] of Object.entries(VIEWPORTS)) {
     await page.screenshot({ path: `${OUT}/challenge-${name}.png`, fullPage: false });
   });
 }
+
+test('daily · first daily shows the 1-day streak hook · mobile', async ({ page }) => {
+  await page.setViewportSize(VIEWPORTS.mobile);
+  await page.addInitScript(() => {
+    const d = new Date();
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const daily = { [key]: { date: key, score: 4200, correct: 6, rounds: 10, grid: '🟩 0.1s\n🟥 10s' } };
+    localStorage.setItem('sg:stats', JSON.stringify({ state: { totals: {}, records: [], tracks: {}, achievements: [], daily }, version: 1 }));
+  });
+  await page.goto('/#/daily');
+  await settle(page);
+  await expect(page.getByTestId('daily-score')).toContainText('4,200');
+  await expect(page.getByTestId('daily-streak')).toContainText('1-day streak · come back tomorrow to keep it');
+  await expectNoHorizontalOverflow(page);
+  await page.screenshot({ path: `${OUT}/daily-first-streak-mobile.png`, fullPage: false });
+});
+
+test('setup · mode card blurbs follow the draft, not static copy', async ({ page }) => {
+  await page.setViewportSize(VIEWPORTS.desktop);
+  await page.goto('/#/setup');
+  await settle(page);
+  const classic = page.locator('[data-mode="classic"]');
+  const fixed = page.locator('[data-mode="fixed"]');
+  const modeHeader = page.getByRole('button', { name: /^Mode/ });
+  await expect(classic).toContainText('0.1s→10s · 7 tries');
+  await expect(modeHeader).toContainText('Classic · 0.1s→10s · 7 tries');
+
+  await page.getByRole('button', { name: /^Songspot Classic preset/ }).click();
+  await expect(classic).toContainText('0.1s→15s · 5 tries');
+  await expect(modeHeader).toContainText('Classic · 0.1s→15s · 5 tries');
+
+  // Sniper is a fixed-clip preset: its tile reads the draft too, and Classic falls back to the default ladder.
+  await page.getByRole('button', { name: /^Sniper preset/ }).click();
+  await expect(fixed).toContainText('0.3s×1 try');
+  await expect(modeHeader).toContainText('Fixed clip · 0.3s×1 try');
+  await expect(classic).toContainText('0.1s→10s · 7 tries');
+  await page.screenshot({ path: `${OUT}/setup-mode-blurbs-desktop.png`, fullPage: false });
+});
+
+test('resume banner + confirmation before replacing a live game · mobile', async ({ page }) => {
+  await page.setViewportSize(VIEWPORTS.mobile);
+  await page.goto('/#/setup');
+  await settle(page);
+  await page.waitForFunction(() => typeof window.__songooner?.start === 'function');
+  const firstId = await page.evaluate(async () => {
+    await window.__songooner!.start({ packIds: ['pop-hits'], mode: 'classic', rounds: 10, seed: 'e2e-resume' });
+    return window.__songooner!.gameStore.getState().state.id;
+  });
+
+  // Home shows the slim banner and it links to the game.
+  await page.goto('/#/');
+  const banner = page.getByTestId('resume-banner');
+  await expect(banner).toBeVisible();
+  await expect(banner).toContainText('Round 1/10');
+  await expect(banner).toContainText('Resume');
+  await expect(banner).toHaveAttribute('href', /#\/play$/);
+  await expectNoHorizontalOverflow(page);
+  await page.screenshot({ path: `${OUT}/resume-banner-home-mobile.png`, fullPage: false });
+
+  // Setup shows it too, and Start asks before throwing the game away.
+  await page.goto('/#/setup');
+  await expect(page.getByTestId('resume-banner')).toContainText('Round 1/10');
+  await page.getByTestId('start-game').click();
+  const dialog = page.getByRole('dialog', { name: 'Replace the game in progress?' });
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toContainText('Round 1/10');
+  await page.waitForTimeout(450);
+  await page.screenshot({ path: `${OUT}/replace-game-dialog-mobile.png`, fullPage: false });
+  await dialog.getByRole('button', { name: 'Keep it' }).click();
+  await expect(dialog).toBeHidden();
+  expect(await page.evaluate(() => location.hash)).toBe('#/setup');
+  expect(await page.evaluate(() => window.__songooner!.gameStore.getState().state.id)).toBe(firstId);
+
+  // Confirming starts a fresh game.
+  await page.getByTestId('start-game').click();
+  await page.getByTestId('confirm-replace-game').click();
+  await expect.poll(() => page.evaluate(() => location.hash), { timeout: 45_000 }).toBe('#/play');
+  expect(await page.evaluate(() => window.__songooner!.gameStore.getState().state.id)).not.toBe(firstId);
+});
 
 test('setup · clip mode, slider keyboard, stages, custom artist pack, start', async ({ page }) => {
   await page.setViewportSize(VIEWPORTS.desktop);

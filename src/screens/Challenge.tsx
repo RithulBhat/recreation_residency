@@ -46,6 +46,7 @@ export default function Challenge() {
       <div className="mx-auto max-w-lg py-10">
         <Card padding="lg">
           <EmptyState
+            as="h1"
             icon={<Link2 />}
             title="This challenge link is broken"
             description="The code could not be read — it may have been cut off when it was copied. Ask your friend to send it again."
@@ -67,7 +68,11 @@ export default function Challenge() {
 
   const settings = challengeSettings(payload);
   const by = payload.by?.trim() || null;
-  const hasExact = (payload.trackIds?.length ?? 0) >= MIN_EXACT_TRACKS;
+  const ids = payload.trackIds ?? [];
+  const hasExact = ids.length >= MIN_EXACT_TRACKS;
+  // Links carry played + queued ids (up to 60) so the autocomplete is not an answer sheet;
+  // the friend only ever hears `rounds` of them (all of them when the game is endless).
+  const exactCount = Math.min(settings.rounds > 0 ? settings.rounds : ids.length, ids.length);
   const missing = packs.filter((p) => !p.pack);
   const blocked = !hasExact && missing.length === packs.length;
   const mods = modifierLabels(settings.modifiers);
@@ -125,7 +130,7 @@ export default function Challenge() {
             <div className="rounded-2xl bg-surface p-3">
               <dt className="text-[11px] font-semibold uppercase tracking-wider text-muted">Songs</dt>
               <dd className="mt-1 font-semibold text-fg">
-                {hasExact ? `The exact same ${payload.trackIds?.length ?? 0} tracks` : 'Same packs, same seed'}
+                {hasExact ? `Same ${exactCount} songs, same order` : 'Same packs, same seed'}
               </dd>
               <dd className="mt-0.5 text-xs text-muted">Difficulty: {settings.difficulty}</dd>
             </div>

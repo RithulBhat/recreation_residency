@@ -3,23 +3,24 @@ import { Disc3, Flame, PartyPopper, Swords, Timer, Zap } from 'lucide-react';
 import type { GameMode } from '@/types';
 import { cn } from '@/components/ui/cn';
 import { useSettingsStore } from '@/store/settingsStore';
+import { modeHow } from './summary';
 
 export interface ModeOption {
   id: GameMode;
   icon: ReactNode;
   name: string;
   blurb: string;
-  how: string;
   accent: string;
 }
 
+/** Static copy per mode; the "how it plays" line is computed live from the draft (`modeHow`). */
 export const MODE_OPTIONS: ReadonlyArray<ModeOption> = [
-  { id: 'classic', icon: <Disc3 />, name: 'Classic', blurb: 'The clip grows every try.', how: 'Escalating · up to 8 tries', accent: '#a855f7' },
-  { id: 'fixed', icon: <Timer />, name: 'Fixed clip', blurb: 'One clip length, every song.', how: '0.1–10 s · 1–6 tries', accent: '#22d3ee' },
-  { id: 'blitz', icon: <Zap />, name: 'Blitz', blurb: 'Name as many as you can.', how: 'Timed · wrong = −3 s', accent: '#fbbf24' },
-  { id: 'survival', icon: <Flame />, name: 'Survival', blurb: 'Lives. Clips shrink as you win.', how: '−15% per correct', accent: '#fb7185' },
-  { id: 'duel', icon: <Swords />, name: 'Duel', blurb: 'Two players, one device.', how: 'Buzzer A / L · or turns', accent: '#f472b6' },
-  { id: 'party', icon: <PartyPopper />, name: 'Party', blurb: '2–8 players, pass the phone.', how: 'Turn-based · scoreboard', accent: '#34d399' },
+  { id: 'classic', icon: <Disc3 />, name: 'Classic', blurb: 'The clip grows every try.', accent: '#a855f7' },
+  { id: 'fixed', icon: <Timer />, name: 'Fixed clip', blurb: 'One clip length, every song.', accent: '#22d3ee' },
+  { id: 'blitz', icon: <Zap />, name: 'Blitz', blurb: 'Name as many as you can. Wrong costs 3 s.', accent: '#fbbf24' },
+  { id: 'survival', icon: <Flame />, name: 'Survival', blurb: 'Lives. Clips shrink 15% per hit.', accent: '#fb7185' },
+  { id: 'duel', icon: <Swords />, name: 'Duel', blurb: 'Two players, one device.', accent: '#f472b6' },
+  { id: 'party', icon: <PartyPopper />, name: 'Party', blurb: '2–8 players, pass the phone.', accent: '#34d399' },
 ];
 
 export const MODE_IDS: readonly GameMode[] = MODE_OPTIONS.map((m) => m.id);
@@ -30,8 +31,9 @@ export function isGameMode(value: unknown): value is GameMode {
 
 /** Six compact mode cards as a keyboard-navigable radiogroup. */
 export function ModePicker() {
-  const mode = useSettingsStore((s) => s.settings.mode);
+  const settings = useSettingsStore((s) => s.settings);
   const update = useSettingsStore((s) => s.update);
+  const mode = settings.mode;
   const ref = useRef<HTMLDivElement>(null);
 
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
@@ -49,7 +51,7 @@ export function ModePicker() {
   };
 
   return (
-    <div ref={ref} role="radiogroup" aria-label="Game mode" onKeyDown={onKeyDown} className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+    <div ref={ref} role="radiogroup" aria-label="Game mode" onKeyDown={onKeyDown} className="grid min-w-0 grid-cols-2 gap-2.5 sm:grid-cols-3">
       {MODE_OPTIONS.map((m) => {
         const selected = m.id === mode;
         return (
@@ -62,7 +64,7 @@ export function ModePicker() {
             tabIndex={selected ? 0 : -1}
             onClick={() => update({ mode: m.id })}
             className={cn(
-              'group relative flex min-h-[7.25rem] flex-col overflow-hidden rounded-2xl border p-3 text-left transition-[border-color,box-shadow,transform] duration-200 active:scale-[0.98]',
+              'group relative flex min-h-[7.25rem] min-w-0 flex-col overflow-hidden rounded-2xl border p-3 text-left transition-[border-color,box-shadow,transform] duration-200 active:scale-[0.98]',
               selected ? 'border-transparent ring-2 ring-accent shadow-glow' : 'border-border hover:border-border-strong',
             )}
             style={{
@@ -84,7 +86,7 @@ export function ModePicker() {
             <span className="relative mt-auto pt-2">
               <span className="block font-display text-sm font-bold leading-tight text-fg">{m.name}</span>
               <span className="mt-0.5 block text-[11px] leading-snug text-muted">{m.blurb}</span>
-              <span className="mt-1.5 block font-mono text-[10px] tabular text-fg/65">{m.how}</span>
+              <span className="mt-1.5 block font-mono text-[10px] tabular text-fg/65">{modeHow(settings, m.id)}</span>
             </span>
           </button>
         );

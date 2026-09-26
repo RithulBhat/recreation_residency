@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { motion, useReducedMotion } from 'motion/react';
 import { LoaderCircle, Pause, Play, RotateCcw } from 'lucide-react';
 import { cn } from './ui/cn';
@@ -60,6 +60,8 @@ export function Vinyl({
   const b = Math.max(0, Math.min(1, blur));
   const [coverFailed, setCoverFailed] = useState(false);
   useEffect(() => setCoverFailed(false), [coverUrl]);
+  // Per-instance gradient id: several records can be on one page (hero, gallery, results).
+  const ringId = `sg-vinyl-ring-${useId().replace(/\W/g, '')}`;
 
   return (
     <div
@@ -83,7 +85,7 @@ export function Vinyl({
         aria-hidden
       >
         <defs>
-          <linearGradient id="sg-vinyl-ring" x1="0" y1="0" x2="1" y2="1">
+          <linearGradient id={ringId} x1="0" y1="0" x2="1" y2="1">
             <stop offset="0" stopColor="var(--sg-accent)" />
             <stop offset="0.55" stopColor="var(--sg-accent-2)" />
             <stop offset="1" stopColor="var(--sg-accent-3)" />
@@ -95,7 +97,7 @@ export function Vinyl({
           cy="50"
           r={R}
           fill="none"
-          stroke="url(#sg-vinyl-ring)"
+          stroke={`url(#${ringId})`}
           strokeWidth="2.5"
           strokeLinecap="round"
           strokeDasharray={state === 'loading' ? `${C * 0.22} ${C}` : C}

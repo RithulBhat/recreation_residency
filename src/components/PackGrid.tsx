@@ -138,7 +138,7 @@ export function PackGrid({
           </div>
         </div>
 
-        <div className="scrollbar-none -mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:px-0" role="group" aria-label="Categories">
+        <div className="scrollbar-none -mx-4 -my-1.5 flex gap-2 overflow-x-auto px-4 py-1.5 sm:mx-0 sm:flex-wrap sm:px-0" role="group" aria-label="Categories">
           <Chip size="sm" selected={category === 'all'} onClick={() => setCategory('all')} count={base.length}>
             All
           </Chip>
@@ -150,7 +150,7 @@ export function PackGrid({
         </div>
 
         {topTags.length > 0 && (
-          <div className="scrollbar-none -mx-4 flex gap-1.5 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:px-0" role="group" aria-label="Tags">
+          <div className="scrollbar-none -mx-4 -my-1.5 flex gap-1.5 overflow-x-auto px-4 py-1.5 sm:mx-0 sm:flex-wrap sm:px-0" role="group" aria-label="Tags">
             {topTags.map((t) => (
               <Chip key={t.tag} size="sm" selected={tags.includes(t.tag)} onClick={() => toggleTag(t.tag)} className="capitalize" check>
                 {t.tag}

@@ -3,6 +3,9 @@ import { Heart } from 'lucide-react';
 import { LogoGlyph } from './Logo';
 import { cn } from './ui/cn';
 
+/** Text links stay 16 px tall visually; `touch-hit-44` gives them a 44 px hit area on touch. */
+const LINK = 'touch-hit-44 inline-flex items-center hover:text-fg';
+
 export function Footer({ className }: { className?: string }) {
   return (
     <footer className={cn('mt-16 border-t border-border pt-6 pb-6 text-xs text-muted', className)}>
@@ -14,10 +17,13 @@ export function Footer({ className }: { className?: string }) {
           </span>
         </div>
         <nav className="flex items-center gap-4" aria-label="Footer">
-          <Link to="/packs" className="hover:text-fg">Packs</Link>
-          <Link to="/daily" className="hover:text-fg">Daily</Link>
-          <Link to="/stats" className="hover:text-fg">Stats</Link>
-          <Link to="/gallery" className="hover:text-fg">Gallery</Link>
+          <Link to="/packs" className={LINK}>Packs</Link>
+          <Link to="/daily" className={LINK}>Daily</Link>
+          <Link to="/stats" className={LINK}>Stats</Link>
+          {/* The design-system showcase is a dev tool; it is not routed in production builds. */}
+          {import.meta.env.DEV && (
+            <Link to="/gallery" className={LINK}>Gallery</Link>
+          )}
         </nav>
       </div>
       <p className="mt-3 text-center text-[11px] text-muted/70 sm:text-left">

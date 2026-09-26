@@ -166,6 +166,23 @@ test('stats · demo · interactions', async ({ page }) => {
   await expectNoHorizontalOverflow(page);
 });
 
+test('stats · one h1, no duplicate ids, fits 320 px', async ({ page }) => {
+  await page.addInitScript(() => localStorage.clear());
+  await page.setViewportSize({ width: 320, height: 640 });
+  await page.goto('/#/stats?demo=1');
+  await settle(page);
+  await expect(page.getByText(/Level \d+ \/ 14/)).toBeVisible();
+  expect(await page.locator('h1').count(), 'exactly one h1').toBe(1);
+  const dupes = await page.evaluate(() => {
+    const seen = new Map<string, number>();
+    for (const el of document.querySelectorAll('[id]')) seen.set(el.id, (seen.get(el.id) ?? 0) + 1);
+    return [...seen].filter(([, n]) => n > 1).map(([id, n]) => `${id} ×${n}`);
+  });
+  expect(dupes, 'duplicate element ids').toEqual([]);
+  await expectNoHorizontalOverflow(page);
+  await page.screenshot({ path: `${OUT}/demo-320.png`, fullPage: true });
+});
+
 test('stats · demo · reduced motion', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.addInitScript(() => localStorage.clear());

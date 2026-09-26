@@ -37,6 +37,54 @@ async function expectIconButtonsLabelled(page: Page) {
   expect(missing, 'icon buttons without aria-label').toEqual([]);
 }
 
+/** One `<h1>` per route: the page outline should start with the screen's own title. */
+async function expectSingleH1(page: Page) {
+  const h1s = await page.locator('h1').evaluateAll((els) => els.map((el) => el.textContent?.trim().slice(0, 60) ?? ''));
+  expect(h1s, 'exactly one h1').toHaveLength(1);
+}
+
+/** Gradients/masks referenced by id resolve to the wrong instance when ids collide. */
+async function expectNoDuplicateIds(page: Page) {
+  const dupes = await page.evaluate(() => {
+    const seen = new Map<string, number>();
+    for (const el of document.querySelectorAll('[id]')) seen.set(el.id, (seen.get(el.id) ?? 0) + 1);
+    return [...seen].filter(([, n]) => n > 1).map(([id, n]) => `${id} ×${n}`);
+  });
+  expect(dupes, 'duplicate element ids').toEqual([]);
+}
+
+/**
+ * Coarse-pointer hit areas: the visual box or the `touch-hit-44` ::before slop must reach 44 px.
+ * Hidden elements (display:none, zero-size) are skipped.
+ */
+async function expectTouchTargets(page: Page, selector: string) {
+  const coarse = await page.evaluate(() => matchMedia('(pointer: coarse)').matches);
+  expect(coarse, 'test context must emulate a coarse pointer').toBe(true);
+  const small = await page.evaluate((sel) => {
+    const out: string[] = [];
+    for (const el of document.querySelectorAll<HTMLElement>(sel)) {
+      const r = el.getBoundingClientRect();
+      if (r.width === 0 || r.height === 0) continue;
+      const before = getComputedStyle(el, '::before');
+      const slop = before.content !== 'none' && before.position === 'absolute';
+      const w = Math.max(r.width, slop ? parseFloat(before.width) || 0 : 0);
+      const h = Math.max(r.height, slop ? parseFloat(before.height) || 0 : 0);
+      if (w < 44 || h < 44) {
+        const label = el.getAttribute('aria-label') ?? el.textContent?.trim().slice(0, 30) ?? '';
+        out.push(`${Math.round(w)}×${Math.round(h)} ${el.tagName.toLowerCase()} "${label}"`);
+      }
+    }
+    return out;
+  }, selector);
+  expect(small, `touch targets under 44px for ${selector}`).toEqual([]);
+}
+
+const NARROW = { width: 320, height: 640 } as const;
+const NARROW_ROUTES = ['/', '/setup', '/packs', '/daily', '/stats', '/duel'] as const;
+const H1_ROUTES = ['/', '/packs', '/setup', '/daily', '/stats', '/c/invalid'] as const;
+
+const slug = (route: string) => route.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '') || 'home';
+
 for (const [name, vp] of Object.entries(VIEWPORTS)) {
   test(`home · ${name}`, async ({ page }) => {
     await page.setViewportSize(vp);
@@ -115,6 +163,103 @@ test('reduced motion renders', async ({ page }) => {
   await settle(page);
   await expectNoHorizontalOverflow(page);
   await page.screenshot({ path: `${OUT}/home-reduced-motion.png`, fullPage: false });
+
+  // The hero badge's pulsing dot is pure CSS (animate-ping) — it must be off, not merely shortened.
+  const ping = page.locator('.animate-ping').first();
+  await expect(ping).toBeAttached();
+  expect(await ping.evaluate((el) => getComputedStyle(el).animationName)).toBe('none');
+  // …and so must every other decorative keyframe utility on the page.
+  const stillMoving = await page.evaluate(() => {
+    const classes = ['animate-ping', 'animate-shimmer', 'animate-pulse-soft', 'animate-float', 'animate-rise', 'animate-fade-in'];
+    return Array.from(document.querySelectorAll<HTMLElement>(classes.map((c) => `.${c}`).join(',')))
+      .filter((el) => getComputedStyle(el).animationName !== 'none')
+      .map((el) => `${el.tagName}.${el.className}`.slice(0, 80));
+  });
+  expect(stillMoving, 'decorative animations running under prefers-reduced-motion').toEqual([]);
+});
+
+for (const route of NARROW_ROUTES) {
+  test(`320 px · ${route}`, async ({ page }) => {
+    await page.addInitScript(() => localStorage.clear());
+    await page.setViewportSize(NARROW);
+    await page.goto(`/#${route}`);
+    await settle(page);
+    const body = await page.evaluate(() => document.body.scrollWidth);
+    expect(body, `body.scrollWidth on ${route}`).toBeLessThanOrEqual(320);
+    await expectNoHorizontalOverflow(page);
+    await expectIconButtonsLabelled(page);
+    await page.screenshot({ path: `${OUT}/narrow-${slug(route)}.png`, fullPage: false });
+    await page.screenshot({ path: `${OUT}/narrow-${slug(route)}-full.png`, fullPage: true });
+  });
+}
+
+test('320 px · header folds volume + theme into one popover', async ({ page }) => {
+  await page.setViewportSize(NARROW);
+  await page.goto('/#/');
+  await settle(page);
+  await expect(page.getByRole('button', { name: 'Volume', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Theme', exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Sound & theme' }).click();
+  await expect(page.getByRole('slider', { name: 'Volume' })).toBeVisible();
+  await expect(page.getByRole('radiogroup', { name: 'Theme' }).getByRole('radio')).toHaveCount(4);
+  await expectNoHorizontalOverflow(page);
+  await page.screenshot({ path: `${OUT}/narrow-header-popover.png`, fullPage: false });
+  await page.getByRole('radio', { name: 'Vinyl' }).click();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'vinyl');
+
+  // From 360 px up the two dedicated buttons are back.
+  await page.setViewportSize({ width: 360, height: 640 });
+  await expect(page.getByRole('button', { name: 'Volume', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Theme', exact: true })).toBeVisible();
+  await expectNoHorizontalOverflow(page);
+});
+
+for (const route of H1_ROUTES) {
+  test(`exactly one h1 · ${route}`, async ({ page }) => {
+    await page.addInitScript(() => localStorage.clear());
+    await page.setViewportSize(VIEWPORTS.mobile);
+    await page.goto(`/#${route}`);
+    await settle(page);
+    await expectSingleH1(page);
+  });
+}
+
+for (const route of ['/', '/stats', '/stats?demo=1'] as const) {
+  test(`no duplicate ids · ${route}`, async ({ page }) => {
+    await page.addInitScript(() => localStorage.clear());
+    await page.setViewportSize(VIEWPORTS.desktop);
+    await page.goto(`/#${route}`);
+    await settle(page);
+    // the logo renders in the header and the footer, the record in the hero
+    expect(await page.locator('svg linearGradient').count()).toBeGreaterThanOrEqual(2);
+    await expectNoDuplicateIds(page);
+  });
+}
+
+test.describe('touch targets · coarse pointer', () => {
+  test.use({ hasTouch: true, isMobile: true });
+
+  test('chips, tabs, segmented controls, pack play buttons, header + footer links', async ({ page }) => {
+    await page.addInitScript(() => localStorage.clear());
+    await page.setViewportSize(VIEWPORTS.mobile);
+
+    await page.goto('/#/packs');
+    await settle(page);
+    await expectTouchTargets(page, '[role="tab"], [aria-label="Tags"] button, [aria-label="Sort packs"] [role="radio"], button[aria-label^="Play "], header button');
+
+    await page.goto('/#/setup');
+    await settle(page);
+    await expectTouchTargets(page, '[aria-label="Presets"] button, [aria-label="Clip mode"] [role="radio"], [aria-label="Categories"] button, header button');
+
+    await page.goto('/#/');
+    await settle(page);
+    await expectTouchTargets(page, 'footer nav a, header a, header button, [aria-label="Highlights"] ~ * button');
+
+    // tablet width: the primary nav links are visible and must have 44 px hit areas too
+    await page.setViewportSize({ width: 1024, height: 768 });
+    await page.waitForTimeout(300);
+    await expectTouchTargets(page, 'nav[aria-label="Primary"] a, footer nav a, header button');
+  });
 });
 
 test('gallery · keyboard interactions', async ({ page }) => {

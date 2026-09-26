@@ -15,9 +15,11 @@ export const HINT_LABELS: Record<HintKind, string> = {
   album: 'Album',
 };
 
-/** Max hints per round: min(3, tries − 1); 0 when hints are disabled. */
-export function maxHints(settings: Pick<GameSettings, 'hintsEnabled' | 'tries'>): number {
+/** Max hints per round: min(3, tries − 1); 0 when hints are disabled and always 0 in Blitz. */
+export function maxHints(settings: Pick<GameSettings, 'hintsEnabled' | 'tries'> & Partial<Pick<GameSettings, 'mode'>>): number {
   if (!settings.hintsEnabled) return 0;
+  // Blitz is a speed mode where any wrong guess ends the song — a hint budget makes no sense there.
+  if (settings.mode === 'blitz') return 0;
   return Math.min(3, Math.max(0, settings.tries - 1));
 }
 

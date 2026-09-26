@@ -1,3 +1,4 @@
+import { useId } from 'react';
 import { cn } from './ui/cn';
 
 export type LogoSize = 'sm' | 'md' | 'lg' | 'xl';
@@ -19,6 +20,9 @@ const sizes: Record<LogoSize, { glyph: number; text: string; gap: string }> = {
 };
 
 export function LogoGlyph({ size = 28, className, spinning }: { size?: number; className?: string; spinning?: boolean }) {
+  // The gradient is referenced by id and the logo renders several times per page (header,
+  // footer, hero), so every instance needs its own id or they all resolve to the first one.
+  const gradientId = `sg-logo-g-${useId().replace(/\W/g, '')}`;
   return (
     <svg
       width={size}
@@ -29,17 +33,17 @@ export function LogoGlyph({ size = 28, className, spinning }: { size?: number; c
       style={{ animationDuration: spinning ? '3s' : undefined }}
     >
       <defs>
-        <linearGradient id="sg-logo-g" x1="0" y1="0" x2="1" y2="1">
+        <linearGradient id={gradientId} x1="0" y1="0" x2="1" y2="1">
           <stop offset="0" stopColor="var(--sg-accent)" />
           <stop offset="0.55" stopColor="var(--sg-accent-2)" />
           <stop offset="1" stopColor="var(--sg-accent-3)" />
         </linearGradient>
       </defs>
       <circle cx="32" cy="32" r="30" fill="var(--sg-vinyl)" />
-      <circle cx="32" cy="32" r="30" fill="none" stroke="url(#sg-logo-g)" strokeWidth="3" />
+      <circle cx="32" cy="32" r="30" fill="none" stroke={`url(#${gradientId})`} strokeWidth="3" />
       <circle cx="32" cy="32" r="22" fill="none" stroke="var(--sg-fg)" strokeOpacity="0.14" strokeWidth="1.5" />
       <circle cx="32" cy="32" r="17" fill="none" stroke="var(--sg-fg)" strokeOpacity="0.1" strokeWidth="1.5" />
-      <circle cx="32" cy="32" r="11" fill="url(#sg-logo-g)" />
+      <circle cx="32" cy="32" r="11" fill={`url(#${gradientId})`} />
       <circle cx="32" cy="32" r="3" fill="var(--sg-vinyl)" />
       <path d="M22 10 A26 26 0 0 1 54 32" fill="none" stroke="#fff" strokeOpacity="0.35" strokeWidth="2" strokeLinecap="round" />
     </svg>

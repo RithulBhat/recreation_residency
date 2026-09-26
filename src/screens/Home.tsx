@@ -27,6 +27,7 @@ import { PackCard } from '@/components/PackCard';
 import { SectionHeading } from '@/components/SectionHeading';
 import { HowItWorks } from '@/components/HowItWorks';
 import { Footer } from '@/components/Footer';
+import { ResumeBanner } from '@/components/ResumeGame';
 
 /* ------------------------------------------------------------------ */
 /* Fallback packs (until the catalog is wired)                          */
@@ -166,7 +167,8 @@ export default function Home({ packs }: HomeProps) {
     <div className="flex flex-col gap-16 sm:gap-24">
       {/* Hero */}
       <section className="grid items-center gap-8 pt-2 sm:pt-10 lg:grid-cols-[1.1fr_0.9fr] lg:gap-8" aria-labelledby="hero-title">
-        <div className="flex flex-col items-start">
+        <div className="flex min-w-0 flex-col items-start">
+          <ResumeBanner className="mb-5 w-full sm:w-auto sm:min-w-80" />
           <motion.div {...rise(0)}>
             <Badge tone="accent" dot className="mb-5">
               <Sparkles className="size-3" /> Free · no sign-up · nothing to install
@@ -175,7 +177,7 @@ export default function Home({ packs }: HomeProps) {
           <motion.h1
             id="hero-title"
             {...rise(0.1)}
-            className="font-display text-[2.6rem] font-black leading-[1.02] tracking-tight text-fg sm:text-6xl lg:text-[4.4rem]"
+            className="max-w-full font-display text-[clamp(2rem,10.5vw,2.6rem)] font-black leading-[1.02] tracking-tight text-fg sm:text-6xl lg:text-[4.4rem]"
           >
             Name the track from{' '}
             <span className="text-gradient whitespace-nowrap">

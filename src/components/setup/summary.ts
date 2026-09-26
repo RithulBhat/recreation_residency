@@ -3,6 +3,7 @@
  * per-option hint copy. Framework-free so it can be unit tested.
  */
 import type { Difficulty, GameMode, GameSettings, Modifiers, StartPosition } from '@/types';
+import { normalizeSettings } from '@/game/presets';
 import { formatClip } from '@/components/ui/Slider';
 
 export const MODE_LABEL: Record<GameMode, string> = {
@@ -80,13 +81,35 @@ export function roundsSummary(s: Pick<GameSettings, 'mode' | 'rounds' | 'blitzDu
   return s.rounds === 0 ? '∞ rounds' : `${s.rounds} rounds`;
 }
 
+/** `Pop Hits`, `Pop Hits + Burna Boy`, `Pop Hits + K-Pop +1` — up to two names, then a count. */
 export function packsSummary(names: readonly string[]): string {
-  if (names.length === 0) return 'No packs';
-  const first = names[0] ?? '';
-  return names.length === 1 ? first : `${first} +${names.length - 1}`;
+  const [first, second] = names;
+  if (first === undefined) return 'No packs';
+  if (second === undefined) return first;
+  const shown = `${first} + ${second}`;
+  return names.length === 2 ? shown : `${shown} +${names.length - 2}`;
 }
 
-/** The StartBar one-liner: `10 rounds · 0.1s→10s · 7 tries · Pop Hits +2 · Medium · reversed`. */
+/**
+ * The Mode card's one-liner for `mode`, derived from the current draft so it never contradicts
+ * the Start bar: `0.5s→4s · 4 tries`, `90s blitz · 1s clips`, `3 lives · 2s×3 tries`, …
+ */
+export function modeHow(draft: GameSettings, mode: GameMode): string {
+  const s = normalizeSettings({ ...draft, mode });
+  switch (mode) {
+    case 'blitz':
+    case 'survival':
+      return `${roundsSummary(s)} · ${clipSummary(s)}`;
+    case 'duel':
+      return `${s.duelStyle === 'buzzer' ? 'Buzzer A / L' : 'Turns'} · ${clipSummary(s)}`;
+    case 'party':
+      return `${s.players.length} players · ${clipSummary(s)}`;
+    default:
+      return clipSummary(s);
+  }
+}
+
+/** The StartBar one-liner: `10 rounds · 0.1s→10s · 7 tries · Pop Hits + K-Pop +1 · Medium · reversed`. */
 export function settingsSummary(s: GameSettings, packNames: readonly string[]): string {
   const parts = [roundsSummary(s), clipSummary(s), packsSummary(packNames)];
   if (s.difficulty !== 'any') parts.push(DIFFICULTY_INFO[s.difficulty].label);

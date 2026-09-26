@@ -364,6 +364,24 @@ html[data-theme='daylight'] {
   }
 }
 
+@utility touch-hit-44 {
+  /* Same slop as hit-44, but only for coarse pointers so mouse hover areas stay tight.
+     Hosts that are already positioned (absolute/fixed/sticky) keep their own position. */
+  @media (pointer: coarse) {
+    &:not(.absolute, .fixed, .sticky) {
+      position: relative;
+    }
+    &::before {
+      content: '';
+      position: absolute;
+      inset: 50%;
+      width: max(100%, 44px);
+      height: max(100%, 44px);
+      transform: translate(-50%, -50%);
+    }
+  }
+}
+
 /* ------------------------------------------------------------------
    Aurora background (cheap: transform-only, will-change)
    ------------------------------------------------------------------ */
@@ -501,6 +519,17 @@ html[data-theme='y2k'] .aurora {
     animation: none !important;
   }
   .vinyl-spin {
+    animation: none !important;
+  }
+  /* Decorative keyframes are dropped outright (not just shortened) so nothing flashes. */
+  .animate-ping,
+  .animate-shimmer,
+  .animate-pulse-soft,
+  .animate-float,
+  .animate-rise,
+  .animate-fade-in,
+  .animate-spin-slow,
+  .before\:animate-shimmer::before {
     animation: none !important;
   }
 }

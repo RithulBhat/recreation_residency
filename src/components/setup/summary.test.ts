@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { DEFAULT_SETTINGS, normalizeSettings } from '@/game/presets';
 import {
   clipSummary,
+  modeHow,
   modifierLabels,
   packsSummary,
   pitchLabel,
@@ -52,10 +53,30 @@ describe('summary', () => {
       modifiers: { ...DEFAULT_SETTINGS.modifiers, reverse: true },
     });
     expect(settingsSummary(s, ['Pop Hits', 'K-Pop', '2000s'])).toBe(
-      '10 rounds · 0.1s→10s · 7 tries · Pop Hits +2 · Medium · reversed',
+      '10 rounds · 0.1s→10s · 7 tries · Pop Hits + K-Pop +1 · Medium · reversed',
     );
-    expect(packsSummary([])).toBe('No packs');
     expect(settingsSummary(normalizeSettings({ mode: 'party' }), ['Pop Hits'])).toContain('2 players');
+  });
+
+  it('names up to two packs before counting the rest', () => {
+    expect(packsSummary([])).toBe('No packs');
+    expect(packsSummary(['Pop Hits'])).toBe('Pop Hits');
+    // a custom pack next to a curated one is named, never hidden behind "+1"
+    expect(packsSummary(['Pop Hits', 'Burna Boy'])).toBe('Pop Hits + Burna Boy');
+    expect(packsSummary(['Burna Boy', 'Arijit Singh'])).toBe('Burna Boy + Arijit Singh');
+    expect(packsSummary(['Pop Hits', 'K-Pop', '2000s', 'Rock'])).toBe('Pop Hits + K-Pop +2');
+  });
+
+  it('modeHow reflects the draft, not static copy', () => {
+    const preset = normalizeSettings({ mode: 'classic', stages: [0.5, 1, 2, 4] });
+    expect(modeHow(preset, 'classic')).toBe('0.5s→4s · 4 tries');
+    expect(modeHow(DEFAULT_SETTINGS, 'classic')).toBe('0.1s→10s · 7 tries');
+    expect(modeHow(normalizeSettings({ mode: 'fixed', clipLength: 0.3, tries: 1 }), 'fixed')).toBe('0.3s×1 try');
+    // other modes read the same draft (what you'd get if you picked them)
+    expect(modeHow(normalizeSettings({ clipLength: 1, blitzDuration: 60 }), 'blitz')).toBe('60s blitz · 1s clips');
+    expect(modeHow(normalizeSettings({ mode: 'survival', clipLength: 2, tries: 3, lives: 3 }), 'survival')).toBe('3 lives · 2s×3 tries');
+    expect(modeHow(normalizeSettings({ duelStyle: 'turns', stages: [0.5, 1, 2, 4] }), 'duel')).toBe('Turns · 0.5s→4s · 4 tries');
+    expect(modeHow(DEFAULT_SETTINGS, 'party')).toBe('2 players · 0.1s→10s · 7 tries');
   });
 
   it('estimates the pool size', () => {

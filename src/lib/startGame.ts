@@ -3,7 +3,7 @@
  * Challenge, Duel lobby, Results "play again"): normalize settings → resolve the track pool →
  * drop recently played tracks when affordable → hand the pool to the game store.
  */
-import { buildPool } from '@/lib/catalog';
+import { buildPool, getPack } from '@/lib/catalog';
 import { loadCustomPacks } from '@/lib/customPacks';
 import { getTrack } from '@/lib/deezer';
 import { normalizeSettings } from '@/game/presets';
@@ -26,6 +26,15 @@ export class PoolError extends Error {
 export interface LoadedGame {
   settings: GameSettings;
   tracks: Track[];
+}
+
+/** `Pop Hits`, `Pop Hits and Burna Boy`, `Pop Hits and 2 more` — pack names for error copy. */
+function describePacks(ids: readonly string[]): string {
+  const names = ids.map((id) => getPack(id)?.name).filter((n): n is string => typeof n === 'string' && n.length > 0);
+  if (names.length === 0) return 'these packs';
+  if (names.length === 1) return names[0]!;
+  if (names.length === 2) return `${names[0]} and ${names[1]}`;
+  return `${names[0]} and ${names.length - 1} more`;
 }
 
 /** Minimum pool size we insist on after excluding recent tracks. */
@@ -53,8 +62,9 @@ export async function loadPool(input: Partial<GameSettings>): Promise<LoadedGame
       explicitFilter: settings.explicitFilter,
     });
   } catch (e) {
-    const detail = e instanceof Error ? e.message : 'unknown error';
-    throw new PoolError(`Couldn't load songs (${detail}). Check your connection and try again.`, 'network');
+    // The technical reason stays in the console; the player gets a sentence they can act on.
+    console.warn('[songooner] could not resolve the track pool', settings.packIds, e);
+    throw new PoolError(`Couldn't load songs for ${describePacks(settings.packIds)}. Check your connection and try again.`, 'network');
   }
   if (tracks.length === 0) throw new PoolError('No playable songs match this selection. Try other packs or difficulty.', 'empty');
 

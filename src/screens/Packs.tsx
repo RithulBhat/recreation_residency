@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Tabs, type TabItem } from '@/components/ui/Tabs';
 import { CustomPackList, CustomPackTools, PackSelectionBar, useCustomPacks } from '@/components/setup';
+import { ReplaceGameDialog } from '@/components/ResumeGame';
 
 type Tab = 'all' | PackCategory;
 
@@ -55,6 +56,7 @@ export default function Packs() {
   return (
     <div className="flex flex-col gap-6 pb-36 sm:gap-8">
       <SectionHeading
+        as="h1"
         eyebrow="Pack browser"
         title={
           <span id="packs-title">
@@ -143,6 +145,7 @@ export default function Packs() {
           if (selected.length) play(selected);
         }}
       />
+      <ReplaceGameDialog game={game} />
     </div>
   );
 }

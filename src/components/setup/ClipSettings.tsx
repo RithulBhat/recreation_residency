@@ -41,7 +41,19 @@ export function ClipSettings() {
           onChange={onClipMode}
           options={[
             { value: 'fixed', label: 'Fixed clip', icon: <Timer /> },
-            { value: 'escalating', label: 'Escalating stages', icon: <Layers />, disabled: mode === 'blitz' },
+            {
+              value: 'escalating',
+              // The full label does not fit next to "Fixed clip" on 320 px screens.
+              label: (
+                <>
+                  <span className="max-[359px]:hidden">Escalating stages</span>
+                  <span className="min-[360px]:hidden">Stages</span>
+                </>
+              ),
+              'aria-label': 'Escalating stages',
+              icon: <Layers />,
+              disabled: mode === 'blitz',
+            },
           ]}
         />
         {hint && <p className="mt-2 text-xs text-muted">{hint}</p>}

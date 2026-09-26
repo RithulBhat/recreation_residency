@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { ElementType, ReactNode } from 'react';
 import { cn } from './cn';
 
 export interface EmptyStateProps {
@@ -8,9 +8,12 @@ export interface EmptyStateProps {
   action?: ReactNode;
   className?: string;
   size?: 'sm' | 'md';
+  /** Heading element for the title. Default h3; pass `h1` when the empty state is the whole page. */
+  as?: ElementType;
 }
 
-export function EmptyState({ icon, title, description, action, className, size = 'md' }: EmptyStateProps) {
+export function EmptyState({ icon, title, description, action, className, size = 'md', as }: EmptyStateProps) {
+  const Title: ElementType = as ?? 'h3';
   return (
     <div
       className={cn(
@@ -30,7 +33,7 @@ export function EmptyState({ icon, title, description, action, className, size =
           {icon}
         </div>
       )}
-      <h3 className={cn('font-display font-semibold text-fg', size === 'sm' ? 'text-base' : 'text-lg')}>{title}</h3>
+      <Title className={cn('font-display font-semibold text-fg', size === 'sm' ? 'text-base' : 'text-lg')}>{title}</Title>
       {description && <p className="max-w-sm text-sm text-muted">{description}</p>}
       {action && <div className="mt-2">{action}</div>}
     </div>

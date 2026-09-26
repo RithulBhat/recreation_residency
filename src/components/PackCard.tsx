@@ -123,7 +123,7 @@ export function PackCard({ pack, selected = false, onToggle, onPlay, size = 'md'
             onPlay(pack.id);
           }}
           className={cn(
-            'absolute bottom-3 right-3 z-[2] grid size-10 place-items-center rounded-full bg-gradient-accent text-accent-fg shadow-glow transition-[opacity,transform] duration-200 active:scale-90',
+            'touch-hit-44 absolute bottom-3 right-3 z-[2] grid size-10 place-items-center rounded-full bg-gradient-accent text-accent-fg shadow-glow transition-[opacity,transform] duration-200 active:scale-90',
             'md:translate-y-1 md:opacity-0 md:group-hover:translate-y-0 md:group-hover:opacity-100 md:focus-visible:translate-y-0 md:focus-visible:opacity-100',
           )}
         >

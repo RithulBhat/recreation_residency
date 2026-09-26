@@ -64,7 +64,7 @@ export function SegmentedControl<T extends string>({
       aria-label={ariaLabel}
       onKeyDown={onKeyDown}
       className={cn(
-        'glass inline-flex items-stretch rounded-full p-1',
+        'glass inline-flex max-w-full items-stretch rounded-full p-1',
         fullWidth && 'flex w-full',
         disabled && 'opacity-50 pointer-events-none',
         className,
@@ -84,7 +84,7 @@ export function SegmentedControl<T extends string>({
             disabled={o.disabled}
             onClick={() => onChange(o.value)}
             className={cn(
-              'relative inline-flex items-center justify-center whitespace-nowrap rounded-full font-semibold transition-colors duration-150 disabled:opacity-40',
+              'touch-hit-44 relative inline-flex min-w-0 items-center justify-center whitespace-nowrap rounded-full font-semibold transition-colors duration-150 disabled:opacity-40',
               sizes[size],
               fullWidth && 'flex-1',
               selected ? 'text-accent-fg' : 'text-muted hover:text-fg',

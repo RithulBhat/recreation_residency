@@ -50,6 +50,15 @@ describe('hints', () => {
     expect(maxHints({ hintsEnabled: false, tries: 7 })).toBe(0);
   });
 
+  it('blitz never offers hints, even though it normalises to 3 tries', () => {
+    const blitz = normalizeSettings({ mode: 'blitz', hintsEnabled: true });
+    expect(blitz.tries).toBe(3);
+    expect(maxHints(blitz)).toBe(0);
+    expect(maxHints({ hintsEnabled: true, tries: 3, mode: 'blitz' })).toBe(0);
+    expect(maxHints({ hintsEnabled: true, tries: 3, mode: 'survival' })).toBe(2);
+    expect(availableHints(blitz, round())).toEqual([]);
+  });
+
   it('availableHints excludes used/unavailable kinds and respects the budget', () => {
     const settings = normalizeSettings({ mode: 'classic' });
     expect(availableHints(settings, round())).toEqual(['year', 'artistInitials', 'coverPeek', 'firstLetter', 'album']);
