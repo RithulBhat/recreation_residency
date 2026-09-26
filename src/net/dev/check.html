@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Songooner duel check</title>
+    <style>
+      body { font: 14px ui-monospace, monospace; background: #0b0b12; color: #e5e7eb; padding: 16px; }
+      b { color: #22d3ee; }
+    </style>
+  </head>
+  <body>
+    <!-- Dev-only harness, never part of the production build. See ./check.ts -->
+    <p>role <b id="role">?</b> · code <b id="code">?</b> · status <b id="status">boot</b> · latency <b id="latency">-</b></p>
+    <p>opponent <b id="opponent">-</b> · echo <b id="echo">-</b></p>
+    <pre id="log"></pre>
+    <script type="module" src="./check.ts"></script>
+  </body>
+</html>
