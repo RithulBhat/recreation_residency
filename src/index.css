@@ -238,10 +238,14 @@ html[data-theme='daylight'] {
    ------------------------------------------------------------------ */
 
 @layer base {
+  /* The viewport (html) is the ONLY scroll container. Keep overflow/overscroll OFF body:
+     with overflow-x on both html and body, body becomes its own scroll container and
+     overscroll-behavior on it blocks wheel/trackpad gestures from chaining to the viewport. */
   html {
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
     overflow-x: hidden;
+    overscroll-behavior-y: none;
     scroll-behavior: smooth;
   }
   html,
@@ -257,8 +261,6 @@ html[data-theme='daylight'] {
     font-feature-settings: 'ss01', 'cv11';
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    overflow-x: hidden;
-    overscroll-behavior-y: none;
     transition: background-color 0.35s ease, color 0.35s ease;
   }
   ::selection {
