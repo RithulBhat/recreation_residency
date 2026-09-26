@@ -57,6 +57,10 @@ describe('normalizeTitle', () => {
     ['Numb Remix', 'numb'],
     ['Remix', 'remix'],
     ['Stayin Alive', 'stayin alive'],
+    ['T.N.T.', 't n t'],
+    ['P.Y.T.', 'p y t'],
+    ['Rock N Roll', 'rock and roll'],
+    ["Rock 'N' Roll", 'rock and roll'],
   ];
   it.each(cases)('%j → %j', (input, expected) => {
     expect(normalizeTitle(input)).toBe(expected);

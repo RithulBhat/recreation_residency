@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Pack, Track } from '@/types/catalog';
+import type { Pack, PackSource, Track } from '@/types/catalog';
 
 /**
  * The Deezer fetchers are mocked at the module boundary so pool building, dedupe and the
@@ -167,6 +167,14 @@ describe('resolvePack', () => {
     expect(fetchers.getChartTracks).toHaveBeenCalledWith(132, 100);
     expect(fetchers.getArtistTop).toHaveBeenCalledWith(12246, 100);
     expect(fetchers.getAlbumTracks).toHaveBeenCalledWith(99);
+  });
+
+  it('ignores a source of unknown kind instead of rejecting the whole pack (P3-13)', async () => {
+    fetchers.getArtistTop.mockResolvedValue([track({ id: 5 })]);
+    const bogus = { kind: 'nope', id: 1 } as unknown as PackSource;
+    const tracks = await resolvePack(pack({ id: 'tampered', sources: [bogus, { kind: 'artist', id: 2 }] }));
+    expect(tracks.map((t) => t.id)).toEqual([5]);
+    await expect(resolvePack(pack({ id: 'only-bogus', sources: [bogus] }))).resolves.toEqual([]);
   });
 
   it('dedupes across sources, first source wins', async () => {
@@ -405,6 +413,16 @@ describe('getDailyPack', () => {
       const date = new Date(Date.UTC(2026, 0, 1 + d)).toISOString().slice(0, 10);
       const picked = getDailyPack(date);
       expect(picked.featured === true || picked.category === 'genre').toBe(true);
+    }
+  });
+
+  it('never picks a chart-sourced pack — charts rotate, so the daily would differ per player (P2-2)', () => {
+    const eligible = PACKS.filter((p) => p.featured === true || p.category === 'genre');
+    expect(eligible.some((p) => p.sources.some((s) => s.kind === 'chart'))).toBe(true); // the exclusion matters
+    for (let d = 0; d < 365; d++) {
+      const date = new Date(Date.UTC(2026, 0, 1 + d)).toISOString().slice(0, 10);
+      const picked = getDailyPack(date);
+      expect(picked.sources.some((s) => s.kind === 'chart'), `${date} → ${picked.id}`).toBe(false);
     }
   });
 

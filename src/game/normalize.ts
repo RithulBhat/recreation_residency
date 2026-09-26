@@ -154,7 +154,8 @@ function mapTokens(s: string): string {
   const tokens = s.split(' ');
   return tokens
     .map((t, i) => {
-      if (t === 'n' && i > 0 && i < tokens.length - 1) return 'and';
+      // "rock n roll" → "rock and roll", but leave the N of an initialism alone ("t n t")
+      if (t === 'n' && i > 0 && i < tokens.length - 1 && tokens[i - 1].length >= 2 && tokens[i + 1].length >= 2) return 'and';
       return TOKEN_MAP[t] ?? t;
     })
     .join(' ');

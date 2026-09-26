@@ -158,6 +158,21 @@ describe('normalizeSettings', () => {
     expect(normalizeSettings({ packIds: [] }).packIds).toEqual(['pop-hits']);
   });
 
+  it('party rounds snap UP to a multiple of the player count (P3-7)', () => {
+    const three = DEFAULT_PLAYERS.slice(0, 3);
+    expect(normalizeSettings({ mode: 'party', rounds: 10, players: three }).rounds).toBe(12);
+    expect(normalizeSettings({ mode: 'party', rounds: 12, players: three }).rounds).toBe(12);
+    expect(normalizeSettings({ mode: 'party', rounds: 1, players: three }).rounds).toBe(3);
+    expect(normalizeSettings({ mode: 'party', rounds: 0, players: three }).rounds).toBe(0); // endless stays endless
+    expect(normalizeSettings({ mode: 'party', rounds: 200, players: three }).rounds).toBe(198); // never past the cap
+    expect(normalizeSettings({ mode: 'party', rounds: 7, players: DEFAULT_PLAYERS.slice(0, 4) }).rounds).toBe(8);
+    // players fill from defaults first (party minimum is 2)
+    expect(normalizeSettings({ mode: 'party', rounds: 7, players: [] }).rounds).toBe(8);
+    // other modes are left alone
+    expect(normalizeSettings({ mode: 'duel', rounds: 7 }).rounds).toBe(7);
+    expect(normalizeSettings({ mode: 'classic', rounds: 7 }).rounds).toBe(7);
+  });
+
   it('maxClipLength follows the mode', () => {
     expect(maxClipLength(normalizeSettings({ mode: 'classic' }))).toBe(10);
     expect(maxClipLength(normalizeSettings({ mode: 'fixed', clipLength: 2 }))).toBe(2);

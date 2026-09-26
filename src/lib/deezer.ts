@@ -113,9 +113,16 @@ type CallbackHost = Record<string, unknown>;
 
 export const JSONP_TIMEOUT_MS = 15_000;
 
+/** After a timeout the callback global stays around as a no-op this long, so a late script never throws. */
+export const LATE_CALLBACK_GRACE_MS = 30_000;
+
+const LATE_CALLBACK_NOOP = (): void => {};
+
 /**
  * Call a Deezer endpoint via JSONP. Cleans up the script tag *and* the global callback on
- * success, error and timeout. Rejects with `DeezerError` for `{error}` payloads.
+ * success, error and timeout (after a timeout the callback is replaced by a no-op stub for
+ * `LATE_CALLBACK_GRACE_MS`, since a slow response would otherwise call a deleted global and
+ * throw a ReferenceError). Rejects with `DeezerError` for `{error}` payloads.
  */
 export function jsonp<T>(url: string, opts?: { timeoutMs?: number }): Promise<T> {
   return new Promise<T>((resolve, reject) => {
@@ -141,6 +148,10 @@ export function jsonp<T>(url: string, opts?: { timeoutMs?: number }): Promise<T>
 
     timer = setTimeout(() => {
       cleanup();
+      host[name] = LATE_CALLBACK_NOOP;
+      setTimeout(() => {
+        if (host[name] === LATE_CALLBACK_NOOP) delete host[name];
+      }, LATE_CALLBACK_GRACE_MS);
       reject(new DeezerError(`Deezer request timed out after ${opts?.timeoutMs ?? JSONP_TIMEOUT_MS}ms`, -2, 'TimeoutError'));
     }, opts?.timeoutMs ?? JSONP_TIMEOUT_MS);
 
@@ -442,8 +453,9 @@ export function isPreviewFresh(track: Track, marginSec = 300): boolean {
   if (!track.preview) return false;
   const exp = previewExpiry(track.preview);
   if (exp !== null) return exp - marginSec > Date.now() / 1000;
-  // No expiry in the url — fall back to how long ago we fetched it.
-  return Date.now() - track.previewFetchedAt < CACHE_TTL_MS;
+  // No expiry in the url — fall back to how long ago we fetched it, assuming the usual signed
+  // lifetime (PREVIEW_TTL_SEC) minus the same safety margin. Never the 6 h list-cache TTL.
+  return Date.now() - track.previewFetchedAt < (PREVIEW_TTL_SEC - marginSec) * 1000;
 }
 
 /* --------------------------------------------------------- public endpoints */

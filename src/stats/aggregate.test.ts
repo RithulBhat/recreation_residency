@@ -1,4 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { createInitialState, reduce } from '@/game/engine';
+import { normalizeSettings } from '@/game/presets';
+import { createRng } from '@/game/rng';
 import {
   MAX_TRACKS,
   accuracy,
@@ -25,6 +28,7 @@ import {
   duelGame,
   fixedGame,
   makeGame,
+  makeTrack,
   partyGame,
   survivalGame,
 } from './testFactory';
@@ -78,6 +82,27 @@ describe('playedRounds / roundOutcome', () => {
   it('counts an unresolved round that was guessed on', () => {
     const game = makeGame({ rounds: [{ shape: 'won' }, { shape: 'unresolved' }] });
     expect(playedRounds(game)).toHaveLength(2);
+  });
+
+  it('ignores a round the engine auto-skipped before any guess — blitz clock ran out, or quit (P3-9)', () => {
+    const game = makeGame({ rounds: [{ shape: 'won' }, { shape: 'skipped', tryIndex: 0 }] });
+    expect(game.rounds[1]).toMatchObject({ status: 'skipped', guesses: [] });
+    expect(playedRounds(game)).toHaveLength(1);
+    expect(summarizeGame(game)).toMatchObject({ rounds: 1, correct: 1 });
+    // a round the player skipped after guessing on it still counts
+    const skippedLater = makeGame({ rounds: [{ shape: 'won' }, { shape: 'skipped', tryIndex: 1 }] });
+    expect(playedRounds(skippedLater)).toHaveLength(2);
+  });
+
+  it('blitz: the round left open when the clock runs out does not lower accuracy', () => {
+    const settings = normalizeSettings({ mode: 'blitz', blitzDuration: 15, clipLength: 1, packIds: ['x'] });
+    const tracks = Array.from({ length: 5 }, (_, i) => makeTrack({ id: i + 1, title: `Song ${i + 1}` }));
+    let s = reduce(createInitialState(), { type: 'start', settings, tracks, now: 0 }, createRng('blitz'));
+    s = reduce(s, { type: 'guess', text: s.rounds[0].track.title, now: 1000 });
+    s = reduce(s, { type: 'tick', now: 15_000 });
+    expect(s.status).toBe('finished');
+    expect(s.rounds.map((r) => r.status)).toEqual(['won', 'skipped']);
+    expect(summarizeGame(s)).toMatchObject({ rounds: 1, correct: 1 });
   });
 
   it('describes a win', () => {

@@ -67,8 +67,13 @@ describe('resultGrid', () => {
   });
 
   it('falls back to the starting clip when nothing was heard', () => {
-    const game = makeGame({ rounds: [{ shape: 'skipped', tryIndex: 0, clip: 0 }] });
-    expect(resultGrid(game)).toBe('⬛ 0.1s');
+    const game = makeGame({ rounds: [{ shape: 'lost', tryIndex: 0, clip: 0 }] });
+    expect(resultGrid(game)).toBe('🟥 0.1s');
+  });
+
+  it('omits a round the engine auto-skipped before any guess (blitz clock / quit)', () => {
+    const game = makeGame({ rounds: [{ shape: 'won' }, { shape: 'skipped', tryIndex: 0 }] });
+    expect(resultGrid(game).split('\n')).toHaveLength(1);
   });
 
   it('is empty for a game with no played rounds', () => {

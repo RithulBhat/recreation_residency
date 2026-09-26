@@ -28,6 +28,12 @@ const twentyOne = t('Stressed Out', 'Twenty One Pilots');
 const pink = t('So What', 'P!nk');
 const kanye = t('Stronger', 'Kanye West');
 const hallOates = t('Maneater', 'Daryl Hall & John Oates');
+const kesariya = t('Kesariya (From "Brahmāstra")', 'Pritam');
+const runningUp = t('Running Up That Hill (A Deal With God)', 'Kate Bush');
+const tnt = t('T.N.T.', 'AC/DC');
+const stan = t('Stan', 'Eminem');
+const love = t('Love', 'Lana Del Rey');
+const hold = t('Hold', 'Someone');
 
 const correct = (text: string, track: Track, target: 'title' | 'artist' | 'both' = 'title') =>
   expect(matchGuess(text, track, target).verdict, `${text} vs ${track.title}`).toBe('correct');
@@ -107,6 +113,37 @@ describe('matchGuess — titles', () => {
     correct('I Wanna Dance with Somebody (Who Loves Me)', wanna);
     correct('i wanna dance with somebody who loves me', wanna);
     wrong('who loves me', wanna);
+  });
+
+  it('accepts a full title typed without its brackets (P2-4)', () => {
+    correct('kesariya from brahmastra', kesariya);
+    correct('Kesariya', kesariya);
+    correct('Kesariya (From "Brahmastra")', kesariya);
+    expect(titleVariants(kesariya)).toEqual(expect.arrayContaining(['kesariya', 'kesariya from brahmastra']));
+    correct('running up that hill a deal with god', runningUp);
+    correct('Running Up That Hill', runningUp);
+    wrong('a deal with god', runningUp);
+    correct('stay with justin bieber', stay);
+    wrong('Stay With Me', stay);
+  });
+
+  it('keeps initialisms intact: T.N.T. is "t n t", not "t and t" (P3-1)', () => {
+    correct('tnt', tnt);
+    correct('TNT', tnt);
+    correct('t.n.t', tnt);
+    correct('T.N.T.', tnt);
+    expect(titleVariants(tnt)).toContain('t n t');
+  });
+
+  it('needs an exact match for 4-letter titles; one edit is tolerated from 5 letters (P3-2)', () => {
+    correct('Stan', stan);
+    correct('stan', stan);
+    wrong('Stay', stan);
+    wrong('Stan', stay);
+    wrong('Lose', love);
+    wrong('Gold', hold);
+    correct('Hello', hello);
+    correct('helo', hello); // 5-letter title, one edit
   });
 
   it('handles K-pop hangul + romanization', () => {

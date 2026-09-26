@@ -7,7 +7,8 @@
  *
  * Title rules (any title variant vs any guess variant):
  *   - normalized equality, or loose (letters+digits only) equality
- *   - Damerau-Levenshtein distance ≤ max(1, floor(len × 0.2)) when both sides are ≥ 4 chars
+ *   - Damerau-Levenshtein distance ≤ max(1, floor(len × 0.2)) when the title is ≥ 5 chars and the
+ *     guess ≥ 4 ("helo" ≈ "Hello"); 4-letter titles need an exact match ("Stan" ≠ "Stay")
  *   - token-set Jaccard ≥ 0.85
  *   - the guess equals the title with its trailing parenthetical removed
  *   - never a plain prefix/containment match ("Stay" ≠ "Stay With Me")
@@ -115,6 +116,10 @@ export function titleVariants(track: Pick<Track, 'title' | 'titleFull'>): string
     // title with every bracketed segment removed ("I Wanna Dance with Somebody (Who Loves Me)")
     const noBrackets = normalizeTitle(stripAllBrackets(raw));
     if (noBrackets) out.push(noBrackets);
+    // brackets flattened but their content kept ('Kesariya (From "Brahmāstra")' → "kesariya from
+    // brahmastra"), so a full title typed without its parentheses still matches
+    const flatBrackets = normalizeTitle(raw.replace(/[()[\]{}]/g, ' '));
+    if (flatBrackets) out.push(flatBrackets);
     // title before a " - " suffix ("Song - Part 2" → "song") only when the suffix is short-ish
     const beforeDash = normalizeTitle(stripDashSuffix(raw));
     if (beforeDash && beforeDash !== n) out.push(beforeDash);
@@ -198,7 +203,7 @@ export function matchTitleVariants(guessVariants: readonly string[], variants: r
         best = Math.max(best, 0.98);
         continue;
       }
-      if (g.length >= 4 && v.length >= 4 && sameDigits(g, v)) {
+      if (g.length >= 4 && v.length >= 5 && sameDigits(g, v)) {
         const thr = fuzzyThreshold(v.length);
         const d = damerauLevenshtein(g, v, thr);
         if (d <= thr) {

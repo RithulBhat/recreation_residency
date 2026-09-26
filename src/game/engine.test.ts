@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { GameAction, GameSettings, GameState, Track } from '@/types';
 import { BLITZ_PENALTY_MS, createInitialState, pickStartOffset, reduce } from './engine';
-import { makeTrack } from './fixtures';
+import { makeTrack, makeTracks } from './fixtures';
 import { DEFAULT_PLAYERS, normalizeSettings } from './presets';
 import { createRng } from './rng';
 import { currentClipLength, currentRound, triesLeft } from './selectors';
@@ -66,6 +66,33 @@ describe('start', () => {
     const b = reduce(createInitialState(), { type: 'start', settings, tracks: pool, now: T0 }, createRng('rng-1'));
     expect(a.id).toBe(b.id);
     expect(a.queue.map((t) => t.id)).toEqual(b.queue.map((t) => t.id));
+  });
+
+  it('seeded order survives a track missing from the pool — only that track drops out (P2-2)', () => {
+    const big = Array.from({ length: 300 }, (_, i) => makeTrack({ id: i + 1, title: `Song ${i + 1}` }));
+    const seed = 'daily-2026-09-26';
+    const a = start({ mode: 'classic', rounds: 10 }, big, seed);
+    const b = start({ mode: 'classic', rounds: 10 }, big.filter((t) => t.id !== 137), seed);
+    const orderA = [a.rounds[0].track.id, ...a.queue.map((t) => t.id)];
+    const orderB = [b.rounds[0].track.id, ...b.queue.map((t) => t.id)];
+    expect(orderB).toEqual(orderA.filter((id) => id !== 137));
+    expect(orderA).not.toEqual(big.map((t) => t.id)); // still a permutation, not the input order
+    // the pool's input order does not matter either (different cache snapshots on two devices)
+    const c = start({ mode: 'classic', rounds: 10 }, [...big].reverse(), seed);
+    expect([c.rounds[0].track.id, ...c.queue.map((t) => t.id)]).toEqual(orderA);
+    // offsets stay deterministic too
+    expect(a.id).toBe(b.id);
+    expect(a.rounds[0].startOffset).toBe(c.rounds[0].startOffset);
+  });
+
+  it('unseeded runs are shuffled by the rng (different rngs → different orders)', () => {
+    const settings = normalizeSettings({ mode: 'classic' });
+    expect(settings.seed).toBeUndefined();
+    const big = makeTracks(40);
+    const a = reduce(createInitialState(), { type: 'start', settings, tracks: big, now: T0 }, createRng('rng-1'));
+    const b = reduce(createInitialState(), { type: 'start', settings, tracks: big, now: T0 }, createRng('rng-2'));
+    expect(a.queue.map((t) => t.id)).not.toEqual(b.queue.map((t) => t.id));
+    expect(a.queue.map((t) => t.id)).not.toEqual(big.slice(1).map((t) => t.id));
   });
 
   it('dedupes tracks by id and finishes immediately with no tracks', () => {
@@ -426,6 +453,19 @@ describe('duel — turns & party rotation', () => {
     expect(s.players.map((p) => p.correct)).toEqual([1, 0, 1]);
     expect(s.players[0].score).toBeGreaterThan(0);
     expect(s.players[1].score).toBe(0);
+  });
+
+  it('party: rounds snap to a multiple of the player count so turns are equal (P3-7)', () => {
+    const players = DEFAULT_PLAYERS.slice(0, 3);
+    let s = start({ mode: 'party', clipMode: 'fixed', clipLength: 1, tries: 1, rounds: 10, players: [...players] }, makeTracks(30));
+    expect(s.settings.rounds).toBe(12);
+    const turns: Record<string, number> = {};
+    while (s.status !== 'finished') {
+      const id = currentRound(s)!.activePlayerId!;
+      turns[id] = (turns[id] ?? 0) + 1;
+      s = run(s, { type: 'giveUp', now: T0 + 1 }, { type: 'next', now: T0 + 2 });
+    }
+    expect(turns).toEqual({ p1: 4, p2: 4, p3: 4 });
   });
 
   it('duel turns alternates two players', () => {

@@ -114,15 +114,26 @@ export function progress(s: GameState): { round: number; total: number } {
 }
 
 /**
+ * True once the player has listened to (or otherwise acted on) the round: a play on this try, an
+ * earlier try consumed, or a guess recorded. The round clock only runs from that moment — the
+ * engine resets `startedAt` on the first play and refuses to time out before it.
+ */
+export function hasListened(round: Pick<Round, 'playsThisTry' | 'tryIndex' | 'guesses'>): boolean {
+  return round.playsThisTry > 0 || round.tryIndex > 0 || round.guesses.length > 0;
+}
+
+/**
  * Milliseconds left on the active clock (blitz game clock, else the round timer), or null when
- * nothing is ticking.
+ * nothing is ticking. Before the first listen the round timer reads as full (it has not started).
  */
 export function timeLeftMs(s: GameState, now: number): number | null {
   if (s.status !== 'playing') return null;
   if (s.settings.mode === 'blitz' && s.blitzEndsAt !== undefined) return Math.max(0, s.blitzEndsAt - now);
   const r = currentRound(s);
   if (s.settings.roundTimer > 0 && r && r.status === 'playing') {
-    return Math.max(0, r.startedAt + s.settings.roundTimer * 1000 - now);
+    const full = s.settings.roundTimer * 1000;
+    if (!hasListened(r)) return full;
+    return Math.max(0, r.startedAt + full - now);
   }
   return null;
 }

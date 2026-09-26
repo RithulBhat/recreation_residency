@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { GameState, Track } from '@/types';
-import { createInitialState, reduce } from './engine';
+import { createInitialState, hasListened, reduce } from './engine';
 import { makeTrack } from './fixtures';
 import { DEFAULT_PLAYERS, normalizeSettings } from './presets';
 import {
@@ -91,11 +91,30 @@ describe('selectors', () => {
     expect(timeLeftMs(b, T0 + 10000)).toBe(20000);
     expect(timeLeftMs(b, T0 + 40000)).toBe(0);
     let r = begin({ mode: 'classic', roundTimer: 20 });
-    expect(timeLeftMs(r, T0 + 5000)).toBe(15000);
+    expect(timeLeftMs(r, T0 + 5000)).toBe(20000); // not listened yet: the ring stays full
     r = reduce(r, { type: 'play', now: T0 + 5000 });
     expect(timeLeftMs(r, T0 + 5000)).toBe(20000);
+    expect(timeLeftMs(r, T0 + 9000)).toBe(16000);
     expect(elapsedMs(r, T0 + 7000)).toBe(2000);
     expect(timeLeftMs(begin({ mode: 'classic' }), T0)).toBeNull();
+  });
+
+  it('round-timer ring stays full until the first listen, in step with tick (P2-1)', () => {
+    let s = begin({ mode: 'classic', roundTimer: 20 });
+    expect(hasListened(currentRound(s)!)).toBe(false);
+    // 25 s of reading the hints without pressing play: no drain, and tick does not time out
+    expect(timeLeftMs(s, T0 + 25_000)).toBe(20_000);
+    expect(reduce(s, { type: 'tick', now: T0 + 25_000 })).toBe(s);
+    s = reduce(s, { type: 'play', now: T0 + 25_000 });
+    expect(hasListened(currentRound(s)!)).toBe(true);
+    expect(timeLeftMs(s, T0 + 25_000)).toBe(20_000);
+    expect(timeLeftMs(s, T0 + 30_000)).toBe(15_000);
+    expect(timeLeftMs(s, T0 + 50_000)).toBe(0);
+    // acting on the round without playing (a skip) also starts the clock, as tick already assumes
+    let k = begin({ mode: 'classic', roundTimer: 20 });
+    k = reduce(k, { type: 'skip', now: T0 + 1000 });
+    expect(hasListened(currentRound(k)!)).toBe(true);
+    expect(timeLeftMs(k, T0 + 6000)).toBe(14_000);
   });
 
   it('activePlayer, leader, standings, tie, lives', () => {

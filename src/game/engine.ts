@@ -8,7 +8,7 @@
  *
  * `reduce` never mutates; invalid actions for the current status return the SAME reference,
  * so `next === prev` is a reliable "nothing happened" check.
- * `rng` is only consulted by 'start' (queue shuffle + game id). Every later random choice
+ * `rng` is only consulted by 'start' (game id, plus the queue shuffle of unseeded runs). Every later random choice
  * (start offsets) is derived by hashing `state.id`, so replaying the same seed yields the same
  * queue AND offsets without needing the rng again.
  *
@@ -18,7 +18,10 @@
  *   round-over. Blitz never enters round-over: rounds auto-advance and 'tick' ends the game.
  *
  * ## Rounds
- *   - 'start' shuffles `tracks` (deduped by id) into `queue`, opens round 0 from its head.
+ *   - 'start' orders `tracks` (deduped by id) into `queue` and opens round 0 from its head. Seeded
+ *     runs (daily / challenge / online duel) sort by a per-track hash of `seed|track.id`, so two
+ *     devices whose pools differ slightly still play the same songs in the same order; unseeded
+ *     runs are a plain rng shuffle.
  *     Start offset per `startPosition` inside a preview assumed 30 s long (or `track.duration`
  *     if shorter): start → 0; random → [0, 30 − maxClip]; middle → [10, 20]; end → [20, 30 − maxClip].
  *   - `round.startedAt` is the round clock: it is set when the round opens and RESET on the first
@@ -65,8 +68,10 @@ import { hintText, maxHints } from './hints';
 import { matchGuess } from './match';
 import { DEFAULT_SETTINGS, SOLO_PLAYER, isBuzzerDuel, isMultiplayer, maxClipLength, normalizeSettings } from './presets';
 import { createRng, hashToUnit, type Rng } from './rng';
-import { clipLengthFor, wonRounds } from './selectors';
+import { clipLengthFor, hasListened, wonRounds } from './selectors';
 import { scoreGuess } from './scoring';
+
+export { hasListened } from './selectors';
 
 export const BLITZ_PENALTY_MS = 3000;
 export const PREVIEW_LENGTH = 30;
@@ -314,6 +319,19 @@ function resolveGuesser(state: GameState, round: Round, playerId: string | undef
 // Action handlers
 // ---------------------------------------------------------------------------------------------
 
+/**
+ * Round order. Seeded: each track gets the key `hashToUnit(`${seed}|${id}`)` and the pool is sorted
+ * by it — a track missing on one device (region-locked preview, rotated playlist snapshot,
+ * recently-played exclusion) only removes itself instead of reshuffling everything. Unseeded:
+ * Fisher–Yates from the rng.
+ */
+function orderQueue(tracks: Track[], seed: string | undefined, rng: Rng): Track[] {
+  if (seed === undefined) return rng.shuffle(tracks);
+  const key = new Map<number, number>();
+  for (const t of tracks) key.set(t.id, hashToUnit(`${seed}|${t.id}`));
+  return tracks.slice().sort((a, b) => (key.get(a.id) ?? 0) - (key.get(b.id) ?? 0) || a.id - b.id);
+}
+
 function onStart(action: Extract<GameAction, { type: 'start' }>, rng?: Rng): GameState {
   const settings = normalizeSettings(action.settings);
   const r = rng ?? createRng(settings.seed);
@@ -329,7 +347,7 @@ function onStart(action: Extract<GameAction, { type: 'start' }>, rng?: Rng): Gam
     settings,
     players: buildPlayers(settings),
     activePlayerIndex: 0,
-    queue: r.shuffle(tracks),
+    queue: orderQueue(tracks, settings.seed, r),
     startedAt: action.now,
   };
   if (settings.mode === 'blitz') base.blitzEndsAt = action.now + settings.blitzDuration * 1000;
@@ -340,7 +358,7 @@ function onStart(action: Extract<GameAction, { type: 'start' }>, rng?: Rng): Gam
 function onPlay(state: GameState, now: number): GameState {
   const round = activeRound(state);
   if (!round) return state;
-  const firstListen = round.playsThisTry === 0 && round.tryIndex === 0 && round.guesses.length === 0;
+  const firstListen = !hasListened(round);
   return replaceRound(state, {
     ...round,
     playsThisTry: round.playsThisTry + 1,
@@ -478,9 +496,8 @@ function onTick(state: GameState, now: number): GameState {
   }
   const round = activeRound(state);
   // The round timer only runs once the player has actually listened (startedAt is reset on the
-  // first play); before that, a slow preview load must not burn the round.
-  const hasListened = round !== undefined && (round.playsThisTry > 0 || round.tryIndex > 0 || round.guesses.length > 0);
-  if (round && hasListened && state.settings.roundTimer > 0 && now >= round.startedAt + state.settings.roundTimer * 1000) {
+  // first play); before that, a slow preview load must not burn the round. `timeLeftMs` mirrors this.
+  if (round && hasListened(round) && state.settings.roundTimer > 0 && now >= round.startedAt + state.settings.roundTimer * 1000) {
     return onGiveUp(state, now, 'timeout');
   }
   return state;

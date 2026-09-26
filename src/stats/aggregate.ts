@@ -84,10 +84,14 @@ export function triesAvailable(settings: GameSettings): number {
 
 /**
  * Rounds that count towards stats: anything resolved, plus an unresolved round
- * the player already guessed on (blitz can end mid-round).
+ * the player already guessed on (blitz can end mid-round). A round the engine
+ * auto-marked `skipped` before any guess — the blitz clock ran out, or the
+ * player quit — was never attempted and must not lower accuracy.
  */
 export function playedRounds(state: GameState): Round[] {
-  return state.rounds.filter((r) => r.status !== 'playing' || r.guesses.length > 0);
+  return state.rounds.filter(
+    (r) => (r.status !== 'playing' && r.status !== 'skipped') || r.guesses.length > 0,
+  );
 }
 
 /** Every guess of every played round, in order. */

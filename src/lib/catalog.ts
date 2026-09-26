@@ -87,6 +87,9 @@ function resolveSource(source: PackSource): Promise<Track[]> {
       return getAlbumTracks(source.id);
     case 'search':
       return searchTracks(source.q, 100);
+    default:
+      // Unknown kind (a tampered custom pack in localStorage): contribute nothing, don't crash.
+      return Promise.resolve([]);
   }
 }
 
@@ -297,9 +300,14 @@ function hashString(value: string): number {
   return h >>> 0;
 }
 
-/** Packs eligible for the daily: featured crowd-pleasers plus every genre pack. */
+/**
+ * Packs eligible for the daily: featured crowd-pleasers plus every genre pack — minus anything
+ * built on a Deezer chart, which rotates hourly and would hand players different songs.
+ */
 function dailyPool(): Pack[] {
-  const pool = PACKS.filter((p) => p.featured === true || p.category === 'genre');
+  const pool = PACKS.filter(
+    (p) => (p.featured === true || p.category === 'genre') && !p.sources.some((s) => s.kind === 'chart'),
+  );
   return [...pool].sort((a, b) => a.id.localeCompare(b.id));
 }
 

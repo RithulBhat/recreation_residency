@@ -300,7 +300,19 @@ function normalizePlayers(raw: unknown, mode: GameMode): PlayerConfig[] {
   return out.slice(0, max);
 }
 
-/** Fill defaults, clamp ranges, derive `tries` from stages in escalating mode, sort stages. */
+/**
+ * Party: rounds snap UP to the next multiple of the player count so everyone gets the same number
+ * of turns (10 rounds / 3 players → 12). Snaps down instead when going up would exceed `max`.
+ */
+function snapToMultiple(rounds: number, n: number, max: number): number {
+  const up = Math.ceil(rounds / n) * n;
+  return up <= max ? up : Math.floor(max / n) * n;
+}
+
+/**
+ * Fill defaults, clamp ranges, derive `tries` from stages in escalating mode, sort stages, and in
+ * party mode snap `rounds` (when > 0) to a multiple of the player count (see `snapToMultiple`).
+ */
 export function normalizeSettings(input: Partial<GameSettings> | null | undefined): GameSettings {
   const s: Partial<Record<keyof GameSettings, unknown>> = input && typeof input === 'object' ? { ...input } : {};
   const d = DEFAULT_SETTINGS;
@@ -326,6 +338,12 @@ export function normalizeSettings(input: Partial<GameSettings> | null | undefine
   const seed = typeof s.seed === 'string' && s.seed.trim() !== '' ? s.seed.trim() : undefined;
   const daily = typeof s.daily === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s.daily) ? s.daily : undefined;
 
+  const players = normalizePlayers(s.players, mode);
+  let rounds = clamp(Math.round(num(s.rounds, d.rounds)), LIMITS.rounds.min, LIMITS.rounds.max);
+  if (mode === 'party' && rounds > 0 && players.length > 0) {
+    rounds = snapToMultiple(rounds, players.length, LIMITS.rounds.max);
+  }
+
   const out: GameSettings = {
     mode,
     packIds: packIds.length ? packIds : [...d.packIds],
@@ -334,7 +352,7 @@ export function normalizeSettings(input: Partial<GameSettings> | null | undefine
     clipLength,
     stages,
     tries,
-    rounds: clamp(Math.round(num(s.rounds, d.rounds)), LIMITS.rounds.min, LIMITS.rounds.max),
+    rounds,
     startPosition: oneOf(s.startPosition, START_POSITIONS, d.startPosition),
     sameStartEachTry: bool(s.sameStartEachTry, d.sameStartEachTry),
     guessTarget: oneOf(s.guessTarget, GUESS_TARGETS, d.guessTarget),
@@ -349,7 +367,7 @@ export function normalizeSettings(input: Partial<GameSettings> | null | undefine
       LIMITS.blitzDuration.max,
     ),
     lives: clamp(Math.round(num(s.lives, d.lives)), LIMITS.lives.min, LIMITS.lives.max),
-    players: normalizePlayers(s.players, mode),
+    players,
     duelStyle: oneOf(s.duelStyle, DUEL_STYLES, d.duelStyle),
     voiceHost: bool(s.voiceHost, d.voiceHost),
   };

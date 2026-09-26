@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   DeezerError,
+  LATE_CALLBACK_GRACE_MS,
   clearCache,
   getAlbumTracks,
   getArtistTop,
@@ -163,12 +164,24 @@ describe('jsonp', () => {
     expect(document.head.querySelectorAll('script').length).toBe(0);
   });
 
-  it('times out and cleans up when the callback never fires', async () => {
+  it('times out, removes the script, and leaves a no-op stub so a late response never throws (P3-4)', async () => {
     blackHoles.add('/silent');
+    vi.useFakeTimers();
+    const host = globalThis as unknown as Record<string, unknown>;
+    const stubs = () => Object.keys(host).filter((k) => k.startsWith('__sgdz_'));
     const pending = jsonp('https://api.deezer.com/silent', { timeoutMs: 20 });
-    await expect(pending).rejects.toMatchObject({ kind: 'TimeoutError', code: -2 });
+    const rejected = expect(pending).rejects.toMatchObject({ kind: 'TimeoutError', code: -2 });
+    await vi.advanceTimersByTimeAsync(20);
+    await rejected;
     expect(document.head.querySelectorAll('script').length).toBe(0);
-    expect(Object.keys(globalThis).filter((k) => k.startsWith('__sgdz_'))).toHaveLength(0);
+    // the callback global survives as a no-op for a grace period…
+    expect(stubs()).toHaveLength(1);
+    const late = host[stubs()[0]!];
+    expect(typeof late).toBe('function');
+    expect(() => (late as (payload: unknown) => void)({ data: [] })).not.toThrow();
+    // …then goes away
+    await vi.advanceTimersByTimeAsync(LATE_CALLBACK_GRACE_MS);
+    expect(stubs()).toHaveLength(0);
   });
 });
 
@@ -254,9 +267,15 @@ describe('preview freshness', () => {
     expect(isPreviewFresh({ ...base, preview: previewUrl('x', now - 10) })).toBe(false);
   });
 
-  it('falls back to previewFetchedAt when the url has no exp', () => {
+  it('falls back to previewFetchedAt when the url has no exp, for the preview lifetime minus the margin (P3-3)', () => {
     const noExp = 'https://cdnt-preview.dzcdn.net/api/1/1/x.mp3';
+    const min = 60_000;
     expect(isPreviewFresh({ ...base, preview: noExp, previewFetchedAt: Date.now() })).toBe(true);
+    expect(isPreviewFresh({ ...base, preview: noExp, previewFetchedAt: Date.now() - 5 * min })).toBe(true);
+    // 11 min old: previews live ~15 min and the default margin is 5 min → stale
+    expect(isPreviewFresh({ ...base, preview: noExp, previewFetchedAt: Date.now() - 11 * min })).toBe(false);
+    expect(isPreviewFresh({ ...base, preview: noExp, previewFetchedAt: Date.now() - 11 * min }, 10)).toBe(true);
+    expect(isPreviewFresh({ ...base, preview: noExp, previewFetchedAt: Date.now() - 16 * min }, 0)).toBe(false);
     expect(isPreviewFresh({ ...base, preview: noExp, previewFetchedAt: Date.now() - 7 * 3600_000 })).toBe(false);
   });
 

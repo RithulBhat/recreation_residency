@@ -106,6 +106,18 @@ function isRecordObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+/**
+ * A stored game record we can trust downstream: `finishedAt` / `score` / `rounds` are read
+ * unguarded (recent form, five-a-day) and `mode` indexes `byMode`, so all four must be sound.
+ */
+function isGameRecord(value: unknown): value is GameRecord {
+  if (!isRecordObject(value) || typeof value.id !== 'string') return false;
+  if (!Number.isFinite(value.finishedAt) || !Number.isFinite(value.score) || !Number.isFinite(value.rounds)) {
+    return false;
+  }
+  return typeof value.mode === 'string' && (GAME_MODES as readonly string[]).includes(value.mode);
+}
+
 /** Rebuild totals defensively from unknown JSON (import / migrate). */
 export function normalizeTotals(input: unknown): StatsTotals {
   const out = emptyTotals();
@@ -151,9 +163,7 @@ function normalizeData(input: unknown): StatsData {
   if (!isRecordObject(input)) return data;
   data.totals = normalizeTotals(input.totals);
   if (Array.isArray(input.records)) {
-    data.records = input.records
-      .filter((r): r is GameRecord => isRecordObject(r) && typeof r.id === 'string')
-      .slice(0, MAX_RECORDS);
+    data.records = input.records.filter(isGameRecord).slice(0, MAX_RECORDS);
   }
   if (isRecordObject(input.tracks)) {
     for (const value of Object.values(input.tracks)) {
