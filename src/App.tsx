@@ -13,6 +13,12 @@ const Home = lazy(() => import('@/screens/Home'));
 // The design-system showcase is a dev tool: not routed (and its chunk not referenced) in production.
 const Gallery = import.meta.env.DEV ? lazy(() => import('@/screens/Gallery')) : null;
 const Placeholder = lazy(() => import('@/screens/Placeholder'));
+const ScoutHome = lazy(() => import('@/screens/scout/Home'));
+const ScoutSetup = lazy(() => import('@/screens/scout/Setup'));
+const ScoutPlay = lazy(() => import('@/screens/scout/Play'));
+const ScoutResults = lazy(() => import('@/screens/scout/Results'));
+const ScoutDaily = lazy(() => import('@/screens/scout/Daily'));
+const ScoutStats = lazy(() => import('@/screens/scout/Stats'));
 const Packs = lazy(() => import('@/screens/Packs'));
 const Setup = lazy(() => import('@/screens/Setup'));
 const Play = lazy(() => import('@/screens/Play'));
@@ -91,12 +97,12 @@ export default function App() {
 
               {/* Highlight Scout's screens land next; the routes exist now so the links work and
                   swapping each element in is a one-line change. */}
-              <Route path={R.scout.home} element={<Placeholder />} />
-              <Route path={R.scout.setup} element={<Placeholder />} />
-              <Route path={R.scout.play} element={<Placeholder />} />
-              <Route path={R.scout.results} element={<Placeholder />} />
-              <Route path={R.scout.daily} element={<Placeholder />} />
-              <Route path={R.scout.stats} element={<Placeholder />} />
+              <Route path={R.scout.home} element={<ScoutHome />} />
+              <Route path={R.scout.setup} element={<ScoutSetup />} />
+              <Route path={R.scout.play} element={<ScoutPlay />} />
+              <Route path={R.scout.results} element={<ScoutResults />} />
+              <Route path={R.scout.daily} element={<ScoutDaily />} />
+              <Route path={R.scout.stats} element={<ScoutStats />} />
 
               {Gallery && <Route path={R.gallery} element={<Gallery />} />}
               <Route path="*" element={<Placeholder />} />
