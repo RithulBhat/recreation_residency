@@ -61,8 +61,8 @@ export function ResultActions({ state, onPlayAgain, loading }: ResultActionsProp
   const { settings } = state;
 
   const cardOptions = useMemo<ShareCardOptions>(
-    () => ({ url: siteUrl(), packLabel: packLabel(settings.packIds), rank: rankFor(totals.xp), perfectRounds: totals.perfectRounds }),
-    [settings.packIds, totals.xp, totals.perfectRounds],
+    () => ({ url: siteUrl(), packLabel: packLabel(settings.packIds), rank: rankFor(totals.xp), clubCount: totals.byClipBucket['0.1']?.correct ?? 0 }),
+    [settings.packIds, totals.xp, totals.byClipBucket],
   );
 
   // Paint the card while the tickers run so the share sheet opens inside the tap's gesture window.

@@ -207,7 +207,7 @@ describe('bragLine', () => {
 
 describe('composeCard', () => {
   it('assembles every line of a solo card', () => {
-    const model = composeCard(classicGame(), { url: 'https://songooner.app/#/', packLabel: 'Pop Hits', rank, perfectRounds: 3 });
+    const model = composeCard(classicGame(), { url: 'https://songooner.app/#/', packLabel: 'Pop Hits', rank, clubCount: 3 });
     expect(model.eyebrowLeft).toBe('SONGOONER');
     expect(model.eyebrowRight).toBe('CLASSIC · POP HITS');
     expect(model.headline).toBe('Golden ears.');
@@ -256,7 +256,7 @@ describe('composeCard', () => {
 /* ------------------------------------------------------------------ painting */
 
 describe('drawCard', () => {
-  const model = composeCard(classicGame(), { url: 'https://songooner.app/#/', packLabel: 'Pop Hits', rank, perfectRounds: 3 });
+  const model = composeCard(classicGame(), { url: 'https://songooner.app/#/', packLabel: 'Pop Hits', rank, clubCount: 3 });
 
   it('draws every text inside the canvas', () => {
     const ctx = new FakeCanvas();

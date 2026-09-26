@@ -189,8 +189,8 @@ export interface ComposeOptions {
   /** `Pop Hits` — resolved pack names. Falls back to the pack ids. */
   packLabel?: string;
   rank?: Rank | null;
-  /** Lifetime `totals.perfectRounds`. */
-  perfectRounds?: number;
+  /** Lifetime correct guesses heard at ≤ 0.1 s (`totals.byClipBucket['0.1'].correct`). */
+  clubCount?: number;
   appName?: string;
 }
 
@@ -264,8 +264,8 @@ export function composeCard(state: GameState, opts: ComposeOptions = {}): CardMo
   const score = formatScore(winner ? winner.score : record.score);
   const best = bestRound(state);
   const rank = opts.rank ? { emoji: opts.rank.emoji, title: opts.rank.title, level: opts.rank.level } : null;
-  const perfect = opts.perfectRounds ?? 0;
-  const club = perfect > 0 ? `0.1s CLUB ×${perfect}` : null;
+  const clubCount = opts.clubCount ?? 0;
+  const club = clubCount > 0 ? `0.1s CLUB ×${clubCount}` : null;
 
   const stats: string[] = [];
   if (multi && record.players) {
