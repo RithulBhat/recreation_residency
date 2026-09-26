@@ -97,12 +97,9 @@ export function useVoiceHost(options: UseVoiceHostOptions = {}): UseVoiceHost {
     host.setVoice(voiceURI);
   }, [host, voiceURI]);
 
-  useEffect(
-    () => () => {
-      host.dispose();
-    },
-    [host],
-  );
+  // Not `dispose()`: the controller lives in a ref, so React StrictMode's mount → cleanup → mount
+  // would leave it permanently disposed (announce() becomes a no-op). Cancelling speech is enough.
+  useEffect(() => () => host.cancel(), [host]);
 
   const controlled = options.enabled !== undefined;
   const onEnabledChange = options.onEnabledChange;
