@@ -11,7 +11,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "e2e": "playwright test",
-    "catalog:verify": "node scripts/verify-packs.mjs"
+    "catalog:verify": "node scripts/verify-packs.mjs",
+    "nfl:sync": "node scripts/sync-nfl.mjs"
   },
   "dependencies": {
     "canvas-confetti": "^1.9.4",

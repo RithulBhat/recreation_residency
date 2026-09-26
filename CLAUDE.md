@@ -1,4 +1,11 @@
-# Songooner — project guide
+# Rithul's Recreation Residency — project guide
+
+One static SPA hosting two games behind a hub page ("Rithul's Recreation Residency"):
+**Songooner** (guess the song) and **Highlight Scout** (guess the NFL player/team).
+Shared: design system (`src/components/ui`), themes, hooks, sfx, confetti, fuzzy matching,
+seeded RNG, scoring maths, stats/achievements, challenge links, daily runs.
+
+## Songooner
 
 Songooner is a song-guessing game ("name the track from 0.1 seconds"), a much better
 Songspot / Heardle. Static single-page app, no backend. Audio + metadata come from
@@ -81,4 +88,50 @@ duel (2 players same device: buzzer keys A / L, or turns) + online duel over Pee
 party (2–8 pass-and-play), daily (seeded `daily-YYYY-MM-DD`, pack of the day), challenge links (`#/c/<code>`).
 
 ## Routes (HashRouter)
-`/` home · `/packs` browser · `/setup` lobby/settings · `/play` game · `/results` · `/daily` · `/stats` · `/duel` online lobby · `/c/:code` challenge
+Hub: `/` Residency landing (both games) · `/gallery` design-system showcase (DEV only).
+Songooner: `/songooner` home · `/songooner/packs` · `/songooner/setup` · `/songooner/play` ·
+`/songooner/results` · `/songooner/daily` · `/songooner/stats` · `/songooner/duel` · `/songooner/c/:code`.
+Highlight Scout: `/scout` home · `/scout/setup` · `/scout/play` · `/scout/results` · `/scout/daily` · `/scout/stats`.
+Every in-app link must use these prefixes — never a bare `/setup`.
+
+---
+
+# Highlight Scout — NFL guessing game
+
+Guess the NFL player or team from progressively-revealed clues. Contracts: `src/scout/types.ts`
+(READ ONLY unless told otherwise). Engine + logic: `src/scout/`. Screens: `src/screens/scout/`.
+
+## Data (baked at build time — this is the key constraint)
+`site.api.espn.com` serves rich NFL JSON but sends **no CORS headers**, so the browser can never
+call it. `scripts/sync-nfl.mjs` (plain Node `fetch`, no CORS problem) harvests everything into
+`src/data/nfl/*.json`, which ship as lazy chunks. Re-run with `npm run nfl:sync`.
+Images ARE fetched at runtime: `a.espncdn.com` sends `Access-Control-Allow-Origin: *`, and player
+headshots are **600×436 RGBA PNGs with a transparent background** — that is what makes real
+silhouettes possible (`filter: brightness(0)` or a canvas alpha pass).
+
+Sources used by the sync script:
+- `site.api.espn.com/apis/site/v2/sports/football/nfl/teams` — 32 teams, colors, logos
+- `…/teams/{id}` — venue via `franchise.venue.fullName`
+- `…/teams/{id}/roster` — every player (id, name, jersey, position, height/weight, age, experience)
+- `sports.core.api.espn.com/v2/sports/football/leagues/nfl/athletes/{id}` — draft, college, birthplace
+- `sports.core.api.espn.com/v2/…/seasons/{yr}/types/2/leaders` — 16 statistical categories → the fame score
+- `…/nfl/scoreboard?year=&seasontype=2&week=` → `…/nfl/summary?event=` — drives/plays; scoring plays
+  carry text like `(Shotgun) C.Williams pass short right to D.Moore for 5 yards, TOUCHDOWN.`
+  Abbreviated names resolve to roster players by initial + last name within the two competing teams
+  (~85% first pass; league-wide fallback lifts it further). Plays whose target player does not
+  resolve confidently are dropped.
+
+There is **no public source of NFL highlight video**, and no dataset marks where a given player is
+in a frame — so a "video clip with a silhouette over the player" is not buildable. The silhouette,
+face-zoom and redacted-play modes cover that intent with real data.
+
+## Modes
+`silhouette` (blacked-out headshot, revealed per try) · `faceZoom` (extreme crop zooming out) ·
+`highlight` (real play text, names redacted) · `teamTrivia` (clue ladder → name the franchise) ·
+`statLine` (season stat line) · `careerPath` (draft → college → teams) · `logoZoom`.
+Each round builds a `ScoutStage[]` ladder: `visual` 0→1 plus `clues` unlocked per rung.
+
+## Difficulty
+Tiers come from `NflPlayer.fame` (0–100): `star` ≥ 80, `starter` 55–79, `rotation` 30–54,
+`deepCut` < 30. `any` = everything. Fame blends statistical-leader appearances, draft capital,
+position weighting (QB/RB/WR read as more recognizable) and experience.
