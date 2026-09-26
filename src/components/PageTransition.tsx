@@ -10,6 +10,8 @@ export interface PageTransitionProps {
 /**
  * Route transition wrapper. Pass `<Routes location={useLocation()}>` as children
  * so the exiting page keeps rendering its old route during the exit animation.
+ * Only opacity + translate are animated: a lingering `filter`/`transform` would turn this wrapper
+ * into the containing block for `position: fixed` children (bottom bars, overlays).
  */
 export function PageTransition({ children, className }: PageTransitionProps) {
   const location = useLocation();
@@ -24,9 +26,9 @@ export function PageTransition({ children, className }: PageTransitionProps) {
       <motion.div
         key={location.pathname}
         className={className}
-        initial={reduce ? { opacity: 0 } : { opacity: 0, y: 10, filter: 'blur(4px)' }}
-        animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
-        exit={reduce ? { opacity: 0 } : { opacity: 0, y: -6, filter: 'blur(4px)' }}
+        initial={reduce ? { opacity: 0 } : { opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={reduce ? { opacity: 0 } : { opacity: 0, y: -6 }}
         transition={{ duration: reduce ? 0 : 0.22, ease: [0.16, 1, 0.3, 1] }}
       >
         {children}
