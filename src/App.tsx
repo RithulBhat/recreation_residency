@@ -19,6 +19,7 @@ const ScoutPlay = lazy(() => import('@/screens/scout/Play'));
 const ScoutResults = lazy(() => import('@/screens/scout/Results'));
 const ScoutDaily = lazy(() => import('@/screens/scout/Daily'));
 const ScoutStats = lazy(() => import('@/screens/scout/Stats'));
+const ScoutChallenge = lazy(() => import('@/screens/scout/Challenge'));
 const Packs = lazy(() => import('@/screens/Packs'));
 const Setup = lazy(() => import('@/screens/Setup'));
 const Play = lazy(() => import('@/screens/Play'));
@@ -103,6 +104,7 @@ export default function App() {
               <Route path={R.scout.results} element={<ScoutResults />} />
               <Route path={R.scout.daily} element={<ScoutDaily />} />
               <Route path={R.scout.stats} element={<ScoutStats />} />
+              <Route path={R.scout.challenge} element={<ScoutChallenge />} />
 
               {Gallery && <Route path={R.gallery} element={<Gallery />} />}
               <Route path="*" element={<Placeholder />} />

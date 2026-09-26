@@ -31,6 +31,8 @@ export const R = {
     results: '/scout/results',
     daily: '/scout/daily',
     stats: '/scout/stats',
+    /** `<Route>` pattern; build a real link with `scoutChallengePath(code)`. */
+    challenge: '/scout/c/:code',
   },
 } as const;
 
