@@ -81,6 +81,7 @@ export function RankHero({ totals, className }: RankHeroProps) {
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
         <StatTile
+          variant="opaque"
           label="Total score"
           value={totals.score}
           icon={<Trophy />}
@@ -88,8 +89,9 @@ export function RankHero({ totals, className }: RankHeroProps) {
           format={(v) => formatScore(v)}
           hint={`${formatScore(Math.round(totals.games > 0 ? totals.score / totals.games : 0))} per game`}
         />
-        <StatTile label="Games" value={totals.games} icon={<Gamepad2 />} hint={`${totals.rounds} rounds played`} />
+        <StatTile variant="opaque" label="Games" value={totals.games} icon={<Gamepad2 />} hint={`${totals.rounds} rounds played`} />
         <StatTile
+          variant="opaque"
           label="Accuracy"
           value={acc * 100}
           icon={<Target />}
@@ -99,19 +101,21 @@ export function RankHero({ totals, className }: RankHeroProps) {
           hint={`${totals.correct} named · ${totals.partial} artist-only`}
         />
         <StatTile
+          variant="opaque"
           label="Best streak"
           value={totals.bestStreak}
           icon={<Flame />}
-          tone="warn"
           hint="Consecutive correct"
         />
         <StatTile
+          variant="opaque"
           label="Perfect rounds"
           value={totals.perfectRounds}
           icon={<Sparkles />}
           hint="First try, shortest clip"
         />
         <StatTile
+          variant="opaque"
           label="Time listening"
           value={formatDuration(totals.timePlayedMs)}
           icon={<Timer />}

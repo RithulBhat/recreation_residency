@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { useLocation, useParams } from 'react-router';
-import { CalendarDays, ChartColumn, Disc3, Home, Library, Link2, Play, Settings2, Swords, Trophy } from 'lucide-react';
+import { CalendarDays, ChartColumn, Home, Library, Link2, Play, SearchX, Settings2, Swords, Trophy } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -29,36 +29,55 @@ export interface PlaceholderProps {
   icon?: ReactNode;
 }
 
+/**
+ * Two jobs: a "coming online" card for a route that is known but not built yet, and the 404. Only
+ * a known route gets the optimistic badge — an unknown address is a dead end and says so.
+ */
 export default function Placeholder({ name, blurb, icon }: PlaceholderProps) {
   const { pathname } = useLocation();
   const params = useParams();
   const key = pathname.startsWith('/c/') ? '/c' : pathname;
   const meta = ROUTES[key];
-  const title = name ?? meta?.title ?? 'Not found';
-  const text = blurb ?? meta?.blurb ?? 'This route does not exist (yet). Try one of the links below.';
-  const glyph = icon ?? meta?.icon ?? <Disc3 />;
+  const known = meta !== undefined;
+  const title = name ?? meta?.title ?? 'Lost track';
+  const text = blurb ?? meta?.blurb ?? "There's nothing at this address — it may have moved, or the link got cut off. The music is this way.";
+  const glyph = icon ?? meta?.icon ?? <SearchX />;
 
   return (
     <div className="mx-auto flex min-h-[60dvh] max-w-lg flex-col items-center justify-center py-10 text-center">
-      <Card padding="lg" className="w-full overflow-hidden" glow>
-        <div className="pointer-events-none absolute -right-16 -top-16 size-56 rounded-full bg-accent opacity-20 blur-3xl" aria-hidden />
+      <Card padding="lg" className="w-full overflow-hidden" glow={known}>
+        <div
+          className={`pointer-events-none absolute -right-16 -top-16 size-56 rounded-full opacity-20 blur-3xl ${known ? 'bg-accent-vivid' : 'bg-danger'}`}
+          aria-hidden
+        />
         <div className="relative flex flex-col items-center">
-          <Badge tone="accent" dot className="mb-5">
-            Coming online
-          </Badge>
-          <div className="grid size-16 place-items-center rounded-3xl bg-gradient-accent text-accent-fg shadow-glow [&>svg]:size-7" aria-hidden>
+          {known ? (
+            <Badge tone="accent" dot className="mb-5">
+              Coming online
+            </Badge>
+          ) : (
+            <Badge tone="danger" className="mb-5">
+              404 · Not found
+            </Badge>
+          )}
+          <div
+            className={`grid size-16 place-items-center rounded-3xl [&>svg]:size-7 ${known ? 'bg-gradient-accent text-accent-fg shadow-glow' : 'bg-danger/15 text-danger'}`}
+            aria-hidden
+          >
             {glyph}
           </div>
-          <h1 className="mt-5 font-display text-2xl font-bold text-fg sm:text-3xl">{title}</h1>
-          <p className="mt-2 font-mono text-xs text-muted">
-            <Kbd size="sm">#{pathname}</Kbd>
-            {params.code && (
-              <>
-                {' '}
-                · code <span className="text-fg">{params.code}</span>
-              </>
-            )}
-          </p>
+          <h1 className="mt-5 font-display text-3xl font-bold text-fg sm:text-4xl">{title}</h1>
+          {import.meta.env.DEV && (
+            <p className="mt-2 font-mono text-xs text-muted">
+              <Kbd size="sm">#{pathname}</Kbd>
+              {params.code && (
+                <>
+                  {' '}
+                  · code <span className="text-fg">{params.code}</span>
+                </>
+              )}
+            </p>
+          )}
           <p className="mt-4 max-w-sm text-sm text-muted">{text}</p>
           <div className="mt-7 flex flex-wrap justify-center gap-2">
             <Button to="/" variant="secondary" leadingIcon={<Home />}>

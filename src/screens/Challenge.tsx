@@ -101,21 +101,27 @@ export default function Challenge() {
               <Swords className="size-7" />
             </span>
             <div className="min-w-0">
-              <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-accent">Challenge</div>
-              <h1 className="mt-1 font-display text-2xl font-black leading-tight text-fg sm:text-3xl" id="challenge-title">
+              <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-accent">
+                {typeof payload.score === 'number' ? 'Challenge · score to beat' : 'Challenge'}
+              </div>
+              {typeof payload.score === 'number' && (
+                <p className="mt-1.5" data-testid="challenge-score">
+                  <span className="text-gradient block font-mono text-5xl font-bold leading-none tabular sm:text-6xl">{formatScore(payload.score)}</span>
+                  <span className="mt-1.5 block text-sm font-semibold text-fg">Beat it.</span>
+                </p>
+              )}
+              <h1
+                className={typeof payload.score === 'number' ? 'mt-3 font-display text-lg font-bold leading-tight text-muted sm:text-xl' : 'mt-1 font-display text-2xl font-black leading-tight text-fg sm:text-3xl'}
+                id="challenge-title"
+              >
                 {by ? (
                   <>
-                    <span className="text-gradient">{by}</span> challenged you
+                    <span className={typeof payload.score === 'number' ? 'text-fg' : 'text-gradient'}>{by}</span> challenged you
                   </>
                 ) : (
                   'A friend challenged you'
                 )}
               </h1>
-              {typeof payload.score === 'number' && (
-                <p className="mt-1 text-sm text-muted">
-                  They scored <span className="font-mono text-base font-bold tabular text-fg">{formatScore(payload.score)}</span> pts. Beat it.
-                </p>
-              )}
             </div>
           </div>
 

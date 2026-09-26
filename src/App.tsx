@@ -85,7 +85,7 @@ export default function App() {
               <Route path="/duel" element={<Duel />} />
               <Route path="/c/:code" element={<Challenge />} />
               {Gallery && <Route path="/gallery" element={<Gallery />} />}
-              <Route path="*" element={<Placeholder name="Not found" />} />
+              <Route path="*" element={<Placeholder />} />
             </Routes>
           </Suspense>
         </PageTransition>
