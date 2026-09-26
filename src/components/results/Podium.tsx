@@ -43,7 +43,33 @@ function Step({ player, place, winner, delay }: { player: PlayerState; place: nu
   );
 }
 
-/** Winner podium + the rest of the field for duel / party games. */
+/** One row of the phone-width standings: place, avatar, name, score, calls and streak. */
+function Row({ player, place, winner }: { player: PlayerState; place: number; winner: boolean }) {
+  return (
+    <li
+      className={cn('flex items-center gap-3 rounded-2xl px-2 py-2.5', winner && 'border border-border-strong')}
+      style={winner ? { background: `linear-gradient(90deg, color-mix(in oklab, ${player.color} 28%, transparent), transparent 70%)` } : undefined}
+      aria-label={`${place + 1}. ${player.name}, ${points(player.score)} points`}
+    >
+      <span className="w-7 shrink-0 text-center font-mono text-sm text-muted tabular" aria-hidden>
+        {place < 3 ? MEDALS[place] : `${place + 1}.`}
+      </span>
+      <Avatar emoji={player.emoji} color={player.color} size="sm" name={player.name} active={winner} />
+      <span className="min-w-0 flex-1 truncate text-sm font-semibold text-fg">{player.name}</span>
+      <span className="shrink-0 text-right leading-tight">
+        <span className="block font-mono text-base font-bold text-fg tabular">{points(player.score)}</span>
+        <span className="block font-mono text-[11px] text-muted tabular">
+          {player.correct} ✓ · 🔥{player.bestStreak}
+        </span>
+      </span>
+    </li>
+  );
+}
+
+/**
+ * Standings for duel / party games: a podium from `sm` up, and a ranked list on phones — three
+ * avatars at three heights never fit a 390 px column.
+ */
 export function Podium({ state }: PodiumProps) {
   const ranked = standings(state);
   if (ranked.length < 2) return null;
@@ -53,18 +79,23 @@ export function Podium({ state }: PodiumProps) {
   const rest = ranked.slice(3);
 
   return (
-    <section className="glass rounded-4xl p-5" aria-label="Standings" data-testid="podium">
-      <p className="text-center font-display text-xl font-bold text-fg">
-        {tie ? "It's a tie!" : `${ranked[0].name} takes it ${ranked[0].emoji}`}
-      </p>
-      <ol className="mt-6 flex items-end justify-center gap-3 border-b border-border">
+    <section className="glass rounded-4xl p-4 sm:p-5" aria-label="Standings" data-testid="podium">
+      <h2 className="text-center font-display text-lg font-bold text-fg sm:text-xl">{tie ? "It's a tie!" : `${ranked[0].name} takes it ${ranked[0].emoji}`}</h2>
+
+      <ol className="mt-3 flex flex-col gap-1 sm:hidden" data-testid="standings-list">
+        {ranked.map((p, i) => (
+          <Row key={p.id} player={p} place={i} winner={i === 0 && !tie} />
+        ))}
+      </ol>
+
+      <ol className="mt-6 hidden items-end justify-center gap-3 border-b border-border sm:flex" data-testid="podium-steps">
         {order.map((p, i) => {
           const place = ranked.indexOf(p);
           return <Step key={p.id} player={p} place={place} winner={place === 0 && !tie} delay={0.1 + i * 0.12} />;
         })}
       </ol>
       {rest.length > 0 && (
-        <ol className="mt-3 flex flex-col divide-y divide-border" start={4}>
+        <ol className="mt-3 hidden flex-col divide-y divide-border sm:flex" start={4}>
           {rest.map((p, i) => (
             <li key={p.id} className="flex items-center gap-3 py-2 text-sm">
               <span className="w-5 font-mono text-muted">{i + 4}.</span>

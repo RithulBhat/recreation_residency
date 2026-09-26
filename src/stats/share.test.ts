@@ -2,13 +2,18 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   GRID_LEGEND,
   challengeShareText,
+  copyText,
   dailyShareText,
   formatClip,
+  formatDailyDate,
   formatScore,
   modeLabel,
+  modeTitle,
   resultGrid,
+  resultHeadline,
   roundSymbol,
   shareOrCopy,
+  shortestWinClip,
   blitzTally,
   shareText,
 } from './share';
@@ -205,5 +210,51 @@ describe('shareOrCopy', () => {
   it('fails when neither path works', async () => {
     stub('clipboard', { writeText: vi.fn().mockRejectedValue(new Error('denied')) });
     await expect(shareOrCopy('grid')).resolves.toBe('failed');
+  });
+});
+
+describe('screen labels', () => {
+  it('formats a daily date like the Daily screen', () => {
+    expect(formatDailyDate('2026-09-26', 'en-US')).toBe('Sat, Sep 26, 2026');
+    expect(formatDailyDate('2026-01-01', 'en-US')).toBe('Thu, Jan 1, 2026');
+    expect(formatDailyDate('not-a-date')).toBe('not-a-date');
+  });
+
+  it('titles a daily by its pretty date and everything else by mode', () => {
+    expect(modeTitle(dailyGame('2026-09-20'), 'en-US')).toBe('Daily · Sun, Sep 20, 2026');
+    expect(modeTitle(classicGame())).toBe('Classic');
+    expect(modeTitle(blitzGame(1, 1))).toBe('Blitz');
+  });
+
+  it('grades a game in one line', () => {
+    expect(resultHeadline({ rounds: 10, correct: 10 })).toBe('Flawless.');
+    expect(resultHeadline({ rounds: 10, correct: 8 })).toBe('Golden ears.');
+    expect(resultHeadline({ rounds: 10, correct: 5 })).toBe('Solid set.');
+    expect(resultHeadline({ rounds: 10, correct: 1 })).toBe('Warming up.');
+    expect(resultHeadline({ rounds: 10, correct: 0 })).toBe('Rough one.');
+    expect(resultHeadline({ rounds: 0, correct: 0 })).toBe('Nothing played.');
+    expect(resultHeadline({ rounds: 3, correct: 3 }, 'quit')).toBe('Called it early.');
+  });
+
+  it('finds the shortest winning clip', () => {
+    expect(shortestWinClip(classicGame())).toBe(0.1);
+    expect(shortestWinClip(makeGame({ rounds: [{ shape: 'lost' }] }))).toBeNull();
+  });
+});
+
+describe('copyText', () => {
+  const nav = globalThis.navigator;
+  afterEach(() => Reflect.deleteProperty(nav, 'clipboard'));
+
+  it('writes to the async clipboard', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(nav, 'clipboard', { value: { writeText }, configurable: true, writable: true });
+    await expect(copyText('hi')).resolves.toBe(true);
+    expect(writeText).toHaveBeenCalledWith('hi');
+  });
+
+  it('reports failure when nothing can copy', async () => {
+    Object.defineProperty(nav, 'clipboard', { value: { writeText: vi.fn().mockRejectedValue(new Error('denied')) }, configurable: true, writable: true });
+    await expect(copyText('hi')).resolves.toBe(false);
   });
 });

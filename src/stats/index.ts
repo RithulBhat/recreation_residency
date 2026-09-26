@@ -8,3 +8,4 @@ export * from './aggregate';
 export * from './rank';
 export * from './achievements';
 export * from './share';
+export * from './shareCard';

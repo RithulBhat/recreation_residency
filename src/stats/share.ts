@@ -1,10 +1,11 @@
 /**
  * Shareable results: Wordle-style emoji grids + the Web Share / clipboard bridge.
+ * The picture version lives in `./shareCard.ts` and builds on the text pieces here.
  */
 
 import type { GameMode, GameSettings, GameState, Round } from '@/types/game';
 import { playedRounds, roundOutcome, summarizeGame } from './aggregate';
-import type { DailyResult } from './types';
+import type { DailyResult, GameRecord } from './types';
 
 export const DEFAULT_APP_NAME = 'Songooner';
 
@@ -36,6 +37,19 @@ export function formatClip(seconds: number): string {
 /** `6420` → `6,420`. Fixed locale so shared text is identical everywhere. */
 export function formatScore(points: number): string {
   return Math.round(points).toLocaleString('en-US');
+}
+
+/**
+ * `2026-09-26` → `Sat, Sep 26, 2026` — the same shape the Daily screen's eyebrow uses, so the two
+ * never disagree. Parsed as a local date (a UTC parse would shift the day west of Greenwich).
+ * Anything that is not `YYYY-MM-DD` is returned untouched.
+ */
+export function formatDailyDate(dateISO: string, locale?: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateISO);
+  if (!m) return dateISO;
+  const date = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  if (Number.isNaN(date.getTime())) return dateISO;
+  return date.toLocaleDateString(locale, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
 }
 
 /** The emoji for one round. */
@@ -70,6 +84,28 @@ function startingClip(settings: GameSettings): number {
   return settings.clipLength;
 }
 
+/** Shortest clip a round was won at (seconds), or null when nothing was won. */
+export function shortestWinClip(state: GameState): number | null {
+  let best = Number.POSITIVE_INFINITY;
+  for (const round of playedRounds(state)) {
+    const o = roundOutcome(round, state.settings);
+    if (o.won && o.clipHeard > 0) best = Math.min(best, o.clipHeard);
+  }
+  return Number.isFinite(best) ? best : null;
+}
+
+/** "Flawless." / "Golden ears." / "Solid set." — the one-line verdict on a game. */
+export function resultHeadline(record: Pick<GameRecord, 'rounds' | 'correct'>, endReason?: GameState['endReason']): string {
+  if (endReason === 'quit') return 'Called it early.';
+  if (record.rounds === 0) return 'Nothing played.';
+  const acc = record.correct / record.rounds;
+  if (acc === 1) return 'Flawless.';
+  if (acc >= 0.8) return 'Golden ears.';
+  if (acc >= 0.5) return 'Solid set.';
+  if (acc > 0) return 'Warming up.';
+  return 'Rough one.';
+}
+
 function headline(appName: string, label: string, correct: number, rounds: number, score: number) {
   return `${appName} · ${label} · ${correct}/${rounds} · ${formatScore(score)} pts`;
 }
@@ -87,10 +123,16 @@ function headlineFor(appName: string, state: GameState, correct: number, rounds:
   return headline(appName, modeLabel(state), correct, rounds, score);
 }
 
-/** Mode label for a game, e.g. `Classic` or `Daily 2026-09-26`. */
+/** Mode label for a game, e.g. `Classic` or `Daily 2026-09-26` (ISO — stable in shared text). */
 export function modeLabel(state: GameState): string {
   const daily = state.settings.daily;
   return daily ? `Daily ${daily}` : (MODE_LABEL[state.settings.mode] ?? state.settings.mode);
+}
+
+/** Mode label for the screen, e.g. `Classic` or `Daily · Sat, Sep 26, 2026`. */
+export function modeTitle(state: GameState, locale?: string): string {
+  const daily = state.settings.daily;
+  return daily ? `Daily · ${formatDailyDate(daily, locale)}` : (MODE_LABEL[state.settings.mode] ?? state.settings.mode);
 }
 
 /**
@@ -137,7 +179,8 @@ export function challengeShareText(name: string, score: number, url?: string): s
   return url ? `${line}\n\n${url}` : line;
 }
 
-function isAbortError(err: unknown): boolean {
+/** A dismissed share sheet rejects with `AbortError` — the user changed their mind, nothing failed. */
+export function isAbortError(err: unknown): boolean {
   if (typeof err !== 'object' || err === null) return false;
   const name = (err as { name?: unknown }).name;
   return name === 'AbortError';
@@ -161,6 +204,20 @@ function legacyCopy(text: string): boolean {
   }
 }
 
+/** Clipboard write: async API first, `execCommand` as the fallback. */
+export async function copyText(text: string): Promise<boolean> {
+  const nav = typeof navigator === 'undefined' ? undefined : navigator;
+  if (nav && nav.clipboard && typeof nav.clipboard.writeText === 'function') {
+    try {
+      await nav.clipboard.writeText(text);
+      return true;
+    } catch {
+      // fall through to the legacy path
+    }
+  }
+  return legacyCopy(text);
+}
+
 /**
  * Native share sheet when available, clipboard otherwise.
  * A dismissed share sheet counts as `'shared'` — nothing failed, the user just
@@ -176,13 +233,5 @@ export async function shareOrCopy(text: string): Promise<'shared' | 'copied' | '
       if (isAbortError(err)) return 'shared';
     }
   }
-  if (nav && nav.clipboard && typeof nav.clipboard.writeText === 'function') {
-    try {
-      await nav.clipboard.writeText(text);
-      return 'copied';
-    } catch {
-      // fall through to the legacy path
-    }
-  }
-  return legacyCopy(text) ? 'copied' : 'failed';
+  return (await copyText(text)) ? 'copied' : 'failed';
 }

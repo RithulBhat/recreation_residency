@@ -21,7 +21,7 @@ import {
   usePreviewPlayer,
 } from '@/components/results';
 
-/** Results screen — the post-game wrap-up: score, progression, standings, every round, and what next. */
+/** Results screen — the post-game wrap-up: score, what next, standings, progression, every round. */
 export default function Results() {
   const state = useGameStore((s) => s.state);
   // A game quit before anything happened is never shown or recorded (see `useFinishGame`).
@@ -55,18 +55,20 @@ export default function Results() {
     void start({ ...settings, seed: undefined, daily: undefined });
   };
 
+  // The actions sit right under the hero so "Play again" and "Share" are on screen at 390×844 even
+  // when a party podium, a rank-up card and a daily grid follow.
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 pb-8 sm:gap-5">
       <ResultsHero state={state} record={record} />
       {challenger && !duelActive && <ChallengeBanner challenger={challenger} score={state.totalScore} />}
       {duelActive && <DuelOutcome duel={duel} state={state} />}
-      {isMultiplayer(settings) && <Podium state={state} />}
       {!duelActive && <ResultActions state={state} onPlayAgain={playAgain} loading={loading} />}
       {error && (
         <p role="alert" className="text-center text-sm text-danger">
           {error}
         </p>
       )}
+      {isMultiplayer(settings) && <Podium state={state} />}
       <ProgressionCard result={stored} />
       {settings.daily && <DailyCard state={state} date={settings.daily} />}
       <RoundList state={state} player={player} />
