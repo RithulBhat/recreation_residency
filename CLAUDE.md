@@ -20,7 +20,9 @@ we can decode with Web Audio and apply effects).
 src/types/        Shared contracts. READ ONLY unless explicitly told to extend. 
 src/lib/deezer.ts JSONP Deezer client (cache, rate limit, pagination)        [catalog]
 src/lib/catalog.ts Resolve packs → Track[] pools, difficulty tiers, dedupe   [catalog]
-src/data/packs.ts Curated packs (150+), verified Deezer ids                   [catalog]
+src/data/packs.json Curated packs (220, ~37k tracks), verified Deezer ids       [catalog]
+src/lib/customPacks.ts Runtime packs (any artist / Deezer URL), persisted
+src/lib/startGame.ts Shared start pipeline: loadPool → startLoadedGame (all screens use it)
 src/audio/        Web Audio engine, effects, sfx synth, visualizer analyser  [audio]
 src/game/         Pure engine: reducer, matching, scoring, rng, presets, codes [engine]
 src/store/        zustand stores: game, settings/prefs, stats, catalog cache  [engine + stats]
@@ -40,7 +42,8 @@ e2e/              Playwright
   ignore errors in directories you don't own while others are in progress.
 - No `any`. Prefer `unknown` + narrowing. Strict null checks are on.
 - Pure logic (matching, scoring, reducer, rng) must be framework-free and unit-tested.
-- Never store expiring preview URLs in localStorage for longer than 6h; check `previewFetchedAt`.
+- Deezer preview URLs expire after ~15 MINUTES (`hdnea=exp=`). Always gate playback on `isPreviewFresh(track)` and
+  call `refreshPreview`/`refreshPreviews` right before playing; cached lists keep metadata only.
 - Never call Deezer with plain `fetch` (no CORS) — always via `src/lib/deezer.ts` JSONP.
 - Respect Deezer rate limit: 50 requests / 5 s. Client queues + caches.
 - Accessibility: every control keyboard-reachable, `aria-label` on icon buttons, focus rings visible,
