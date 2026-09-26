@@ -276,7 +276,7 @@ export default function Home({ packs }: HomeProps) {
             <Button variant="glow" size="lg" to="/setup" leadingIcon={<Play className="fill-current" />}>
               Play now
             </Button>
-            <Button variant="secondary" size="lg" to="/setup?mode=duel" leadingIcon={<Swords />}>
+            <Button variant="secondary" size="lg" to="/duel" leadingIcon={<Swords />}>
               Start a duel
             </Button>
           </div>
