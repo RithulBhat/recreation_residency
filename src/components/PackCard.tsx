@@ -1,5 +1,5 @@
 import { motion, useReducedMotion } from 'motion/react';
-import { Check, Play } from 'lucide-react';
+import { Check, Play, Plus } from 'lucide-react';
 import type { Pack, PackCategory } from '@/types';
 import { cn } from './ui/cn';
 
@@ -24,6 +24,11 @@ export interface PackCardProps {
   className?: string;
   /** Fixed width for horizontal strips */
   style?: React.CSSProperties;
+  /**
+   * Whether a featured pack wears its FEATURED badge. Default true; grids cap how many cards get
+   * it and "featured" sections turn it off, so the badge only shows where it says something.
+   */
+  showFeatured?: boolean;
 }
 
 export function formatPackSize(n?: number): string {
@@ -32,7 +37,7 @@ export function formatPackSize(n?: number): string {
   return `~${Math.round(n / 10) * 10} songs`;
 }
 
-export function PackCard({ pack, selected = false, onToggle, onPlay, size = 'md', className, style }: PackCardProps) {
+export function PackCard({ pack, selected = false, onToggle, onPlay, size = 'md', className, style, showFeatured = true }: PackCardProps) {
   const reduce = useReducedMotion();
   const accent = pack.accent || 'var(--sg-accent)';
   const sm = size === 'sm';
@@ -76,28 +81,34 @@ export function PackCard({ pack, selected = false, onToggle, onPlay, size = 'md'
       <div aria-hidden className="pointer-events-none absolute inset-0 noise rounded-3xl" />
 
       <div className="pointer-events-none relative z-[1] flex items-start justify-between gap-2">
+        {/* Saturated accent tile: dark emoji (🖤 🎬) and pale ones both stay visible on every theme. */}
         <span
           className={cn(
-            'grid place-items-center rounded-2xl bg-black/25 leading-none shadow-inner backdrop-blur-sm',
+            'grid place-items-center rounded-2xl leading-none shadow-inner ring-1 ring-white/25',
             sm ? 'size-10 text-2xl' : 'size-12 text-3xl',
           )}
+          style={{ background: `color-mix(in oklab, ${accent} 78%, white)` }}
           aria-hidden
         >
           {pack.emoji}
         </span>
         <div className="flex items-center gap-1.5">
-          {pack.featured && !selected && (
+          {pack.featured && showFeatured && !selected && (
             <span className="rounded-full bg-black/25 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white/85">Featured</span>
           )}
-          <span
-            className={cn(
-              'grid size-7 place-items-center rounded-full border transition-[background-color,border-color,transform] duration-200',
-              selected ? 'scale-100 border-transparent bg-accent text-accent-fg' : 'scale-90 border-white/25 bg-black/20 text-transparent group-hover:border-white/50',
-            )}
-            aria-hidden
-          >
-            <Check className="size-4" strokeWidth={3} />
-          </span>
+          {onToggle && (
+            <span
+              className={cn(
+                'grid size-7 place-items-center rounded-full border transition-[background-color,border-color,transform] duration-200',
+                selected
+                  ? 'border-transparent bg-accent-solid text-accent-fg'
+                  : 'border-white/40 bg-black/30 text-white/90 group-hover:border-white/70 group-hover:bg-black/40',
+              )}
+              aria-hidden
+            >
+              {selected ? <Check className="size-4" strokeWidth={3} /> : <Plus className="size-4" strokeWidth={2.5} />}
+            </span>
+          )}
         </div>
       </div>
 

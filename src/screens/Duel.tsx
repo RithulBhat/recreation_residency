@@ -278,7 +278,7 @@ export default function Duel() {
   /* ----------------------------------------------------- render */
 
   return (
-    <div className="flex flex-col gap-8 sm:gap-10">
+    <div className="flex flex-col gap-5 sm:gap-10">
       <SectionHeading
         eyebrow="Head to head"
         title={<>Duel a <span className="text-gradient">friend</span></>}
@@ -350,7 +350,6 @@ export default function Duel() {
           <Card padding="lg" className="rounded-4xl">
             <h2 className="mb-4 font-display text-lg font-bold text-fg">Who are you?</h2>
             <IdentityPicker name={name} onNameChange={setName} look={look} onLookChange={setLook} />
-            {!nameOk && <p className="mt-3 text-xs text-muted">Pick a name so your opponent knows who they are racing.</p>}
           </Card>
 
           <div className="grid gap-4 lg:grid-cols-2">
@@ -373,6 +372,11 @@ export default function Duel() {
               >
                 Create room
               </Button>
+              {!nameOk && (
+                <p className="text-xs font-medium text-muted" role="status">
+                  Pick a name first.
+                </p>
+              )}
             </Card>
 
             <Card
@@ -411,6 +415,11 @@ export default function Duel() {
               >
                 Join room
               </Button>
+              {(!nameOk || !codeOk) && (
+                <p className="text-xs font-medium text-muted" role="status">
+                  {!nameOk ? 'Pick a name first.' : 'Enter the six-character code.'}
+                </p>
+              )}
             </Card>
           </div>
 

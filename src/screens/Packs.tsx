@@ -54,7 +54,7 @@ export default function Packs() {
   };
 
   return (
-    <div className="flex flex-col gap-6 pb-36 sm:gap-8">
+    <div className="flex flex-col gap-4 pb-36 sm:gap-8">
       <SectionHeading
         as="h1"
         eyebrow="Pack browser"
@@ -119,6 +119,7 @@ export default function Packs() {
               onSurprise={surprise}
               hideSummary
               hideExplicit={settings.explicitFilter}
+              compactFilters
             />
           </div>
           <Card padding="md" className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">

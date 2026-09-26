@@ -31,7 +31,7 @@ export default function Daily() {
   ];
 
   return (
-    <div className="flex flex-col gap-8 pb-8 sm:gap-10">
+    <div className="flex flex-col gap-5 pb-8 sm:gap-10">
       <SectionHeading
         as="h1"
         eyebrow={
@@ -50,7 +50,7 @@ export default function Daily() {
 
       <div className="grid gap-5 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:items-start">
         <div className="flex flex-col gap-4">
-          <PackCard pack={pack} className="min-h-52" />
+          <PackCard pack={pack} className="min-h-40" showFeatured={false} />
           <Card padding="sm">
             <ul className="flex flex-col gap-2.5 text-sm text-fg">
               {rules.map((r, i) => (

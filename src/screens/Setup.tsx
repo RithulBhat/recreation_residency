@@ -82,7 +82,7 @@ export default function Setup() {
   const mods = modifierLabels(settings.modifiers);
 
   return (
-    <div className="flex flex-col gap-6 pb-36 sm:pb-32">
+    <div className="flex flex-col gap-4 pb-36 sm:gap-6 sm:pb-32">
       <SectionHeading
         as="h1"
         eyebrow="Lobby"

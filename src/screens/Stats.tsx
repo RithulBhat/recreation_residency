@@ -78,7 +78,7 @@ export default function Stats() {
   const hasGames = totals.games > 0;
 
   return (
-    <div className="flex flex-col gap-10 pb-4 sm:gap-14">
+    <div className="flex flex-col gap-8 pb-4 sm:gap-14">
       <SectionHeading
         as="h1"
         eyebrow="Local · private · yours"

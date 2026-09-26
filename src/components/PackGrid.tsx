@@ -1,16 +1,21 @@
 import { useMemo, useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import { ArrowUpDown, Play, Search, Shuffle, X } from 'lucide-react';
+import { ArrowUpDown, Play, Search, Shuffle, SlidersHorizontal, X } from 'lucide-react';
 import type { Pack, PackCategory } from '@/types';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { cn } from './ui/cn';
 import { Button } from './ui/Button';
 import { Chip } from './ui/Chip';
 import { Input } from './ui/Input';
+import { Popover } from './ui/Popover';
 import { SegmentedControl } from './ui/SegmentedControl';
 import { EmptyState } from './ui/EmptyState';
 import { PackCard, PACK_CATEGORY_LABEL } from './PackCard';
 
 export type PackSort = 'featured' | 'name' | 'size';
+
+/** Past this many, a FEATURED badge on every card in view stops telling the player anything. */
+const MAX_FEATURED_BADGES = 6;
 
 export interface PackGridProps {
   packs: ReadonlyArray<Pack>;
@@ -31,6 +36,11 @@ export interface PackGridProps {
   className?: string;
   /** Number of tag chips to surface. Default 12. */
   maxTags?: number;
+  /**
+   * Below `sm`, fold the sort control and the tag row into a filter button on the search field so
+   * the first cards land inside the first fold. Wider screens keep the inline rows.
+   */
+  compactFilters?: boolean;
 }
 
 const CATEGORY_ORDER: PackCategory[] = ['genre', 'decade', 'region', 'artist', 'vibe', 'soundtrack', 'chart', 'custom'];
@@ -48,8 +58,11 @@ export function PackGrid({
   hideExplicit = false,
   className,
   maxTags = 12,
+  compactFilters = false,
 }: PackGridProps) {
   const reduce = useReducedMotion();
+  const narrow = useMediaQuery('(max-width: 639px)');
+  const compact = compactFilters && narrow;
   const [query, setQuery] = useState(initialQuery);
   const [category, setCategory] = useState<'all' | PackCategory>('all');
   const [tags, setTags] = useState<string[]>([]);
@@ -90,11 +103,107 @@ export function PackGrid({
     return list;
   }, [base, category, tags, query, sort]);
 
+  /** The first few featured packs in display order wear the badge; the rest go without. */
+  const badged = useMemo(
+    () => new Set(filtered.filter((p) => p.featured).slice(0, MAX_FEATURED_BADGES).map((p) => p.id)),
+    [filtered],
+  );
+
   const selected = useMemo(() => base.filter((p) => selectedIds.includes(p.id)), [base, selectedIds]);
   const totalSongs = selected.reduce((n, p) => n + (p.approxSize ?? 0), 0);
 
   const toggleTag = (t: string) => setTags((prev) => (prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]));
   const hasFilters = query.trim() !== '' || category !== 'all' || tags.length > 0;
+  const activeFilters = (sort === 'featured' ? 0 : 1) + tags.length;
+
+  const sortControl = (
+    <SegmentedControl<PackSort>
+      size="sm"
+      aria-label="Sort packs"
+      value={sort}
+      onChange={setSort}
+      options={[
+        { value: 'featured', label: 'Featured' },
+        { value: 'name', label: 'A–Z' },
+        { value: 'size', label: 'Biggest' },
+      ]}
+    />
+  );
+
+  const tagChips =
+    topTags.length > 0 ? (
+      <div
+        className={cn(
+          compact ? 'flex flex-wrap gap-1.5' : 'scrollbar-none -mx-4 -my-1.5 flex gap-1.5 overflow-x-auto px-4 py-1.5 sm:mx-0 sm:flex-wrap sm:px-0',
+        )}
+        role="group"
+        aria-label="Tags"
+      >
+        {topTags.map((t) => (
+          <Chip key={t.tag} size="sm" selected={tags.includes(t.tag)} onClick={() => toggleTag(t.tag)} className="capitalize" check>
+            {t.tag}
+          </Chip>
+        ))}
+        {tags.length > 0 && (
+          <button type="button" onClick={() => setTags([])} className="h-8 shrink-0 px-2 text-xs font-semibold text-muted hover:text-fg">
+            Clear tags
+          </button>
+        )}
+      </div>
+    ) : null;
+
+  const clearButton = query ? (
+    <button
+      type="button"
+      aria-label="Clear search"
+      onClick={() => setQuery('')}
+      className="grid size-8 place-items-center rounded-full text-muted hover:bg-surface hover:text-fg"
+    >
+      <X className="size-4" />
+    </button>
+  ) : null;
+
+  const filterButton = compact ? (
+    <Popover
+      aria-label="Sort and filter"
+      align="end"
+      width={300}
+      trigger={
+        <button
+          type="button"
+          aria-label={activeFilters > 0 ? `Sort and filter, ${activeFilters} active` : 'Sort and filter'}
+          className={cn(
+            'touch-hit-44 relative grid size-9 place-items-center rounded-lg transition-colors',
+            activeFilters > 0 ? 'bg-accent/15 text-accent' : 'text-muted hover:bg-surface hover:text-fg',
+          )}
+          data-testid="pack-filters"
+        >
+          <SlidersHorizontal className="size-4" />
+          {activeFilters > 0 && (
+            <span
+              className="absolute -right-1 -top-1 grid size-4 place-items-center rounded-full bg-accent-solid font-mono text-[10px] font-bold leading-none text-accent-fg"
+              aria-hidden
+            >
+              {activeFilters}
+            </span>
+          )}
+        </button>
+      }
+    >
+      <div className="flex flex-col gap-3 p-1.5">
+        <div>
+          <div className="mb-1.5 text-[11px] font-bold uppercase tracking-wider text-muted">Sort</div>
+          {sortControl}
+        </div>
+        {tagChips && (
+          <div>
+            <div className="mb-1.5 text-[11px] font-bold uppercase tracking-wider text-muted">Tags</div>
+            {tagChips}
+          </div>
+        )}
+      </div>
+    </Popover>
+  ) : null;
 
   return (
     <div className={cn('relative', className)}>
@@ -109,33 +218,23 @@ export function PackGrid({
             leadingIcon={<Search />}
             aria-label="Search packs"
             containerClassName="flex-1"
+            // The Input's trailing slot only reserves `pr-2`; keep typed text clear of the buttons.
+            style={compact ? { paddingRight: query ? '5.25rem' : '3rem' } : undefined}
             trailing={
-              query ? (
-                <button
-                  type="button"
-                  aria-label="Clear search"
-                  onClick={() => setQuery('')}
-                  className="grid size-8 place-items-center rounded-full text-muted hover:bg-surface hover:text-fg"
-                >
-                  <X className="size-4" />
-                </button>
+              clearButton || filterButton ? (
+                <span className="flex items-center gap-0.5">
+                  {clearButton}
+                  {filterButton}
+                </span>
               ) : undefined
             }
           />
-          <div className="flex items-center gap-2">
-            <ArrowUpDown className="size-4 shrink-0 text-muted" aria-hidden />
-            <SegmentedControl<PackSort>
-              size="sm"
-              aria-label="Sort packs"
-              value={sort}
-              onChange={setSort}
-              options={[
-                { value: 'featured', label: 'Featured' },
-                { value: 'name', label: 'A–Z' },
-                { value: 'size', label: 'Biggest' },
-              ]}
-            />
-          </div>
+          {!compact && (
+            <div className="flex items-center gap-2">
+              <ArrowUpDown className="size-4 shrink-0 text-muted" aria-hidden />
+              {sortControl}
+            </div>
+          )}
         </div>
 
         <div className="scrollbar-none -mx-4 -my-1.5 flex gap-2 overflow-x-auto px-4 py-1.5 sm:mx-0 sm:flex-wrap sm:px-0" role="group" aria-label="Categories">
@@ -149,24 +248,11 @@ export function PackGrid({
           ))}
         </div>
 
-        {topTags.length > 0 && (
-          <div className="scrollbar-none -mx-4 -my-1.5 flex gap-1.5 overflow-x-auto px-4 py-1.5 sm:mx-0 sm:flex-wrap sm:px-0" role="group" aria-label="Tags">
-            {topTags.map((t) => (
-              <Chip key={t.tag} size="sm" selected={tags.includes(t.tag)} onClick={() => toggleTag(t.tag)} className="capitalize" check>
-                {t.tag}
-              </Chip>
-            ))}
-            {tags.length > 0 && (
-              <button type="button" onClick={() => setTags([])} className="h-8 shrink-0 px-2 text-xs font-semibold text-muted hover:text-fg">
-                Clear tags
-              </button>
-            )}
-          </div>
-        )}
+        {!compact && tagChips}
       </div>
 
       {/* Grid */}
-      <div className="mt-4 flex items-center justify-between text-xs text-muted">
+      <div className="mt-3 flex items-center justify-between text-xs text-muted">
         <span>
           <span className="font-mono font-semibold tabular text-fg">{filtered.length}</span> pack{filtered.length === 1 ? '' : 's'}
           {hasFilters && ' match'}
@@ -200,7 +286,7 @@ export function PackGrid({
       ) : (
         <div className={cn('mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4', !hideSummary && selected.length > 0 && 'pb-24')}>
           {filtered.map((p) => (
-            <PackCard key={p.id} pack={p} selected={selectedIds.includes(p.id)} onToggle={onToggle} onPlay={onPlay} />
+            <PackCard key={p.id} pack={p} selected={selectedIds.includes(p.id)} showFeatured={badged.has(p.id)} onToggle={onToggle} onPlay={onPlay} />
           ))}
         </div>
       )}
@@ -218,7 +304,7 @@ export function PackGrid({
               className="pointer-events-none sticky inset-x-0 z-30 flex justify-center px-2"
               style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 5rem)' }}
             >
-              <div className="glass-strong pointer-events-auto flex w-full max-w-xl items-center gap-3 rounded-full bg-bg-elevated/95 py-2 pl-4 pr-2 shadow-xl">
+              <div className="glass-strong pointer-events-auto flex w-full max-w-xl items-center gap-3 rounded-full bg-bg-elevated/96 py-2 pl-4 pr-2 shadow-xl">
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-sm font-bold text-fg">
                     Mix {selected.length} pack{selected.length === 1 ? '' : 's'}
