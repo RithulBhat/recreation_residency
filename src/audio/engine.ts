@@ -39,8 +39,17 @@ export interface SongoonerAudioEngine extends AudioEngine {
   getContext(): AudioContext | null;
 }
 
-/** Decoded buffers kept in memory — a 30 s stereo preview is ~10 MB of float samples. */
-export const DEFAULT_CACHE_SIZE = 12;
+/**
+ * Decoded buffers kept in memory — a 30 s stereo preview at 48 kHz is ~11.5 MB of float samples, so
+ * this is a hard ceiling of ~46 MB; the Play screen additionally evicts everything but the current
+ * and next round on every round change.
+ */
+export const DEFAULT_CACHE_SIZE = 4;
+/**
+ * Error message when playback was requested before any user gesture unlocked audio (an iOS
+ * auto-reveal): scheduling a source on a suspended context would report "playing" at 0 % forever.
+ */
+export const AUTOPLAY_BLOCKED = 'Audio needs a tap to start';
 /** Clips are scheduled this far ahead of `currentTime` so the gain automation and the source start share a render quantum. */
 const SCHEDULE_LEAD = 0.015;
 /** Fade applied when a clip is stopped mid-way (avoids a click). */
@@ -206,15 +215,19 @@ class EngineImpl implements SongoonerAudioEngine {
     return ctx;
   }
 
+  /** Resolves true when the context is running afterwards. A running context counts as unlocked. */
   private async tryResume(ctx: AudioContext, timeoutMs = RESUME_TIMEOUT_MS): Promise<boolean> {
     // 'interrupted' (iOS, not in the TS union) also needs a resume.
-    if ((ctx.state as string) === 'running') return true;
-    try {
-      await Promise.race([ctx.resume(), delay(timeoutMs)]);
-    } catch {
-      /* closed context or refused resume */
+    if ((ctx.state as string) !== 'running') {
+      try {
+        await Promise.race([ctx.resume(), delay(timeoutMs)]);
+      } catch {
+        /* closed context or refused resume */
+      }
     }
-    return (ctx.state as string) === 'running';
+    const running = (ctx.state as string) === 'running';
+    if (running) this.unlocked = true;
+    return running;
   }
 
   unlock(): Promise<void> {
@@ -419,8 +432,14 @@ class EngineImpl implements SongoonerAudioEngine {
 
     const ctx = this.ensureContext();
     if (buffer && ctx && this.master) {
-      await this.tryResume(ctx);
+      const running = await this.tryResume(ctx);
       if (gen !== this.generation) return;
+      if (!running && !this.unlocked) {
+        // No gesture has ever unlocked this context (e.g. the auto-reveal on iOS): a scheduled source
+        // would sit silently "playing" at 0 % until the next tap. Say so instead; the tap retries.
+        this.emit({ state: 'error', progress: 0, error: AUTOPLAY_BLOCKED });
+        throw new Error(AUTOPLAY_BLOCKED);
+      }
       return this.playWebAudio(gen, ctx, this.master, buffer, spec, full);
     }
     return this.playElement(gen, spec, full, failure);

@@ -10,7 +10,7 @@ function duelStub(partial: Partial<UseOnlineDuel>): UseOnlineDuel {
   return {
     status: 'playing', code: 'ABCDEF', role: 'guest', me: null,
     opponent: { id: 'host', name: 'Maya', emoji: '🦊', color: '#f97316' },
-    latencyMs: 82, error: null, startAt: null, countdown: 0, initPayload: null, opponentReady: true,
+    latencyMs: 82, error: null, startAt: null, countdown: 0, initPayload: null, opponentReady: true, myReady: false,
     opponentProgress: { type: 'progress', round: 3, score: 1240, streak: 2, correct: 2, status: 'playing', lastVerdict: 'correct', at: 0 },
     opponentFinished: null, myFinished: null, rematchOffer: null, rematchSeed: null, rematchPending: false,
     incomingEmotes: [{ id: 'e1', emoji: '🔥', at: 0 }],

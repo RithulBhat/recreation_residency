@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cleanTranscript } from './cleanup';
+import { cleanTranscript, cleanTranscriptCandidates } from './cleanup';
 
 describe('cleanTranscript', () => {
   const cases: ReadonlyArray<readonly [string, string]> = [
@@ -8,12 +8,16 @@ describe('cleanTranscript', () => {
     ['uh uh Africa', 'Africa'],
     ['Hmm, uh, Rolling in the Deep', 'Rolling in the Deep'],
     ['umm... Take On Me', 'Take On Me'],
+    ['er, Take On Me', 'Take On Me'],
     ['the song is Levitating', 'Levitating'],
-    ['this is Smells Like Teen Spirit', 'Smells Like Teen Spirit'],
-    ["it's Blinding Lights", 'Blinding Lights'],
-    ["yeah so, maybe it's Mr. Brightside", 'Mr. Brightside'],
+    ['the answer is Levitating', 'Levitating'],
+    ["it's called Levitating", 'Levitating'],
+    ['is it called Levitating', 'Levitating'],
+    ["maybe it's Mr. Brightside", 'Mr. Brightside'],
+    ['okay, Mr. Brightside', 'Mr. Brightside'],
     ['MY GUESS IS Mamma Mia', 'Mamma Mia'],
     ["I'm pretty sure it's Wonderwall", 'Wonderwall'],
+    ['I know this one, Wonderwall', 'Wonderwall'],
     // trailing hedges
     ['Thriller, I think', 'Thriller'],
     ['Africa or something', 'Africa'],
@@ -47,13 +51,40 @@ describe('cleanTranscript', () => {
     });
   }
 
-  it('documents that a leading "it\'s" is treated as filler', () => {
-    // Known trade-off: "It's My Life" loses its article. The matcher is fuzzy enough.
-    expect(cleanTranscript("It's My Life")).toBe('My Life');
+  // Real titles that open with what used to be treated as filler (audit P1-1).
+  const realTitles = [
+    "It's My Life",
+    'Its My Life',
+    'This Is America',
+    "That's The Way Love Goes",
+    'That Is Love',
+    'Like a Prayer',
+    'Is This Love',
+    'Is It Love',
+    "It's Gonna Be Me",
+    'So Anxious',
+    'Oh No',
+    'Yeah!',
+    'Well Well Well',
+    'Alright',
+    'It Must Be Love',
+    'Could It Be Magic',
+    'Sounds Like Rain',
+  ];
+  for (const title of realTitles) {
+    it(`keeps the title-like opener in ${JSON.stringify(title)}`, () => {
+      expect(cleanTranscript(title)).toBe(title);
+    });
+  }
+
+  it('still strips true fillers in front of a title-like opener', () => {
+    expect(cleanTranscript("um, I think it's It's My Life")).toBe("It's My Life");
+    expect(cleanTranscript('the song is This Is America')).toBe('This Is America');
   });
 
   it('never returns an empty string when the input was only filler', () => {
     expect(cleanTranscript('um')).toBe('um');
+    expect(cleanTranscript('okay')).toBe('okay');
     expect(cleanTranscript("it's")).toBe("it's");
   });
 
@@ -63,11 +94,44 @@ describe('cleanTranscript', () => {
     );
   });
 
+  it('only rewrites "by" when both sides carry a word', () => {
+    expect(cleanTranscript('by Queen')).toBe('by Queen');
+    expect(cleanTranscript('Bohemian Rhapsody by')).toBe('Bohemian Rhapsody by');
+    expect(cleanTranscript('Bohemian Rhapsody by ?')).toBe('Bohemian Rhapsody by?');
+  });
+
   it('leaves an existing dash separator alone', () => {
     expect(cleanTranscript('Queen - Bohemian Rhapsody')).toBe('Queen - Bohemian Rhapsody');
+    expect(cleanTranscript('Queen - Stand by Me')).toBe('Queen - Stand by Me');
   });
 
   it('is total — non-string input yields an empty string', () => {
     expect(cleanTranscript(undefined as unknown as string)).toBe('');
+  });
+});
+
+describe('cleanTranscriptCandidates', () => {
+  it('offers the un-rewritten "by" form as a second candidate', () => {
+    expect(cleanTranscriptCandidates('Stand By Me')).toEqual(['Stand - Me', 'Stand By Me']);
+    expect(cleanTranscriptCandidates('this is america by childish gambino')).toEqual([
+      'this is america - childish gambino',
+      'this is america by childish gambino',
+    ]);
+    expect(cleanTranscriptCandidates("I think it's Stand by Me by Ben E King")).toEqual([
+      'Stand by Me - Ben E King',
+      'Stand by Me by Ben E King',
+    ]);
+  });
+
+  it('collapses to a single candidate when there is nothing to rewrite', () => {
+    expect(cleanTranscriptCandidates("um, it's my life")).toEqual(["it's my life"]);
+    expect(cleanTranscriptCandidates('Queen - Bohemian Rhapsody')).toEqual(['Queen - Bohemian Rhapsody']);
+  });
+
+  it('never yields empty strings and is total', () => {
+    expect(cleanTranscriptCandidates('')).toEqual([]);
+    expect(cleanTranscriptCandidates('   ')).toEqual([]);
+    expect(cleanTranscriptCandidates('um')).toEqual(['um']);
+    expect(cleanTranscriptCandidates(undefined as unknown as string)).toEqual([]);
   });
 });

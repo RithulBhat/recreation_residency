@@ -4,6 +4,10 @@
  * Speech engines hand us conversational sentences ("um, I think it's Bohemian
  * Rhapsody by Queen") where the game wants a bare guess ("Bohemian Rhapsody -
  * Queen"). This module is pure and framework-free so it can be unit tested.
+ *
+ * Cleanup is lossy by nature, so `cleanTranscriptCandidates` also returns the
+ * less-rewritten forms; the caller tries each against the matcher (see
+ * `pickVoiceGuess`) instead of betting a try on a single guess.
  */
 
 /** Hesitation noises that are never part of a song title — stripped anywhere. */
@@ -11,6 +15,9 @@ const HESITATIONS = /\b(?:u+m+|u+h+m+|e+r+m+|h+m+|m+h+m+|ahem)\b/gi;
 
 /**
  * Conversational lead-ins, longest first (JS alternation is first-match).
+ * Only true fillers belong here: "it's", "that's", "this is", "is it", "so",
+ * "like", "oh" and "yeah" all open real titles ("It's My Life", "This Is
+ * America", "Is This Love", "So Anxious", "Oh No", "Like a Prayer") and stay.
  * Applied repeatedly at the head of the string, never down to empty.
  */
 const LEAD_IN_PARTS = [
@@ -20,19 +27,12 @@ const LEAD_IN_PARTS = [
   'i think',
   "i(?:'d| would| will|'ll) say",
   'my (?:final answer|guess|answer) is',
-  "the (?:song|title|track|answer|name)(?:'s| is)",
-  'that (?:would|must|might|could) be',
-  'it (?:must|might|could|has to|gotta) be',
-  "it(?:'s| is)|its",
-  "that(?:'s| is)",
-  'this is',
-  'is (?:it|this)',
-  'could (?:it|this) be',
-  'sounds like',
-  'i know this(?: one)?',
+  "the (?:song|title|track|answer|name)(?:'s| is)(?: called)?",
+  "it(?:'s| is) called",
+  'is (?:it|this) called',
   "maybe it(?:'s| is)",
-  'obviously|definitely|probably|maybe',
-  'okay|ok|so|well|oh|uh|er|like|yeah|yep|yup|alright',
+  'i know this(?: one)?',
+  'okay|ok|u+h+|e+r+',
 ];
 const LEAD_IN = new RegExp(`^(?:${LEAD_IN_PARTS.join('|')})\\b[\\s,.!?:;-]*`, 'i');
 
@@ -118,7 +118,7 @@ function stripLeadIns(input: string): string {
     const match = LEAD_IN.exec(s);
     if (!match || match[0].length === 0) break;
     const rest = s.slice(match[0].length).replace(LEADING_JUNK, '').trim();
-    // Never strip the whole guess away — "It's" alone stays "It's".
+    // Never strip the whole guess away — "Okay" alone stays "Okay".
     if (rest.length === 0) break;
     s = rest;
   }
@@ -153,7 +153,17 @@ function applyPunctuation(input: string): string {
   return collapse(s);
 }
 
-/** "X by Y" -> "X - Y", using the LAST " by " so "Stand by Me by Ben E King" works. */
+function wordCount(input: string): number {
+  return input.split(/\s+/).filter((w) => /[\p{L}\p{N}]/u.test(w)).length;
+}
+
+/**
+ * "X by Y" -> "X - Y", using the LAST " by " so "Stand by Me by Ben E King" works.
+ * Only rewrites when both sides carry at least one word and the guess is not
+ * already dash-separated. A title that itself ends in "by <word>" ("Stand By
+ * Me") is still rewritten here — that is what the un-rewritten candidate from
+ * `cleanTranscriptCandidates` is for.
+ */
 function applyBySeparator(input: string): string {
   if (input.includes(' - ')) return input;
   let last: { index: number; length: number } | null = null;
@@ -164,7 +174,7 @@ function applyBySeparator(input: string): string {
   if (!last) return input;
   const left = input.slice(0, last.index).trim();
   const right = input.slice(last.index + last.length).trim();
-  if (left.length === 0 || right.length === 0) return input;
+  if (wordCount(left) < 1 || wordCount(right) < 1) return input;
   return `${left} - ${right}`;
 }
 
@@ -175,6 +185,19 @@ function trimEdges(input: string): string {
 function unwrapQuotes(input: string): string {
   const match = /^"(.+)"$/.exec(input);
   return match ? match[1].trim() : input;
+}
+
+/** Everything except the "by" rewrite: fillers, hedges, spoken punctuation, whitespace. */
+function cleanCore(t: string): string {
+  let s = collapse(normalizeQuotes(t));
+  if (s.length === 0) return '';
+  s = unwrapQuotes(s);
+  s = s.replace(BY_VERBS, 'by');
+  s = collapse(s.replace(HESITATIONS, ' '));
+  s = stripLeadIns(s);
+  s = stripTails(s);
+  s = applyPunctuation(s);
+  return trimEdges(collapse(s));
 }
 
 /**
@@ -189,18 +212,22 @@ function unwrapQuotes(input: string): string {
  */
 export function cleanTranscript(t: string): string {
   if (typeof t !== 'string') return '';
-  let s = collapse(normalizeQuotes(t));
-  if (s.length === 0) return '';
-
-  s = unwrapQuotes(s);
-  s = s.replace(BY_VERBS, 'by');
-  s = collapse(s.replace(HESITATIONS, ' '));
-  s = stripLeadIns(s);
-  s = stripTails(s);
-  s = applyPunctuation(s);
-  s = applyBySeparator(s);
-  s = trimEdges(collapse(s));
-
+  const s = trimEdges(collapse(applyBySeparator(cleanCore(t))));
   // A guess that cleaned down to nothing means the filler *was* the guess.
   return s.length > 0 ? s : collapse(normalizeQuotes(t));
+}
+
+/**
+ * Every cleaned form worth trying against the matcher, most likely first: the
+ * fully cleaned guess, then the same guess with its " by " left alone (so a
+ * spoken "Stand By Me" is not only read as "Stand - Me"). Deduplicated, never
+ * empty strings.
+ */
+export function cleanTranscriptCandidates(t: string): string[] {
+  if (typeof t !== 'string') return [];
+  const out: string[] = [];
+  for (const candidate of [cleanTranscript(t), cleanCore(t)]) {
+    if (candidate.length > 0 && !out.includes(candidate)) out.push(candidate);
+  }
+  return out;
 }

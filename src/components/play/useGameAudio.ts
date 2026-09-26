@@ -21,7 +21,7 @@ export interface GameAudio {
   analyser: AnalyserNode | null;
   /** The round's preview is being fetched / re-signed */
   loading: boolean;
-  /** The preview could not be played, even after a refresh */
+  /** The preview could not be played, even after a refresh. `play()` / `hear()` clear it and retry. */
   error: string | null;
   /** Play (or replay) the current clip. Call from a click / keydown handler. */
   play: () => void;
@@ -60,6 +60,10 @@ function message(e: unknown): string {
   return e instanceof Error ? e.message : 'Could not load this preview';
 }
 
+function isString(v: string | null): v is string {
+  return typeof v === 'string';
+}
+
 export function useGameAudio(): GameAudio {
   const engine = getAudioEngine();
   const audio = useAudioEngine();
@@ -69,6 +73,8 @@ export function useGameAudio(): GameAudio {
   const fresh = useRef(new Map<number, Track>());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** A `play()` is waiting for its preview url; a second tap meanwhile must not dispatch twice. */
+  const pendingPlay = useRef(false);
 
   /** Fresh preview url for a track, re-signing it when Deezer's signature is about to expire. */
   const resolve = useCallback(async (track: Track): Promise<string> => {
@@ -80,6 +86,12 @@ export function useGameAudio(): GameAudio {
     return refreshed.preview;
   }, []);
 
+  /** True when `resolve(track)` will answer from memory (no JSONP round-trip). */
+  const isResolved = useCallback((track: Track): boolean => {
+    const known = fresh.current.get(track.id) ?? track;
+    return !!known.preview && isPreviewFresh(known);
+  }, []);
+
   // Preload the current round's preview (and the next one in the queue) whenever a round opens.
   useEffect(() => {
     const s = useGameStore.getState().state;
@@ -89,7 +101,8 @@ export function useGameAudio(): GameAudio {
     engine.stop();
     setError(null);
     setLoading(true);
-    resolve(r.track)
+    const current = resolve(r.track);
+    current
       .then((url) => engine.preload(url))
       .then(() => {
         if (alive) setLoading(false);
@@ -100,13 +113,18 @@ export function useGameAudio(): GameAudio {
         setError(message(e));
       });
     const upcoming = s.queue[0];
-    if (upcoming) void resolve(upcoming).then((url) => engine.preload(url)).catch(() => undefined);
+    const next = upcoming ? resolve(upcoming) : Promise.resolve<string | null>(null);
+    void next.then((url) => (url ? engine.preload(url) : undefined)).catch(() => undefined);
+    // Decoded previews are ~10 MB each: keep only this round's and the next one's.
+    void Promise.all([current.catch(() => null), next.catch(() => null)]).then((urls) => {
+      if (alive) engine.evict(urls.filter(isString));
+    });
     return () => {
       alive = false;
     };
   }, [roundKey, engine, resolve]);
 
-  // Playback errors from the engine (element fallback refused, decode failure, …).
+  // Playback errors from the engine (element fallback refused, decode failure, autoplay blocked, …).
   useEffect(() => {
     if (audio.state === 'error' && audio.error) setError(audio.error);
   }, [audio.state, audio.error]);
@@ -128,14 +146,34 @@ export function useGameAudio(): GameAudio {
       engine.stop();
       return;
     }
+    if (pendingPlay.current) return;
     getSfx().play('click');
-    useGameStore.getState().play();
-    const spec = { offset: r.startOffset, duration: currentClipLength(s), modifiers: s.settings.modifiers };
     setError(null);
-    resolve(r.track)
-      .then((url) => engine.playClip({ url, ...spec }))
-      .catch((e: unknown) => setError(message(e)));
-  }, [engine, resolve]);
+    const gameId = s.id;
+    const roundIndex = r.index;
+    const instant = isResolved(r.track);
+    if (!instant) setLoading(true);
+    pendingPlay.current = true;
+    resolve(r.track).then(
+      (url) => {
+        pendingPlay.current = false;
+        if (!instant) setLoading(false);
+        // The engine's `play` (plays-this-try, time-bonus / round-timer clock) is dispatched only now,
+        // once the preview is ready: a slow re-sign or a failure must not eat into the bonus window.
+        const now = useGameStore.getState().state;
+        const cur = currentRound(now);
+        if (now.id !== gameId || !cur || cur.index !== roundIndex || now.status !== 'playing' || cur.status !== 'playing') return;
+        useGameStore.getState().play();
+        const spec = { offset: cur.startOffset, duration: currentClipLength(now), modifiers: now.settings.modifiers };
+        engine.playClip({ url, ...spec }).catch((e: unknown) => setError(message(e)));
+      },
+      (e: unknown) => {
+        pendingPlay.current = false;
+        if (!instant) setLoading(false);
+        setError(message(e));
+      },
+    );
+  }, [engine, resolve, isResolved]);
 
   const hear = useCallback(() => {
     const s = useGameStore.getState().state;
@@ -143,6 +181,7 @@ export function useGameAudio(): GameAudio {
     if (!r) return;
     void engine.unlock();
     applyVolumePrefs();
+    setError(null);
     resolve(r.track)
       .then((url) => engine.playFull(url, r.startOffset))
       .catch((e: unknown) => setError(message(e)));

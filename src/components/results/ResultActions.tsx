@@ -11,6 +11,18 @@ export interface ResultActionsProps {
   loading: boolean;
 }
 
+/** `encodeChallenge` keeps this many track ids; the online-duel `init` has the same cap. */
+const MAX_CHALLENGE_TRACKS = 60;
+
+/**
+ * Track ids for a challenge link: the whole run (played rounds + still-queued tracks), not just the
+ * answers. The friend's engine orders them with the same seed, so they hear the same songs — and the
+ * autocomplete pool is no longer the answer sheet.
+ */
+export function challengeTrackIds(state: GameState): number[] {
+  return [...state.rounds.map((r) => r.track.id), ...state.queue.map((t) => t.id)].slice(0, MAX_CHALLENGE_TRACKS);
+}
+
 function reportShare(outcome: 'shared' | 'copied' | 'failed', what: string): void {
   if (outcome === 'copied') toast.success(`${what} copied`, 'Paste it anywhere.');
   else if (outcome === 'failed') toast.error("Couldn't share", 'Your browser blocked the clipboard.');
@@ -51,7 +63,7 @@ export function ResultActions({ state, onPlayAgain, loading }: ResultActionsProp
       },
       by: playerName || 'A friend',
       score: state.totalScore,
-      trackIds: state.rounds.map((r) => r.track.id),
+      trackIds: challengeTrackIds(state),
     });
     const outcome = await shareOrCopy(challengeShareText(playerName || 'A friend', state.totalScore, url));
     reportShare(outcome, 'Challenge link');

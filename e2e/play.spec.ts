@@ -263,6 +263,65 @@ test('play · classic stages, host bubble and survival lives', async ({ page }) 
   await expect(page.getByRole('img', { name: '2 of 3 lives left' })).toBeVisible();
 });
 
+test('play · a failed preview makes the record a Retry affordance (click and Space)', async ({ page }) => {
+  test.setTimeout(120_000);
+  await page.setViewportSize(VIEWPORTS.desktop);
+  const previews = /preview[^/]*\.dzcdn\.net/;
+  await page.route(previews, (route) => route.abort());
+  await startGame(page, { packIds: ['pop-hits'], mode: 'fixed', clipLength: 1, tries: 3, rounds: 2, seed: 'e2e-retry' });
+  const stage = page.getByTestId('stage');
+
+  await page.getByRole('button', { name: /play clip/i }).click();
+  await expect(stage).toHaveAttribute('data-error', '', { timeout: 15_000 });
+  await expect(stage).toContainText(/Tap the record or press/);
+  const retry = stage.getByRole('button', { name: /Retry clip/ });
+  await expect(retry).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'Give up & next' })).toBeVisible();
+
+  // Unblock the CDN: the record retries and clears the error; Space replays.
+  await page.unroute(previews);
+  await retry.click();
+  await expect(stage).toHaveAttribute('data-vinyl', 'playing', { timeout: 20_000 });
+  await expect(stage).not.toHaveAttribute('data-error', '');
+  await expect(stage).toHaveAttribute('data-vinyl', 'done', { timeout: 20_000 });
+  await page.keyboard.press('Space');
+  await expect(stage).toHaveAttribute('data-vinyl', 'playing', { timeout: 20_000 });
+});
+
+test('play · auto-reveal before any gesture shows "tap to hear" instead of a silent spinning record', async ({ page }) => {
+  test.setTimeout(120_000);
+  await page.setViewportSize(VIEWPORTS.mobile);
+  // Emulate iOS: the context starts suspended and resume() is refused until a real pointer gesture.
+  await page.addInitScript(() => {
+    let gesture = false;
+    document.addEventListener('pointerdown', () => (gesture = true), true);
+    const Real = window.AudioContext;
+    window.AudioContext = class extends Real {
+      constructor(o?: AudioContextOptions) {
+        super(o);
+        void super.suspend();
+      }
+      override resume(): Promise<void> {
+        return gesture ? super.resume() : Promise.resolve();
+      }
+    };
+  });
+  await startGame(page, { packIds: ['pop-hits'], mode: 'fixed', clipLength: 1, tries: 1, rounds: 2, seed: 'e2e-autoplay' });
+  const stage = page.getByTestId('stage');
+
+  // Give up via the keyboard so no pointer gesture unlocks audio; the lost round auto-reveals.
+  await page.getByRole('button', { name: 'Give up' }).focus();
+  await page.keyboard.press('Enter');
+  await expect(stage).toContainText('Tap the record to hear the song', { timeout: 10_000 });
+  await expect(stage).not.toHaveAttribute('data-vinyl', 'playing');
+  await expect(stage.locator('.text-danger')).toHaveCount(0); // expected state, not an error
+  const hear = stage.getByRole('button', { name: 'Hear the song' });
+  await expect(hear).toBeEnabled();
+  await hear.click();
+  await expect(stage).toHaveAttribute('data-vinyl', 'playing', { timeout: 20_000 });
+  await expect(stage).not.toHaveAttribute('data-error', '');
+});
+
 test('play · party pass-the-phone interstitial', async ({ page }) => {
   test.setTimeout(120_000);
   await page.setViewportSize(VIEWPORTS.mobile);

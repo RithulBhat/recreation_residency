@@ -1,3 +1,4 @@
+import { StrictMode } from 'react';
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useVoiceGuess } from './useVoiceGuess';
@@ -143,12 +144,12 @@ describe('useVoiceGuess', () => {
     act(() => engine().emitEnd());
   });
 
-  it('cleans the final transcript and calls onFinal', () => {
+  it('cleans the final transcript and calls onFinal with the cleaned and the raw text', () => {
     const onFinal = vi.fn();
     const { result } = renderHook(() => useVoiceGuess({ meter: false, onFinal }));
     act(() => result.current.start());
-    act(() => engine().emitResult("um, I think it's Africa by Toto", true));
-    expect(onFinal).toHaveBeenCalledWith('Africa - Toto');
+    act(() => engine().emitResult("um, I think it's Africa by Toto ", true));
+    expect(onFinal).toHaveBeenCalledWith('Africa - Toto', "um, I think it's Africa by Toto");
     expect(result.current.transcript).toBe('Africa - Toto');
     expect(result.current.interim).toBe('');
     act(() => engine().emitEnd());
@@ -261,5 +262,29 @@ describe('useVoiceHost', () => {
     act(() => result.current.say('hi'));
     unmount();
     expect(synth.cancelCalls).toBe(1);
+  });
+
+  it('is disposed on unmount: nothing is spoken or published afterwards', () => {
+    const onLine = vi.fn();
+    const { result, unmount } = renderHook(() => useVoiceHost({ defaultEnabled: true, onLine }));
+    const { announce } = result.current;
+    unmount();
+    act(() => announce({ kind: 'skip' }));
+    expect(synth.spoken).toHaveLength(0);
+    expect(onLine).not.toHaveBeenCalled();
+  });
+
+  it('survives a StrictMode remount with a fresh controller (not a disposed one)', () => {
+    const onLine = vi.fn();
+    const { result } = renderHook(() => useVoiceHost({ defaultEnabled: true, onLine }), { wrapper: StrictMode });
+    expect(result.current.supported).toBe(true);
+    act(() => result.current.announce({ kind: 'reveal', title: 'Africa', artist: 'Toto' }));
+    expect(onLine).toHaveBeenCalledTimes(1);
+    expect(synth.spoken).toHaveLength(1);
+    expect(result.current.line).toBe(synth.spoken[0].text);
+    expect(result.current.speaking).toBe(true);
+    act(() => result.current.setPersonality('savage'));
+    act(() => result.current.announce({ kind: 'timeout' }));
+    expect(PHRASES.savage.timeout).toContain(result.current.line);
   });
 });

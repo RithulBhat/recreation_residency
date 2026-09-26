@@ -56,9 +56,13 @@ export interface VoiceHostController extends VoiceHost {
   dispose(): void;
 }
 
+/** Whether this browser has SpeechSynthesis at all (Firefox has it; jsdom does not). */
+export function isSpeechSynthesisSupported(): boolean {
+  return typeof window !== 'undefined' && 'speechSynthesis' in window;
+}
+
 function getSynth(): SpeechSynthesis | null {
-  if (typeof window === 'undefined') return null;
-  if (!('speechSynthesis' in window)) return null;
+  if (!isSpeechSynthesisSupported()) return null;
   return window.speechSynthesis;
 }
 
@@ -118,7 +122,7 @@ export function pickDefaultVoice(voices: readonly SpeechSynthesisVoice[]): Speec
  *   `roundStart`/`reveal` cancels whatever is still talking.
  */
 export function createVoiceHost(opts: VoiceHostOptions = {}): VoiceHostController {
-  const supported = typeof window !== 'undefined' && 'speechSynthesis' in window;
+  const supported = isSpeechSynthesisSupported();
 
   let enabled = opts.enabled ?? false;
   let personality: HostPersonality = opts.personality ?? 'hype';

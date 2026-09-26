@@ -104,6 +104,11 @@ export function useGameHost(): GameHost {
       const e = hostEventFor(event);
       if (e) announce(e);
     }
+    // A remount (React StrictMode's simulated one in DEV, or revisiting the screen) disposes the host
+    // controller and creates a fresh one, so the fresh one must get the opening lines too.
+    return () => {
+      announced.current = null;
+    };
   }, [enabled, gameId, announce]);
 
   return { enabled, personality, line: host.line, speaking: host.speaking };

@@ -1,4 +1,5 @@
-export { cleanTranscript } from './cleanup';
+export { cleanTranscript, cleanTranscriptCandidates } from './cleanup';
+export { pickVoiceGuess, voiceGuessCandidates } from './pickGuess';
 export { createRecognizer, friendlyRecognitionError, type RecognizerOptions, type RecognizerHandlers } from './recognizer';
 export {
   PHRASES,
@@ -15,6 +16,7 @@ export {
 } from './phrases';
 export {
   createVoiceHost,
+  isSpeechSynthesisSupported,
   pickDefaultVoice,
   HOST_TUNING,
   MAX_PENDING,

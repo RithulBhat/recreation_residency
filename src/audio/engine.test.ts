@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AudioStateEvent, ClipSpec } from '@/types';
-import { createAudioEngine, DEFAULT_CACHE_SIZE, type FetchLike } from './engine';
+import { AUTOPLAY_BLOCKED, createAudioEngine, DEFAULT_CACHE_SIZE, type FetchLike } from './engine';
 import { DEFAULT_MODIFIERS } from './effects';
 import {
   FakeAnalyserNode,
@@ -397,5 +397,51 @@ describe('element fallback', () => {
     await engine.playClip({ url: url(1), offset: 1, duration: 0.05 });
     expect(play).toHaveBeenCalledTimes(1);
     expect(engine.getBackend()).toBe('element');
+  });
+});
+
+describe('autoplay policy', () => {
+  it('reports AUTOPLAY_BLOCKED instead of a silent "playing" when no gesture ever unlocked the context', async () => {
+    const ctx = new FakeAudioContext();
+    // resume() is a no-op outside a user gesture on iOS: the context stays suspended.
+    ctx.resume = () => {
+      ctx.resumeCalls++;
+      return Promise.resolve();
+    };
+    const { engine, states } = setup({ ctx });
+    await expect(engine.playFull(url(1), 0)).rejects.toThrow(AUTOPLAY_BLOCKED);
+    expect(engine.getState()).toEqual({ state: 'error', progress: 0, error: AUTOPLAY_BLOCKED });
+    expect(engine.isPlaying()).toBe(false);
+    expect(ctx.liveSources).toHaveLength(0);
+    expect(states()).toEqual(['loading', 'error']);
+  });
+
+  it('once a gesture unlocked the context, a later suspended (interrupted) context is scheduled as before', async () => {
+    const ctx = new FakeAudioContext();
+    const { engine } = setup({ ctx });
+    await engine.unlock(); // the gesture
+    ctx.state = 'suspended'; // e.g. a phone call interrupted the context; it resumes on its own later
+    ctx.resume = () => Promise.resolve();
+    const done = engine.playFull(url(1), 0);
+    await waitForSource(ctx);
+    expect(engine.getState().state).toBe('playing');
+    ctx.endAllSources();
+    await done;
+  });
+
+  it('a context observed running counts as unlocked even without unlock()', async () => {
+    const ctx = new FakeAudioContext();
+    ctx.state = 'running'; // desktop browsers create a running context once the page was interacted with
+    const { engine } = setup({ ctx });
+    const done = engine.playClip({ url: url(1), offset: 0, duration: 1 });
+    await waitForSource(ctx);
+    ctx.state = 'suspended';
+    ctx.resume = () => Promise.resolve();
+    ctx.endAllSources();
+    await done;
+    const again = engine.playClip({ url: url(1), offset: 0, duration: 1 });
+    await waitForSource(ctx);
+    ctx.endAllSources();
+    await expect(again).resolves.toBeUndefined();
   });
 });

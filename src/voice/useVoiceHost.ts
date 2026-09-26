@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { HostEvent, HostPersonality } from '@/types/voice';
-import { createVoiceHost, type VoiceHostController } from './host';
+import { createVoiceHost, isSpeechSynthesisSupported, type VoiceHostController } from './host';
 
 export interface UseVoiceHostOptions {
   /** Controlled on/off — feed `GameSettings.voiceHost` here. */
@@ -42,17 +42,13 @@ export interface UseVoiceHost {
  * Every knob is prop-driven: pass `enabled` / `personality` / `voiceURI` to have
  * the settings store own them (the `set*` functions then only call the matching
  * `on*Change`), or pass the `default*` variants to let the hook hold state.
+ *
+ * The controller is created inside an effect, so unmount can `dispose()` it and
+ * a remount — React StrictMode's simulated one in DEV, or the screen being
+ * revisited — gets a fresh controller instead of a permanently disposed one.
  */
 export function useVoiceHost(options: UseVoiceHostOptions = {}): UseVoiceHost {
   const hostRef = useRef<VoiceHostController | null>(null);
-  if (hostRef.current === null) {
-    hostRef.current = createVoiceHost({
-      enabled: options.enabled ?? options.defaultEnabled ?? false,
-      personality: options.personality ?? options.defaultPersonality ?? 'hype',
-      voiceURI: options.voiceURI ?? options.defaultVoiceURI ?? null,
-    });
-  }
-  const host = hostRef.current;
 
   const [enabledState, setEnabledState] = useState(options.defaultEnabled ?? false);
   const [personalityState, setPersonalityState] = useState<HostPersonality>(
@@ -64,16 +60,22 @@ export function useVoiceHost(options: UseVoiceHostOptions = {}): UseVoiceHost {
   const personality = options.personality ?? personalityState;
   const voiceURI = options.voiceURI ?? voiceURIState;
 
-  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>(() => host.listVoices());
+  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [speaking, setSpeaking] = useState(false);
-  const [line, setLine] = useState<string>(() => host.currentLine() ?? '');
+  const [line, setLine] = useState('');
 
   const onLineRef = useRef(options.onLine);
   useEffect(() => {
     onLineRef.current = options.onLine;
   }, [options.onLine]);
 
+  // The knobs a freshly created controller should start with (read inside the mount effect only).
+  const knobsRef = useRef({ enabled, personality, voiceURI });
+  knobsRef.current = { enabled, personality, voiceURI };
+
   useEffect(() => {
+    const host = createVoiceHost(knobsRef.current);
+    hostRef.current = host;
     const offVoices = host.onVoicesChanged((next) => setVoices(next.slice()));
     const offSpeaking = host.onSpeakingChanged(setSpeaking);
     const offLine = host.onLine((next) => {
@@ -84,33 +86,32 @@ export function useVoiceHost(options: UseVoiceHostOptions = {}): UseVoiceHost {
       offVoices();
       offSpeaking();
       offLine();
+      host.dispose();
+      if (hostRef.current === host) hostRef.current = null;
     };
-  }, [host]);
+  }, []);
 
+  // Declared after the mount effect so, within one commit, the controller exists before these run.
   useEffect(() => {
-    host.setEnabled(enabled);
-  }, [host, enabled]);
+    hostRef.current?.setEnabled(enabled);
+  }, [enabled]);
   useEffect(() => {
-    host.setPersonality(personality);
-  }, [host, personality]);
+    hostRef.current?.setPersonality(personality);
+  }, [personality]);
   useEffect(() => {
-    host.setVoice(voiceURI);
-  }, [host, voiceURI]);
-
-  // Not `dispose()`: the controller lives in a ref, so React StrictMode's mount → cleanup → mount
-  // would leave it permanently disposed (announce() becomes a no-op). Cancelling speech is enough.
-  useEffect(() => () => host.cancel(), [host]);
+    hostRef.current?.setVoice(voiceURI);
+  }, [voiceURI]);
 
   const controlled = options.enabled !== undefined;
   const onEnabledChange = options.onEnabledChange;
   const setEnabled = useCallback(
     (on: boolean) => {
       // Must happen inside the click handler: iOS only unlocks speech on a gesture.
-      if (on) host.prime();
+      if (on) hostRef.current?.prime();
       if (!controlled) setEnabledState(on);
       onEnabledChange?.(on);
     },
-    [host, controlled, onEnabledChange],
+    [controlled, onEnabledChange],
   );
 
   const personalityControlled = options.personality !== undefined;
@@ -133,12 +134,12 @@ export function useVoiceHost(options: UseVoiceHostOptions = {}): UseVoiceHost {
     [voiceControlled, onVoiceURIChange],
   );
 
-  const announce = useCallback((e: HostEvent) => host.announce(e), [host]);
-  const say = useCallback((text: string) => host.say(text), [host]);
-  const cancel = useCallback(() => host.cancel(), [host]);
+  const announce = useCallback((e: HostEvent) => hostRef.current?.announce(e), []);
+  const say = useCallback((text: string) => hostRef.current?.say(text), []);
+  const cancel = useCallback(() => hostRef.current?.cancel(), []);
 
   return {
-    supported: host.supported,
+    supported: hostRef.current?.supported ?? isSpeechSynthesisSupported(),
     enabled,
     setEnabled,
     personality,

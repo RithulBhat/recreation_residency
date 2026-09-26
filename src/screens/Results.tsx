@@ -30,14 +30,17 @@ export default function Results() {
   const duelActive = isDuelActive(duel);
   const player = usePreviewPlayer();
   const { start, loading, error } = useStartGame();
-  const record = useMemo(() => summarizeGame(state), [state]);
+  const record = useMemo(() => (finished ? summarizeGame(state) : null), [finished, state]);
 
   // Normally recorded by Play before navigating here; this covers a direct visit (idempotent).
   useEffect(() => {
     if (finished) useResultStore.getState().record(useGameStore.getState().state);
   }, [finished, gameId]);
 
-  if (!finished) return <Navigate to="/setup" replace />;
+  // "Play again" flips the store to the new game a moment before it navigates to /play; bouncing
+  // through /setup in that window flashed the lobby and rewrote history. Only a genuinely unfinished
+  // game with no start in flight is sent to Setup.
+  if (!finished || record === null) return loading ? null : <Navigate to="/setup" replace />;
 
   const { settings } = state;
   const playAgain = () => {

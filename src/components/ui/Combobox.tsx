@@ -12,7 +12,10 @@ export interface ComboboxProps<T> {
   getLabel: (o: T) => string;
   getDescription?: (o: T) => string | undefined;
   onSelect: (o: T) => void;
-  /** Enter pressed with no highlighted option (free-text submit) */
+  /**
+   * Enter pressed with no highlighted option (free-text submit). Nothing is highlighted until the
+   * user arrows onto (or hovers) a suggestion, so Enter never silently swaps the typed text.
+   */
   onSubmit?: (text: string) => void;
   renderOption?: (o: T, ctx: { highlighted: boolean; query: string }) => ReactNode;
   loading?: boolean;
@@ -37,6 +40,9 @@ export interface ComboboxProps<T> {
   name?: string;
   autoComplete?: string;
 }
+
+/** `highlight` value when no option is active. */
+const NONE = -1;
 
 export function Combobox<T>({
   value,
@@ -70,7 +76,7 @@ export function Combobox<T>({
   const baseId = id ?? autoId;
   const listId = `${baseId}-list`;
   const [open, setOpen] = useState(false);
-  const [highlight, setHighlight] = useState(0);
+  const [highlight, setHighlight] = useState(NONE);
   const listRef = useRef<HTMLUListElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
 
@@ -78,11 +84,11 @@ export function Combobox<T>({
   const hasOptions = options.length > 0;
 
   useEffect(() => {
-    setHighlight(0);
+    setHighlight(NONE);
   }, [options]);
 
   useEffect(() => {
-    if (!shouldShow) return;
+    if (!shouldShow || highlight < 0) return;
     const el = listRef.current?.querySelector<HTMLElement>(`[data-index="${highlight}"]`);
     el?.scrollIntoView({ block: 'nearest' });
   }, [highlight, shouldShow]);
@@ -110,13 +116,14 @@ export function Combobox<T>({
     }
     if (e.key === 'ArrowUp') {
       e.preventDefault();
-      if (hasOptions) setHighlight((h) => (h - 1 + options.length) % options.length);
+      if (hasOptions) setHighlight((h) => (h <= 0 ? options.length - 1 : h - 1));
       return;
     }
     if (e.key === 'Enter') {
-      if (shouldShow && hasOptions && options[highlight] !== undefined) {
+      const chosen = shouldShow && hasOptions && highlight >= 0 ? options[highlight] : undefined;
+      if (chosen !== undefined) {
         e.preventDefault();
-        select(options[highlight]!);
+        select(chosen);
       } else if (onSubmit && value.trim()) {
         e.preventDefault();
         onSubmit(value.trim());
@@ -134,7 +141,7 @@ export function Combobox<T>({
     if (e.key === 'Tab') setOpen(false);
   };
 
-  const activeId = shouldShow && hasOptions ? `${baseId}-opt-${highlight}` : undefined;
+  const activeId = shouldShow && hasOptions && highlight >= 0 ? `${baseId}-opt-${highlight}` : undefined;
   const padL = size === 'xl' ? 'pl-14' : 'pl-11';
 
   return (
@@ -193,6 +200,7 @@ export function Combobox<T>({
         role="listbox"
         aria-label={ariaLabel ? `${ariaLabel} suggestions` : 'Suggestions'}
         hidden={!shouldShow}
+        onMouseLeave={() => setHighlight(NONE)}
         className={cn(
           'glass-strong absolute inset-x-0 top-full z-40 mt-2 max-h-72 overflow-y-auto rounded-2xl bg-bg-elevated/95 p-1.5 shadow-xl',
           shouldShow ? 'animate-fade-in' : '',

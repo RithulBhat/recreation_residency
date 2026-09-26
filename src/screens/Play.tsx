@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import type { HintKind, PlayerState } from '@/types';
-import { HostBubble, useVoiceGuess } from '@/voice';
+import { HostBubble, pickVoiceGuess, useVoiceGuess } from '@/voice';
 import { toast } from '@/components/ui';
 import {
   Feedback,
@@ -90,7 +90,17 @@ export default function Play() {
     [guess],
   );
 
-  const voice = useVoiceGuess({ onFinal: submit });
+  // Transcript cleanup is lossy ("Stand By Me" → "Stand - Me", "It's My Life" → …): try every form of
+  // what was said against this round's track and submit the one the matcher accepts.
+  const submitVoice = useCallback(
+    (cleaned: string, raw: string) => {
+      const s = useGameStore.getState().state;
+      const r = currentRound(s);
+      submit(r ? pickVoiceGuess(cleaned, raw, r.track, s.settings.guessTarget) : cleaned);
+    },
+    [submit],
+  );
+  const voice = useVoiceGuess({ onFinal: submitVoice });
 
   const onNext = useCallback(() => {
     if (useGameStore.getState().state.status !== 'round-over') return;

@@ -4,8 +4,12 @@ import { cleanTranscript } from './cleanup';
 import { createRecognizer, type RecognizerOptions } from './recognizer';
 
 export interface UseVoiceGuessOptions extends RecognizerOptions {
-  /** Called with the cleaned transcript when the engine finalises an utterance. */
-  onFinal?: (text: string) => void;
+  /**
+   * Called when the engine finalises an utterance, with the cleaned transcript and the raw one.
+   * Cleanup is lossy ("Stand By Me" → "Stand - Me"), so callers that know the answer should pick
+   * between the two — see `pickVoiceGuess`.
+   */
+  onFinal?: (cleaned: string, raw: string) => void;
   /** Called with each raw partial, if you want to mirror it somewhere else. */
   onInterim?: (text: string) => void;
   /** Sample the microphone for a VU meter. Default true. */
@@ -37,8 +41,9 @@ const LEVEL_EPSILON = 0.02;
  * Push-to-talk voice guessing.
  *
  * `start()` runs one utterance: partials land in `interim`, and the final
- * transcript is cleaned and handed to `onFinal`. Safe to call on Firefox —
- * `supported` is false and `start()` just reports a friendly error.
+ * transcript is cleaned and handed to `onFinal` (alongside the raw text). Safe
+ * to call on Firefox — `supported` is false and `start()` just reports a
+ * friendly error.
  */
 export function useVoiceGuess(options: UseVoiceGuessOptions = {}): UseVoiceGuess {
   const { lang, interim: wantInterim = true, maxAlternatives, meter = true } = options;
@@ -87,9 +92,10 @@ export function useVoiceGuess(options: UseVoiceGuessOptions = {}): UseVoiceGuess
           return;
         }
         setInterim('');
-        const cleaned = cleanRef.current(r.transcript);
+        const raw = r.transcript.trim();
+        const cleaned = cleanRef.current(raw);
         setTranscript(cleaned);
-        if (cleaned.length > 0) onFinalRef.current?.(cleaned);
+        if (cleaned.length > 0) onFinalRef.current?.(cleaned, raw);
       },
       onEnd: () => {
         setListening(false);

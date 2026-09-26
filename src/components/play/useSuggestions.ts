@@ -1,24 +1,31 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { GameState, Track } from '@/types';
+import type { GameSettings, GameState, Track } from '@/types';
 import { TrackIndex } from '@/game/match';
 import { searchTracks } from '@/lib/deezer';
-import { trackKey } from '@/lib/catalog';
+import { buildPool, trackKey } from '@/lib/catalog';
 
 export const REMOTE_DEBOUNCE_MS = 250;
 export const REMOTE_MIN_CHARS = 3;
 export const REMOTE_WHEN_FEWER_THAN = 3;
 export const MAX_SUGGESTIONS = 8;
+/**
+ * A game pool smaller than this is the answer sheet (a challenge link carries ≤ 60 exact tracks,
+ * an online duel's `init` is capped at 60), so the suggestion pool is widened to the packs' catalogue.
+ */
+export const BROAD_POOL_WHEN_FEWER_THAN = 40;
 
-/** The whole pool of a game (played + upcoming), memoized per game id. */
-export function useGamePool(state: GameState): Track[] {
-  const ref = useRef<{ id: string; pool: Track[] } | null>(null);
-  if (!ref.current || ref.current.id !== state.id) {
-    ref.current = { id: state.id, pool: [...state.rounds.map((r) => r.track), ...state.queue] };
-  }
-  return ref.current.pool;
+let broadPool: { id: string; promise: Promise<Track[]> } | null = null;
+
+/** The packs' whole catalogue at every difficulty, resolved once per game id. Failures yield []. */
+function loadBroadPool(gameId: string, settings: GameSettings): Promise<Track[]> {
+  if (broadPool?.id === gameId) return broadPool.promise;
+  const { packIds, explicitFilter } = settings;
+  const promise = buildPool({ packIds, difficulty: 'any', explicitFilter }).catch((): Track[] => []);
+  broadPool = { id: gameId, promise };
+  return promise;
 }
 
-function merge(local: readonly Track[], remote: readonly Track[], limit: number): Track[] {
+function merge(local: readonly Track[], remote: readonly Track[], limit = Number.POSITIVE_INFINITY): Track[] {
   const out: Track[] = [];
   const ids = new Set<number>();
   const keys = new Set<string>();
@@ -31,6 +38,35 @@ function merge(local: readonly Track[], remote: readonly Track[], limit: number)
     if (out.length >= limit) break;
   }
   return out;
+}
+
+/**
+ * The suggestion pool of a game: its own tracks (played + upcoming), memoized per game id, unioned
+ * in the background with the packs' catalogue when the game's pool is too small to hide the answers.
+ */
+export function useGamePool(state: GameState): Track[] {
+  const ref = useRef<{ id: string; pool: Track[] } | null>(null);
+  if (!ref.current || ref.current.id !== state.id) {
+    ref.current = { id: state.id, pool: [...state.rounds.map((r) => r.track), ...state.queue] };
+  }
+  const local = ref.current.pool;
+  const gameId = state.id;
+  const settings = state.settings;
+  const narrow = local.length < BROAD_POOL_WHEN_FEWER_THAN;
+  const [broad, setBroad] = useState<{ id: string; tracks: Track[] } | null>(null);
+
+  useEffect(() => {
+    if (!narrow) return;
+    let alive = true;
+    void loadBroadPool(gameId, settings).then((tracks) => {
+      if (alive && tracks.length > 0) setBroad({ id: gameId, tracks });
+    });
+    return () => {
+      alive = false;
+    };
+  }, [gameId, settings, narrow]);
+
+  return useMemo(() => (broad && broad.id === gameId ? merge(local, broad.tracks) : local), [local, broad, gameId]);
 }
 
 /**

@@ -1,5 +1,6 @@
 import { motion, useReducedMotion } from 'motion/react';
 import type { Round } from '@/types';
+import { AUTOPLAY_BLOCKED } from '@/audio';
 import { AlbumArt } from '@/components/AlbumArt';
 import { Vinyl } from '@/components/Vinyl';
 import { Visualizer } from '@/components/Visualizer';
@@ -19,6 +20,16 @@ export interface StageProps {
 
 function statusLine(audio: GameAudio, live: boolean): React.ReactNode {
   if (audio.loading) return 'Dropping the needle…';
+  if (audio.error) {
+    // The record is the retry affordance: it re-fetches the preview (live) or replays the reveal.
+    return live ? (
+      <>
+        Tap the record or press <Kbd size="sm">Space</Kbd> to retry
+      </>
+    ) : (
+      'Tap the record to hear the song'
+    );
+  }
   if (!live) return 'Round over';
   if (audio.vinylState === 'playing') return 'Listening…';
   if (audio.vinylState === 'done')
@@ -40,6 +51,9 @@ export function Stage({ round, blur, audio, clipLabel, live, onGiveUp }: StagePr
   const { track } = round;
   const cover = track.coverBig || track.cover;
   const playing = audio.vinylState === 'playing';
+  const failed = audio.error !== null;
+  // "Audio needs a tap" is the expected state after an auto-reveal outside a gesture — not worth red ink.
+  const showError = failed && audio.error !== AUTOPLAY_BLOCKED;
 
   return (
     <section
@@ -47,6 +61,7 @@ export function Stage({ round, blur, audio, clipLabel, live, onGiveUp }: StagePr
       aria-label="Now playing"
       data-testid="stage"
       data-vinyl={audio.vinylState}
+      data-error={failed ? '' : undefined}
     >
       {cover && (
         <div
@@ -81,16 +96,20 @@ export function Stage({ round, blur, audio, clipLabel, live, onGiveUp }: StagePr
             clipLabel={clipLabel}
             coverUrl={track.cover || cover}
             blur={blur}
-            onClick={audio.play}
-            disabled={!live || !!audio.error}
+            // Live: play / replay (clears a failure and retries). Round over: only a failed reveal
+            // makes the record tappable — it retries the full song, like the card's "Hear the song".
+            onClick={live ? audio.play : audio.hear}
+            disabled={!live && !failed}
+            aria-label={failed ? (live ? `Retry clip (${clipLabel})` : 'Hear the song') : undefined}
           />
           <div className={cn('mt-5 h-12 w-full max-w-xs transition-opacity', playing ? 'opacity-100' : 'opacity-70')}>
             <Visualizer analyser={audio.analyser} active={playing} variant="bars" bars={40} idleAmplitude={0.5} />
           </div>
-          <p className="mt-2 min-h-5 font-mono text-[11px] uppercase tracking-widest text-muted" aria-live="polite">
-            {audio.error ? <span className="text-danger normal-case tracking-normal">{audio.error}</span> : statusLine(audio, live)}
+          <p className="mt-2 min-h-5 text-center font-mono text-[11px] uppercase tracking-widest text-muted" aria-live="polite">
+            {showError && <span className="block text-danger normal-case tracking-normal">{audio.error}</span>}
+            {statusLine(audio, live)}
           </p>
-          {audio.error && live && (
+          {failed && live && (
             <Button variant="danger" size="sm" className="mt-2" onClick={onGiveUp}>
               Give up &amp; next
             </Button>
