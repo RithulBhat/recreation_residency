@@ -8,11 +8,11 @@
     "legends": ["Larry Fitzgerald", "Kurt Warner", "Pat Tillman", "Aeneas Williams", "Dan Dierdorf", "Jim Hart", "Adrian Wilson", "Ollie Matson"],
     "facts": [
       "It is the oldest continuously operating professional football club in the United States, tracing back to an 1898 neighborhood athletic club.",
-      "Its first jerseys were bought secondhand from the University of Chicago; the faded maroon is where the nickname came from.",
+      "Secondhand maroon jerseys bought from the University of Chicago in 1901 had faded so far that the owner renamed the club for the shade of red he saw instead.",
       "It has represented Chicago, St. Louis and the desert Southwest over its history.",
-      "It won NFL championships in 1925 and 1947 and has never won a Super Bowl.",
+      "It won NFL championships in 1925 and 1947, both while based in Chicago.",
       "A safety left the roster to enlist in the Army Rangers after 9/11 and was killed in Afghanistan; a statue of him stands at the stadium.",
-      "Its only Super Bowl appearance came after the 2008 season and was decided by a touchdown in the final minute.",
+      "It reached its first Super Bowl after the 2008 season and lost 27-23 on a touchdown inside the final minute.",
       "Home games are played under a retractable roof, on a natural grass field that rolls out of the building on a tray.",
       "A receiver spent all 17 of his NFL seasons here and retired second on the all-time receiving yards list."
     ]
@@ -44,7 +44,7 @@
       "The nickname was picked in a fan phone-in poll and honors a poem written by a one-time resident of the city.",
       "Its first draft pick was an offensive tackle who made 11 Pro Bowls and reached the Hall of Fame.",
       "The franchise arrived in 1996 when an owner moved his team from another city, leaving the old name and record book behind.",
-      "Its 2000 defense gave up 165 points across a 16-game season, a modern record, and pitched four shutouts.",
+      "Its 2000 defense gave up 165 points, the fewest of any 16-game season, and pitched four shutouts.",
       "A middle linebacker played all 17 of his seasons for the franchise and retired minutes after winning a title.",
       "It won a Super Bowl in a game interrupted by a 34-minute stadium power outage.",
       "A quarterback drafted here in 2018 won a unanimous MVP the next year after setting the single-season rushing record for his position."
@@ -57,13 +57,13 @@
     "rivals": ["MIA", "NE", "NYJ"],
     "legends": ["Jim Kelly", "Bruce Smith", "Thurman Thomas", "Andre Reed", "Steve Tasker", "Cornelius Bennett", "Darryl Talley"],
     "facts": [
-      "Its two AFL championships, in 1964 and 1965, are the only league titles in its history.",
+      "It won back-to-back AFL championships in 1964 and 1965, before the leagues merged.",
       "A running back here became the first to rush for 2,000 yards in a season, and did it in only 14 games.",
       "Its early-1990s offense ran a no-huddle scheme known as the K-Gun.",
-      "It won a playoff game after trailing 35-3, the largest comeback in NFL history.",
+      "It won a playoff game after trailing 35-3, the largest comeback in NFL postseason history.",
       "Lake-effect snow has twice forced its home games to be relocated to a domed stadium in another state.",
       "A missed 47-yard field goal in the final seconds cost it the Super Bowl after the 1990 season.",
-      "It is the only team to lose four Super Bowls in a row.",
+      "It lost four Super Bowls in a row, after the 1990 through 1993 seasons.",
       "Its fan base is famous for breaking folding tables at tailgates and for donating en masse to charities tied to opposing players."
     ]
   },
@@ -90,14 +90,14 @@
     "rivals": ["GB", "MIN", "DET"],
     "legends": ["Walter Payton", "Dick Butkus", "Mike Singletary", "Gale Sayers", "Bronko Nagurski", "Sid Luckman", "Brian Urlacher", "Devin Hester"],
     "facts": [
-      "It started in 1920 as a company team for a starch manufacturer in Decatur, Illinois.",
-      "Its 1940 championship game win was 73-0, the most lopsided result in league history.",
+      "It entered the league in 1920 as a company team for a starch manufacturer in Decatur, Illinois.",
+      "Its 1940 championship game win was 73-0, the most lopsided result of the NFL's first century.",
       "A rookie here scored six touchdowns in a single game in 1965.",
-      "It has sent more players to the Pro Football Hall of Fame than any other franchise.",
+      "By 2025 it had sent more players to the Pro Football Hall of Fame than any other franchise.",
       "It is one of only two franchises that have been in the NFL continuously since 1920.",
       "Its 1985 defense ran a scheme named after a jersey number and allowed 10 points total in three playoff games.",
       "A running back retired in 1987 as the league's all-time leading rusher with 16,726 yards.",
-      "Home games are played in the oldest stadium in the NFL, on a city lakefront."
+      "Since 1971 home games have been played on a city lakefront, in a stadium that opened in 1924 as a war memorial."
     ]
   },
   "CIN": {
@@ -108,12 +108,12 @@
     "legends": ["Anthony Munoz", "Ken Anderson", "Boomer Esiason", "Chad Johnson", "Isaac Curtis", "Tim Krumrie", "Carson Palmer"],
     "facts": [
       "It was founded in 1968 by a coach who had built another Ohio franchise and then been fired from it.",
-      "Its striped helmet, introduced in 1981, was the first tiger-stripe design in the NFL.",
+      "Its striped helmet arrived in 1981, replacing a plain orange shell that had carried only block letters.",
       "A touchdown celebration called the Ickey Shuffle came out of its 1988 Super Bowl team.",
       "It lost two Super Bowls in the 1980s to the same opponent, both by fewer than six points.",
       "It went 31 seasons without a playoff win, from the 1990 season to the 2021 season.",
-      "A receiver here legally changed his surname to the Spanish rendering of his jersey number.",
-      "It reached the Super Bowl after the 2021 season behind a quarterback taken first overall two years before."
+      "A receiver here legally changed his surname in 2008 to a Spanish play on his jersey number, 85.",
+      "It reached the Super Bowl after the 2021 season behind a quarterback taken first overall a year earlier."
     ]
   },
   "CLE": {
@@ -130,7 +130,7 @@
       "The franchise was shut down for three seasons in the late 1990s while its name and records stayed behind in the city.",
       "A left tackle here played 10,363 consecutive snaps.",
       "It finished 0-16 in 2017.",
-      "One end-zone bleacher section is nicknamed the Dawg Pound."
+      "A cornerback nicknamed the 1985 defense after dogs, and the bleachers behind one end zone took the name; the fans in them bark and wear dog masks."
     ]
   },
   "DAL": {
@@ -157,14 +157,14 @@
     "rivals": ["KC", "LV", "LAC"],
     "legends": ["John Elway", "Terrell Davis", "Shannon Sharpe", "Von Miller", "Peyton Manning", "Champ Bailey", "Floyd Little", "Randy Gradishar"],
     "facts": [
-      "Its first uniforms included vertically striped socks so unpopular that players burned them in a public bonfire in 1962.",
+      "Its first uniforms included vertically striped socks so unpopular that a new coach had them burned at a public bonfire in 1962.",
       "Its 1977 defense was nicknamed the Orange Crush.",
       "A 98-yard march in the 1986 conference championship game is remembered simply as The Drive.",
       "It lost its first four Super Bowls, three of them by 19 points or more.",
       "A running back here gained 2,008 yards on the ground in 1998.",
       "Its quarterback won back-to-back Super Bowls and retired immediately after the second.",
       "Its 2013 offense scored 606 points, the most any team had managed in a season at the time.",
-      "It won a Super Bowl after the 2015 season with the league's best defense and a quarterback playing his last game."
+      "It won a Super Bowl after the 2015 season with a defense that led the league in yards allowed and a quarterback playing his last game."
     ]
   },
   "DET": {
@@ -176,12 +176,12 @@
     "facts": [
       "The franchise began in Portsmouth, Ohio, and moved to its current city in 1934.",
       "It has hosted a game on Thanksgiving Day in nearly every season since 1934.",
-      "It won NFL championships in 1935, 1952, 1953 and 1957, and nothing since.",
+      "It won NFL championships in 1935, 1952, 1953 and 1957.",
       "A running back abruptly retired in 1999 while still within 1,500 yards of the all-time rushing record.",
       "A receiver here gained 1,964 yards in 2012, the most in a season by anyone at the time.",
       "It finished 0-16 in 2008, the first team ever to do so.",
       "It won its first playoff game in 32 years after the 2023 season.",
-      "Its fans rally around the two-word chant 'One Pride'."
+      "Its fans rally around a two-word chant built on the collective noun for a group of its namesake animal."
     ]
   },
   "GB": {
@@ -196,7 +196,7 @@
       "It won three consecutive league championships twice, in 1929-31 and again in 1965-67.",
       "The 1967 championship game it hosted, played at 13 below zero, is known as the Ice Bowl.",
       "The Super Bowl trophy is named after its head coach of the 1960s.",
-      "It has won 13 league championships, more than any other franchise.",
+      "It won nine league championships before the Super Bowl existed, more than any other franchise.",
       "Two of its quarterbacks won a combined seven MVP awards in back-to-back eras.",
       "Its signature touchdown celebration is a jump into the arms of fans in the front row."
     ]
@@ -241,12 +241,12 @@
     "rivals": ["TEN", "IND", "HOU"],
     "legends": ["Fred Taylor", "Tony Boselli", "Mark Brunell", "Jimmy Smith", "Maurice Jones-Drew", "Josh Scobee", "Calais Campbell"],
     "facts": [
-      "Its first head coach came from a Super Bowl-winning staff and took it to four playoff berths in five years.",
+      "Its first head coach had coached receivers on a Super Bowl-winning staff and took it to four playoff berths in five years.",
       "It reached a conference championship game in only its second season as an expansion team.",
       "It drafted first overall in consecutive years, 2021 and 2022.",
       "It has played at least one home game in London in nearly every season since 2013.",
-      "It won a playoff game after the 2017 season with the league's top-ranked defense.",
-      "It erased a 27-0 halftime deficit to win a playoff game after the 2022 season.",
+      "It won a playoff game after the 2017 season behind a defense that allowed fewer passing yards than any other.",
+      "It erased a 27-0 deficit to win a playoff game 31-30 after the 2022 season.",
       "Its stadium has two swimming pools built into one end zone and some of the largest video boards in the league."
     ]
   },
@@ -260,11 +260,11 @@
       "It began in 1960 in Dallas under a different name and moved in 1963.",
       "Its founder also founded the entire league it started out in.",
       "Its founder coined the phrase 'Super Bowl' after watching his children play with a bouncy toy ball.",
-      "A linebacker here recorded seven sacks in a single game in 1990, an NFL record.",
+      "A linebacker here set the single-game sack record with seven in 1990.",
       "A tight end it drafted in 1997 retired as the most productive player ever at his position.",
       "It won the fourth Super Bowl ever played and then waited 50 years to win another.",
-      "Its stadium holds the Guinness world record for the loudest crowd roar at a sports venue.",
-      "It won three Super Bowls within five seasons in the 2020s."
+      "Its stadium set a Guinness world record in 2014 with a 142.2-decibel crowd roar.",
+      "It won three Super Bowls in five seasons, after the 2019, 2022 and 2023 seasons."
     ]
   },
   "LAC": {
@@ -275,7 +275,7 @@
     "legends": ["LaDainian Tomlinson", "Junior Seau", "Dan Fouts", "Philip Rivers", "Antonio Gates", "Lance Alworth", "Kellen Winslow"],
     "facts": [
       "It played its first season in one city, spent 56 years in another, then moved back in 2017.",
-      "It won the 1963 AFL championship, still its only league title.",
+      "It won the 1963 AFL championship 51-10.",
       "Its high-volume passing offense of the late 1970s was nicknamed Air Coryell.",
       "A brutally humid 1981 playoff win in Miami is remembered as the Epic in Miami.",
       "A linebacker it drafted in 1990 made 12 straight Pro Bowls.",
@@ -295,7 +295,7 @@
       "It is the only franchise to win league championships representing three different cities.",
       "Its defensive line of the 1960s was known as the Fearsome Foursome.",
       "A running back here set the single-season rushing record with 2,105 yards in 1984.",
-      "Its 1999 offense was nicknamed the Greatest Show on Turf and won a Super Bowl by a single yard.",
+      "Its 1999 offense was nicknamed the Greatest Show on Turf and won a Super Bowl on a tackle made a yard short of the goal line.",
       "It returned to its current city in 2016 after 21 seasons in Missouri.",
       "A defensive tackle here won three Defensive Player of the Year awards in a four-year span.",
       "It won a Super Bowl played in its own stadium after the 2021 season."
@@ -329,7 +329,7 @@
       "Its early-1970s defense was called the No-Name Defense.",
       "A quarterback here faked a spike and threw a touchdown instead in 1994.",
       "It won consecutive Super Bowls after the 1972 and 1973 seasons.",
-      "It is the only team to finish a season unbeaten and untied in the Super Bowl era.",
+      "Its 1972 team went 17-0, the only perfect season, playoffs included, of the NFL's first century.",
       "A quarterback here threw for 5,084 yards and 48 touchdowns in 1984.",
       "Its coach retired as the winningest in NFL history with 347 victories.",
       "Home games are played under a canopy that shades the seats but leaves the field open."
@@ -344,7 +344,7 @@
     "facts": [
       "A defensive tackle here won MVP in 1971, the first defensive player ever to do it.",
       "Its defensive line of the 1970s was nicknamed the Purple People Eaters.",
-      "It lost four Super Bowls between the 1969 and 1976 seasons and has not been back.",
+      "It lost four Super Bowls between the 1969 and 1976 seasons.",
       "It lost a home conference championship game after a 15-1 season on a missed field goal by a kicker who had not missed all year.",
       "A running back here gained 296 yards on the ground in a single 2007 game.",
       "A running back here returned from a torn knee ligament to rush for 2,097 yards and win MVP.",
@@ -377,7 +377,7 @@
     "legends": ["Drew Brees", "Archie Manning", "Rickey Jackson", "Morten Andersen", "Willie Roaf", "Marques Colston", "Deuce McAllister"],
     "facts": [
       "The franchise was awarded on a Catholic feast day in 1966, and took its nickname straight from it.",
-      "A kicker here made a 63-yard field goal in 1970 that stood as the NFL record for 28 years.",
+      "A kicker here made a 63-yard field goal in 1970 that went unmatched for 28 years and unbeaten for 43.",
       "Fans wore paper bags over their heads through a 1-15 season in 1980.",
       "It did not win a playoff game until its 34th season.",
       "Its stadium sheltered thousands of evacuees after a 2005 hurricane, and the team played that entire season away from home.",
@@ -412,10 +412,10 @@
     "facts": [
       "It started in 1960 under an entirely different name and changed it in 1963 when new owners took over.",
       "Its defensive line around 1981 earned a nickname riffing on the city's stock exchange.",
-      "A running back here won the rushing title in 2004, the oldest player ever to win his first.",
+      "A running back here won the 2004 rushing title at 31, by a single yard.",
       "A cornerback here was so hard to throw at that his coverage area got its own island nickname.",
       "Its quarterback publicly guaranteed a Super Bowl win and then delivered a 16-7 upset.",
-      "That victory, after the 1968 season, is still its only league championship.",
+      "That win, after the 1968 season, was the first by an AFL team over an NFL champion.",
       "It reached back-to-back conference championship games after the 2009 and 2010 seasons.",
       "It shares a New Jersey stadium with another franchise."
     ]
@@ -446,8 +446,8 @@
     "facts": [
       "It was originally named after the city's baseball club.",
       "Its helmet logo appears on only one side, a holdover from a 1962 experiment that was never undone.",
-      "Its colors are taken from the city's coat of arms.",
-      "Its defense of the 1970s was called the Steel Curtain.",
+      "Its colors are taken from the city's flag.",
+      "Its 1970s defensive front was named in a 1971 radio contest that welded the city industry onto a Cold War phrase.",
       "It won a 1972 playoff game on a deflected pass scooped up inches off the turf and run in for a score.",
       "It won four Super Bowls in six seasons in the 1970s.",
       "It won its sixth Super Bowl after the 2008 season on a toe-tap catch in the corner of the end zone.",
@@ -464,9 +464,9 @@
       "As part of its expansion deal it played its first season in one conference and its second in the other.",
       "It is the only franchise to have appeared in a championship game in both conferences.",
       "Its jersey number 12 is retired in honor of its fans.",
-      "A 2011 playoff touchdown run was so violent that it registered on a nearby seismometer.",
+      "A 67-yard playoff touchdown run after the 2010 season was so violent that it registered on a nearby seismometer.",
       "Its stadium was deliberately designed to trap and amplify crowd noise, and its fans have twice set the world record for loudest crowd.",
-      "Its 2013 defense was nicknamed the Legion of Boom and won a Super Bowl 43-8.",
+      "Its hard-hitting 2013 secondary earned a nickname of its own and won a Super Bowl 43-8 over the highest-scoring offense in NFL history to that point.",
       "It lost the following Super Bowl on an interception at the one-yard line.",
       "It won a second Super Bowl after the 2025 season, beating a six-time champion 29-13."
     ]
@@ -479,7 +479,7 @@
     "legends": ["Joe Montana", "Jerry Rice", "Ronnie Lott", "Steve Young", "Charles Haley", "Patrick Willis", "Frank Gore", "Bryant Young"],
     "facts": [
       "It is named for the prospectors of an 1849 gold rush.",
-      "It was one of three teams absorbed into the NFL when a rival league folded in 1950.",
+      "It was one of three teams taken into the NFL for 1950 when a rival league folded.",
       "Its 1950s backfield was called the Million Dollar Backfield, and all four members reached the Hall of Fame.",
       "A late touchdown pass in the 1981 conference championship game is remembered simply as The Catch.",
       "Its system of timed, short, rhythmic passes became known as the West Coast offense.",
@@ -495,13 +495,13 @@
     "rivals": ["NO", "ATL", "CAR"],
     "legends": ["Derrick Brooks", "Warren Sapp", "John Lynch", "Ronde Barber", "Lee Roy Selmon", "Mike Alstott", "Doug Williams"],
     "facts": [
-      "It lost its first 26 games, the longest losing streak to open a franchise's existence.",
+      "It lost the first 26 games in its history.",
       "Its original orange uniforms and winking pirate logo earned the era the nickname Creamsicle.",
       "It reached a conference championship game in only its fourth season.",
       "It had 14 consecutive losing seasons from 1983 through 1996.",
       "Its 2002 defense allowed the fewest points in the league and won a Super Bowl 48-21.",
       "Its home end zone holds a 103-foot pirate ship whose cannons fire after scores.",
-      "It signed a 43-year-old quarterback in 2020 and won the title that season.",
+      "It signed a 42-year-old quarterback in March 2020 and won the title with him that season, by which time he had turned 43.",
       "It was the first team ever to win a Super Bowl played in its own stadium."
     ]
   },
@@ -535,7 +535,7 @@
       "A cornerback here played all 20 of his NFL seasons for the franchise.",
       "It won a Super Bowl with the first Black starting quarterback to do so, who threw four touchdown passes in one quarter.",
       "It won three Super Bowls in a decade with three different starting quarterbacks.",
-      "It has won five league championships in all, two of them before the Super Bowl existed.",
+      "It won NFL championships in 1937 and 1942, before the Super Bowl existed.",
       "It changed its team name twice in three years, in 2020 and again in 2022."
     ]
   }

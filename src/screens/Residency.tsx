@@ -1,88 +1,120 @@
 import type { ReactNode } from 'react';
-import { Link } from 'react-router';
-import { ArrowRight, Disc3, ScanFace } from 'lucide-react';
-import { Badge } from '@/components/ui/Badge';
-import { Card } from '@/components/ui/Card';
-import { SectionHeading } from '@/components/SectionHeading';
-import { Footer } from '@/components/Footer';
-import { GAME_LABEL, GAME_TAGLINE, R, RESIDENCY_NAME } from '@/routes';
+import type { GameTone } from '@/components/hub/GameCard';
+import { GAME_LABEL, GAME_TAGLINE, R } from '@/routes';
+import {
+  GameCard,
+  HubFooter,
+  HubHero,
+  InsideStrip,
+  SCOUT_PLAYER_COUNT,
+  ScoutArt,
+  SONGOONER_PACK_COUNT,
+  SongoonerArt,
+} from '@/components/hub';
+import '@/components/hub/hub.css';
 
-interface ResidencyGame {
-  to: string;
+interface HubGame {
+  kicker: string;
   name: string;
   tagline: string;
   blurb: string;
-  icon: ReactNode;
+  facts: readonly string[];
+  to: string;
+  playTo: string;
+  playLabel: string;
   badge?: string;
+  tone: GameTone;
+  art: ReactNode;
 }
 
-const GAMES: readonly ResidencyGame[] = [
+/**
+ * The two worlds. `?autostart=1` is the lobby's "skip the setup" flag, so the card's Play button
+ * really does drop you into a round rather than onto another screen.
+ */
+const GAMES: readonly HubGame[] = [
   {
-    to: R.songooner.home,
+    kicker: 'Music',
     name: GAME_LABEL.songooner,
     tagline: GAME_TAGLINE.songooner,
-    blurb: 'Thousands of songs, 220 packs, any clip from 0.1 to 10 seconds. Classic, blitz, survival, duels and a daily run.',
-    icon: <Disc3 />,
+    blurb:
+      'A tenth of a second of a song. Name it, or trade points for a longer clip. Classic, blitz, survival, duels, party mode and a daily run.',
+    facts: ['0.1s → 10s clips', `${SONGOONER_PACK_COUNT} packs`, 'Duels, party & voice'],
+    to: R.songooner.home,
+    playTo: `${R.songooner.setup}?autostart=1`,
+    playLabel: 'Play Songooner now',
+    tone: 'accent',
+    art: <SongoonerArt />,
   },
   {
-    to: R.scout.home,
+    kicker: 'NFL',
     name: GAME_LABEL.scout,
     tagline: GAME_TAGLINE.scout,
-    blurb: 'Silhouettes, face zooms, redacted play-by-play and team trivia — real NFL rosters, revealed one clue at a time.',
-    icon: <ScanFace />,
+    blurb:
+      'A blacked-out headshot, revealed one try at a time. Or an extreme face zoom, a redacted play-by-play, a season stat line, a career path, a logo crop.',
+    facts: [`${SCOUT_PLAYER_COUNT.toLocaleString()} players`, '7 clue modes', 'Real play-by-play'],
+    to: R.scout.home,
+    playTo: `${R.scout.setup}?autostart=1`,
+    playLabel: 'Play Highlight Scout now',
     badge: 'New',
+    tone: 'accent-2',
+    art: <ScoutArt />,
   },
 ];
 
 /**
- * The hub. Deliberately structural: one h1, one line of copy, one card per game. The visual pass
- * lands on top of this skeleton, so everything here is a design-system primitive on semantic tokens.
+ * The front door.
+ *
+ * A marquee, one card per game — each card its own world, built from the game's own art — a quiet
+ * strip of what the house actually holds, and a footer that credits both data sources. Nothing here
+ * blocks first paint: the counts are constants (pinned to the real JSON by `counts.test.ts`), the
+ * Scout silhouette is a runtime image from ESPN's CORS-enabled CDN, and "welcome back" is read from
+ * `localStorage` after mount.
  */
 export default function Residency() {
   return (
-    <div className="flex flex-col gap-8 pb-4 sm:gap-12">
-      {/* Left-aligned like every other screen title. `align="center"` is not used: SectionHeading's
-          centred variant still resolves to `align-items: flex-end` in the generated CSS. */}
-      <SectionHeading
-        as="h1"
-        size="lg"
-        eyebrow="Two games, one house"
-        title={<span id="residency-title">{RESIDENCY_NAME}</span>}
-        description="Guess songs from a heartbeat of audio, or name the NFL player behind the silhouette. Free, no sign-up, nothing to install."
-      />
+    <div className="flex flex-col gap-8 pb-2 sm:gap-14">
+      <HubHero />
 
-      <ul className="grid gap-4 sm:grid-cols-2 sm:gap-5" aria-labelledby="residency-title" data-testid="residency-games">
-        {GAMES.map((g) => (
-          <li key={g.to} className="min-w-0">
-            <Link
-              to={g.to}
-              className="group block h-full rounded-3xl focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent-2"
-            >
-              <Card interactive padding="lg" className="flex h-full min-w-0 flex-col items-start gap-3">
-                <div className="flex w-full min-w-0 items-start justify-between gap-3">
-                  <span className="grid size-14 shrink-0 place-items-center rounded-2xl bg-accent/15 text-accent [&>svg]:size-7" aria-hidden>
-                    {g.icon}
-                  </span>
-                  {g.badge && (
-                    <Badge tone="accent" dot>
-                      {g.badge}
-                    </Badge>
-                  )}
-                </div>
-                <h2 className="min-w-0 font-display text-2xl font-black tracking-tight text-fg sm:text-3xl">{g.name}</h2>
-                <p className="text-sm font-semibold text-accent">{g.tagline}</p>
-                <p className="text-sm text-muted">{g.blurb}</p>
-                <span className="mt-auto inline-flex items-center gap-1.5 pt-2 text-sm font-bold text-fg">
-                  Play {g.name}
-                  <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" aria-hidden />
-                </span>
-              </Card>
-            </Link>
-          </li>
-        ))}
-      </ul>
+      <section aria-labelledby="hub-games">
+        <div className="mb-4 flex items-center gap-3 sm:mb-5">
+          <h2
+            id="hub-games"
+            className="font-mono text-[11px] font-semibold uppercase tracking-[0.28em] text-muted"
+          >
+            Select a game
+          </h2>
+          <span className="h-px flex-1 bg-gradient-to-r from-border to-transparent" aria-hidden />
+        </div>
 
-      <Footer className="mt-0" />
+        <ul
+          className="grid gap-4 lg:grid-cols-2 lg:gap-6"
+          data-testid="residency-games"
+          aria-labelledby="hub-games"
+        >
+          {GAMES.map((g, i) => (
+            <li key={g.to} className="min-w-0">
+              <GameCard
+                index={i + 1}
+                kicker={g.kicker}
+                name={g.name}
+                tagline={g.tagline}
+                blurb={g.blurb}
+                facts={g.facts}
+                to={g.to}
+                playTo={g.playTo}
+                playLabel={g.playLabel}
+                badge={g.badge}
+                tone={g.tone}
+                art={g.art}
+              />
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      <InsideStrip />
+
+      <HubFooter className="mt-0" />
     </div>
   );
 }

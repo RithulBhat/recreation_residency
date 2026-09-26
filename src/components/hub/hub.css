@@ -1,0 +1,157 @@
+/* ------------------------------------------------------------------
+   Residency hub — the art on the two game cards.
+
+   Tailwind covers layout; these rules exist because the two worlds are
+   built from layered gradients that are unreadable as arbitrary-value
+   utilities. Every colour resolves through a --sg-* theme variable, so
+   the light spill, the chalk grid and the rim light follow all four
+   themes without a single hard-coded hex.
+   ------------------------------------------------------------------ */
+
+/* --- Songooner: a violet → cyan → pink light spill behind the record --- */
+
+.hub-stage-song {
+  background:
+    radial-gradient(85% 80% at 14% 4%, color-mix(in oklab, var(--sg-accent-vivid) 42%, transparent), transparent 62%),
+    radial-gradient(85% 80% at 88% 14%, color-mix(in oklab, var(--sg-accent-2-vivid) 36%, transparent), transparent 60%),
+    radial-gradient(110% 90% at 50% 118%, color-mix(in oklab, var(--sg-accent-3-vivid) 34%, transparent), transparent 64%),
+    var(--sg-bg-elevated);
+}
+
+/* Concentric grooves radiating past the record, so the light spill has structure. */
+.hub-grooves {
+  background: repeating-radial-gradient(
+    circle at 50% 52%,
+    transparent 0 10px,
+    color-mix(in oklab, var(--sg-fg) 7%, transparent) 10px 11px
+  );
+  mask-image: radial-gradient(circle at 50% 52%, #000 22%, transparent 74%);
+  -webkit-mask-image: radial-gradient(circle at 50% 52%, #000 22%, transparent 74%);
+}
+
+/* --- Highlight Scout: a chalkboard with field markings --- */
+
+.hub-stage-scout {
+  background:
+    /* stadium light, from above */
+    radial-gradient(64% 58% at 50% -12%, color-mix(in oklab, var(--sg-accent-2-vivid) 24%, transparent), transparent 72%),
+    /* yard lines every 12.5% */
+    repeating-linear-gradient(
+      90deg,
+      color-mix(in oklab, var(--sg-fg) 13%, transparent) 0 1px,
+      transparent 1px 12.5%
+    ),
+    /* chalk rules */
+    repeating-linear-gradient(
+      0deg,
+      color-mix(in oklab, var(--sg-fg) 6%, transparent) 0 1px,
+      transparent 1px 25%
+    ),
+    var(--sg-bg-elevated);
+}
+
+/* Hash marks: one short tick every 1.5625% (eight per yard-line gap). */
+.hub-hashes {
+  background: repeating-linear-gradient(
+    90deg,
+    color-mix(in oklab, var(--sg-fg) 22%, transparent) 0 1px,
+    transparent 1px 1.5625%
+  );
+}
+
+/*
+ * The broadcast monitor behind the silhouette. `fg 10%` over the elevated surface lands slightly
+ * lighter than the card in the dark themes and slightly darker in the light ones — either way the
+ * blacked-out figure has something to sit against.
+ */
+.hub-monitor {
+  background:
+    radial-gradient(75% 60% at 50% 0%, color-mix(in oklab, var(--sg-accent-2-vivid) 30%, transparent), transparent 70%),
+    color-mix(in oklab, var(--sg-fg) 16%, var(--sg-bg-elevated));
+}
+
+/*
+ * The silhouette treatment from the Highlight Scout visual spec: head crop, blacked out, rim lit so
+ * the hairline and jaw carry the shape. Same numbers the game's own stage uses.
+ */
+.hub-silhouette {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 50% 50%;
+  /*
+   * `cover` on a 600x436 source in a square already matches heights, so only the transform frames
+   * the shot. The spec's 2.1x is tuned for the game's 280-380 px stage; the card's monitor is half
+   * that, and anchoring the zoom at the top edge keeps every crown in the rotation inside the frame
+   * while still landing a head-and-neck crop rather than the rejected full bust.
+   */
+  transform: scale(1.28);
+  transform-origin: 50% 0%;
+  /* Two passes: a tight 3 px rim that traces the hairline and jaw (the part that carries the
+     shape), and a soft one for depth — kept low so it does not smudge on the light themes. */
+  filter: brightness(0) drop-shadow(0 0 3px var(--sg-accent-2))
+    drop-shadow(0 2px 7px color-mix(in oklab, var(--sg-accent-2) 40%, transparent));
+  opacity: 0.97;
+}
+
+/* --- Shared --- */
+
+/* Hairline top edge, the way a physical marquee catches light. */
+.hub-card-sheen {
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in oklab, var(--sg-fg) 28%, transparent) 30%,
+    color-mix(in oklab, var(--sg-fg) 28%, transparent) 70%,
+    transparent
+  );
+}
+
+/* A slow sweep of light across a card's art on hover — decorative, motion-gated below. */
+.hub-sweep {
+  background: linear-gradient(
+    105deg,
+    transparent 38%,
+    color-mix(in oklab, var(--sg-fg) 14%, transparent) 50%,
+    transparent 62%
+  );
+  transform: translateX(-120%);
+  transition: transform 0.9s var(--ease-out-expo);
+}
+.group:hover .hub-sweep {
+  transform: translateX(120%);
+}
+
+/* The two marquee lamps either side of the hero eyebrow. */
+.hub-lamp {
+  background: var(--gradient-accent);
+  box-shadow: 0 0 12px color-mix(in oklab, var(--sg-accent-vivid) 70%, transparent);
+  animation: hub-lamp 3.2s ease-in-out infinite;
+}
+.hub-lamp-b {
+  animation-delay: -1.6s;
+}
+
+@keyframes hub-lamp {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hub-lamp {
+    animation: none;
+    opacity: 0.8;
+  }
+  .hub-sweep,
+  .group:hover .hub-sweep {
+    transition: none;
+    transform: translateX(-120%);
+  }
+}

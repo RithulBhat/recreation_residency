@@ -99,12 +99,14 @@ function CompactControls({ theme, onThemeChange, volume, onVolumeChange, muted, 
  * way back to the game's own lobby. The residency half never shrinks; the game name truncates, so
  * even "Highlight Scout" on a 320 px phone cannot push the row wider than the screen.
  */
-function Brand({ game, compact }: { game: GameKey | null; compact: boolean }) {
+function Brand({ game, compact, onHub }: { game: GameKey | null; compact: boolean; onHub: boolean }) {
   return (
     <div className="flex min-w-0 items-center gap-1.5 sm:gap-2">
       <Link
         to={R.residency}
         aria-label={RESIDENCY_NAME}
+        // On the hub the wordmark is the page you are already on, not a way out of it.
+        aria-current={onHub ? 'page' : undefined}
         className="flex min-h-11 shrink-0 items-center gap-1.5 rounded-xl focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent-2 sm:gap-2"
       >
         <LogoGlyph size={compact ? 22 : 28} />
@@ -174,7 +176,7 @@ export function AppShell({
       <header className={cn('sticky top-0 z-40 pt-safe', immersive && 'landscape-phone:hidden')}>
         <div className="glass border-x-0 border-t-0 bg-bg/90">
           <div className={cn('mx-auto flex h-16 w-full items-center gap-3 px-4 sm:px-6', widths[width])}>
-            <Brand game={game} compact={compact} />
+            <Brand game={game} compact={compact} onHub={pathname === R.residency} />
 
             {!immersive && nav && (
               <nav className="ml-4 hidden items-center gap-1 md:flex" aria-label="Primary">

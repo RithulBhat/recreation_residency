@@ -46,6 +46,41 @@ const teamIds = new Set(teams.map((t) => t.id));
 const teamAbbrs = new Set(teams.map((t) => t.abbr));
 const playerIds = new Set(players.map((p) => p.id));
 
+// --- fame contract (CLAUDE.md "Difficulty", mirrored by scripts/verify-nfl.mjs) ----------------
+const SKILL_GROUPS: PositionGroup[] = ['QB', 'RB', 'WR', 'TE'];
+const DEFENSIVE_GROUPS: PositionGroup[] = ['DL', 'LB', 'DB'];
+/** EASY difficulty must offer a famous face at every position a fan actually watches. */
+const STAR_REQUIRED_GROUPS: PositionGroup[] = ['QB', 'RB', 'WR', 'TE', 'DL', 'LB', 'DB'];
+/** Nobody a general fan cannot name may sit in EASY — by group, or by raw ESPN position. */
+const UNGUESSABLE_GROUPS: PositionGroup[] = ['OL', 'ST'];
+const UNGUESSABLE_POSITIONS = new Set([
+  'OL', 'OT', 'T', 'LT', 'RT', 'OG', 'G', 'LG', 'RG', 'C',
+  'PK', 'K', 'P', 'LS', 'H',
+]);
+/** The longest game Highlight Scout offers; every tier must be able to fill one. */
+const ROUNDS_PER_GAME = 20;
+type FameTier = 'star' | 'starter' | 'rotation' | 'deepCut';
+
+/** The bands CLAUDE.md documents, as closed inclusive ranges. */
+const FAME_BAND_RANGE: Record<FameTier, [number, number]> = {
+  star: [80, 100],
+  starter: [55, 79],
+  rotation: [30, 54],
+  deepCut: [1, 29],
+};
+const tierOfFame = (fame: number): FameTier =>
+  fame >= 80 ? 'star' : fame >= 55 ? 'starter' : fame >= 30 ? 'rotation' : 'deepCut';
+
+const ranked = [...players].sort((a, b) => b.fame - a.fame || a.name.localeCompare(b.name));
+const top40 = ranked.slice(0, 40);
+const byTier: Record<FameTier, NflPlayer[]> = {
+  star: players.filter((p) => p.fame >= 80),
+  starter: players.filter((p) => p.fame >= 55 && p.fame < 80),
+  rotation: players.filter((p) => p.fame >= 30 && p.fame < 55),
+  deepCut: players.filter((p) => p.fame < 30),
+};
+const named = (name: string): NflPlayer | undefined => players.find((p) => p.name === name);
+
 describe('teams.json satisfies NflTeam', () => {
   it('has all 32 franchises with unique ids and abbreviations', () => {
     expect(teams).toHaveLength(32);
@@ -157,27 +192,186 @@ describe('players.json satisfies NflPlayer', () => {
     }
   });
 
+  // --- fame criterion 7: the bands CLAUDE.md documents, and a playable game at every difficulty --
   it('spreads fame across all four difficulty tiers', () => {
     for (const p of players) {
       expect(p.fame, p.name).toBeGreaterThanOrEqual(1);
       expect(p.fame, p.name).toBeLessThanOrEqual(100);
+      // Every player lands in exactly the band CLAUDE.md documents: star >= 80, starter 55-79,
+      // rotation 30-54, deepCut < 30.
+      const [lo, hi] = FAME_BAND_RANGE[tierOfFame(p.fame)];
+      expect(p.fame, `${p.name} -> ${tierOfFame(p.fame)}`).toBeGreaterThanOrEqual(lo);
+      expect(p.fame, `${p.name} -> ${tierOfFame(p.fame)}`).toBeLessThanOrEqual(hi);
     }
-    const star = players.filter((p) => p.fame >= 80);
-    const starter = players.filter((p) => p.fame >= 55 && p.fame < 80);
-    const rotation = players.filter((p) => p.fame >= 30 && p.fame < 55);
-    const deepCut = players.filter((p) => p.fame < 30);
-    expect(star.length).toBeGreaterThanOrEqual(20);
-    expect(star.length).toBeLessThanOrEqual(140);
-    expect(starter.length).toBeGreaterThanOrEqual(150);
-    expect(rotation.length).toBeGreaterThanOrEqual(150);
-    expect(deepCut.length).toBeGreaterThan(0);
-    expect(deepCut.length / players.length).toBeLessThan(0.75);
+    expect(byTier.star.length).toBeGreaterThanOrEqual(60);
+    expect(byTier.star.length).toBeLessThanOrEqual(140);
+    expect(byTier.starter.length).toBeGreaterThanOrEqual(150);
+    expect(byTier.rotation.length).toBeGreaterThanOrEqual(150);
+    expect(byTier.deepCut.length).toBeGreaterThan(0);
+    expect(byTier.deepCut.length / players.length).toBeLessThan(0.75);
+    // A 20-round game has to be playable at every difficulty the setup screen offers.
+    for (const [name, rows] of Object.entries(byTier)) {
+      expect(rows.length, `${name} tier`).toBeGreaterThanOrEqual(ROUNDS_PER_GAME);
+    }
+  });
+});
+
+/**
+ * Fame is a RECOGNISABILITY score — "would a general NFL fan name this face?" — and NOT a measure of
+ * statistical volume. These seven criteria are the guard rails, mirrored one-for-one by
+ * `scripts/verify-nfl.mjs`, and each names the concrete failure it prevents, because two versions of
+ * this field have already been rejected.
+ *
+ * A volume-ranked score put fifteen quarterbacks in the top twenty-five, no defender and one tight
+ * end in the whole `star` tier (the game's EASY difficulty), Jared Goff above Patrick Mahomes and
+ * Travis Kelce around 70th. Ranking inside each position group and mapping that onto per-group
+ * ceilings then fixed the shape and broke the meaning: the leader of a thin group landed near its
+ * ceiling regardless of public profile, so Dallas Goedert (zero Pro Bowls, zero All-Pros), Kevin
+ * Byard, Trey McBride, James Cook III, Danielle Hunter, Derek Stingley Jr. and Keenan Allen filled
+ * the top 40, while Joe Burrow sat 43rd after turf-toe surgery, Jayden Daniels 248th, Travis Hunter
+ * 736th, and only eight quarterbacks reached the top 40 at all.
+ *
+ * If one of these goes red the score has regressed: fix `scoreFame` in `scripts/sync-nfl.mjs` and
+ * regenerate (`NFL_FAME_ONLY=1 npm run nfl:sync`). Do not relax a bound — `scripts/verify-nfl.mjs`
+ * asserts the same seven properties and would still catch it.
+ */
+describe('players.json fame ranks recognisability, not stat volume', () => {
+  // Keyed by ESPN athlete id, not by name: two rostered players are called Justin Jefferson (the
+  // Vikings receiver and a 2026 rookie linebacker) and only one of them is a household name.
+  const byId = new Map(players.map((p) => [p.id, p]));
+  const top40Ids = new Set(top40.map((p) => p.id));
+  const rankOf = new Map(ranked.map((p, i) => [p.id, i + 1]));
+  /** Resolves a named player, or undefined once he leaves the league (verify-nfl.mjs reports it). */
+  const withId = (id: string, name: string): NflPlayer | undefined => {
+    const p = byId.get(id);
+    if (p) expect(p.name, `id ${id}`).toBe(name);
+    return p;
+  };
+  const where = (p: NflPlayer): string => `${p.name} — fame ${p.fame}, #${rankOf.get(p.id)}`;
+
+  // --- criterion 1 ------------------------------------------------------------------------------
+  it('puts 12 to 18 quarterbacks in the top 40', () => {
+    // Quarterback is the most famous position in the sport. The first rebuild answered a
+    // quarterback-heavy top 25 with per-position ceilings and over-corrected to eight.
+    const qbs = top40.filter((p) => p.group === 'QB');
+    expect(qbs.length, qbs.map((p) => p.name).join(', ')).toBeGreaterThanOrEqual(12);
+    expect(qbs.length, qbs.map((p) => p.name).join(', ')).toBeLessThanOrEqual(18);
   });
 
-  it('ranks recognisable positions at the top of the fame list', () => {
-    const top = [...players].sort((a, b) => b.fame - a.fame).slice(0, 40);
-    const skill = top.filter((p) => ['QB', 'RB', 'WR', 'TE'].includes(p.group));
-    expect(skill.length / top.length).toBeGreaterThanOrEqual(0.7);
+  // --- criterion 2 ------------------------------------------------------------------------------
+  it('puts at least four defenders and two tight ends in the top 40', () => {
+    const defenders = top40.filter((p) => DEFENSIVE_GROUPS.includes(p.group));
+    const tightEnds = top40.filter((p) => p.group === 'TE');
+    expect(defenders.length, defenders.map((p) => p.name).join(', ')).toBeGreaterThanOrEqual(4);
+    expect(tightEnds.length, tightEnds.map((p) => p.name).join(', ')).toBeGreaterThanOrEqual(2);
+  });
+
+  it('keeps the top 40 mostly skill players without making it offense-only', () => {
+    const skill = top40.filter((p) => SKILL_GROUPS.includes(p.group));
+    const share = skill.length / top40.length;
+    expect(share).toBeGreaterThanOrEqual(0.55);
+    expect(share).toBeLessThanOrEqual(0.9);
+    expect(SKILL_GROUPS).toContain(ranked[0].group);
+  });
+
+  // --- criterion 3 ------------------------------------------------------------------------------
+  it('puts every household name inside the top 40', () => {
+    const required: Array<[string, string]> = [
+      ['3139477', 'Patrick Mahomes'],
+      ['3918298', 'Josh Allen'],
+      ['3915511', 'Joe Burrow'],
+      ['3916387', 'Lamar Jackson'],
+      ['15847', 'Travis Kelce'],
+      ['4362628', "Ja'Marr Chase"],
+      ['3117251', 'Christian McCaffrey'],
+      ['4262921', 'Justin Jefferson'],
+      ['3929630', 'Saquon Barkley'],
+      ['3122132', 'Myles Garrett'],
+      ['4361423', 'Micah Parsons'],
+    ];
+    const missing = required
+      .map(([id, name]) => withId(id, name))
+      .filter((p): p is NflPlayer => p !== undefined && !top40Ids.has(p.id));
+    expect(missing.map(where)).toEqual([]);
+  });
+
+  // --- criterion 4 ------------------------------------------------------------------------------
+  it('puts draft pedigree and rookie narrative in the star tier', () => {
+    // Every one of these ranked outside the top 100 under a production-driven score: an Offensive
+    // Rookie of the Year who lost a season to injury, a Heisman-winning second overall pick, a
+    // record-setting tight end, a number one overall pick, a franchise quarterback and a five-time
+    // Pro Bowl edge rusher. All six are EASY-mode famous.
+    const required: Array<[string, string]> = [
+      ['4426348', 'Jayden Daniels'],
+      ['4685415', 'Travis Hunter'],
+      ['4432665', 'Brock Bowers'],
+      ['4431611', 'Caleb Williams'],
+      ['4038941', 'Justin Herbert'],
+      ['3916655', 'Maxx Crosby'],
+    ];
+    const short = required
+      .map(([id, name]) => withId(id, name))
+      .filter((p): p is NflPlayer => p !== undefined && p.fame < 80);
+    expect(short.map(where)).toEqual([]);
+  });
+
+  // --- criterion 5 ------------------------------------------------------------------------------
+  it('keeps statistical production out of the top 40', () => {
+    // Fantasy-relevant or film-room respected, not household names. A leaderboard-driven score put
+    // all seven in the top 40 and made one round in five unwinnable for EASY mode's own audience.
+    // They may be star-tier famous; they are not among the forty most recognisable faces alive.
+    const excluded: Array<[string, string]> = [
+      ['2574056', 'Kevin Byard'],
+      ['3121023', 'Dallas Goedert'],
+      ['4426434', 'Derek Stingley Jr.'],
+      ['4379399', 'James Cook III'],
+      ['2976560', 'Danielle Hunter'],
+      ['4361307', 'Trey McBride'],
+      ['15818', 'Keenan Allen'],
+    ];
+    const intruders = excluded
+      .map(([id, name]) => withId(id, name))
+      .filter((p): p is NflPlayer => p !== undefined && top40Ids.has(p.id));
+    expect(intruders.map(where)).toEqual([]);
+  });
+
+  it('ranks sustained excellence above one loud season', () => {
+    const mahomes = named('Patrick Mahomes');
+    if (!mahomes) return; // He left the league; verify-nfl.mjs reports the skip loudly.
+    for (const rival of ['Sam Darnold', 'Baker Mayfield', 'Jared Goff', 'Matthew Stafford']) {
+      const other = named(rival);
+      if (!other) continue;
+      expect(mahomes.fame, `${mahomes.name} ${mahomes.fame} vs ${rival} ${other.fame}`).toBeGreaterThan(
+        other.fame,
+      );
+    }
+  });
+
+  // --- criterion 6 ------------------------------------------------------------------------------
+  it('holds 60 to 140 players in the star tier, covering every watchable position', () => {
+    expect(byTier.star.length).toBeGreaterThanOrEqual(60);
+    expect(byTier.star.length).toBeLessThanOrEqual(140);
+    const groups = [...new Set(byTier.star.map((p) => p.group))];
+    for (const g of STAR_REQUIRED_GROUPS) expect(groups, `no ${g} in the star tier`).toContain(g);
+  });
+
+  it('never puts a lineman, kicker, punter or long snapper in the star tier', () => {
+    const wrong = byTier.star.filter(
+      (p) => UNGUESSABLE_GROUPS.includes(p.group) || UNGUESSABLE_POSITIONS.has(p.pos.toUpperCase()),
+    );
+    expect(wrong.map((p) => `${p.name} (${p.pos}) ${p.fame}`)).toEqual([]);
+  });
+
+  it('gives each position group its own recognisability ceiling', () => {
+    // The best quarterback in the league reads as more famous than the best guard — that gap is why
+    // the score caps fame per position group and per raw ESPN position.
+    const bestOf = (group: PositionGroup): number =>
+      Math.max(0, ...players.filter((p) => p.group === group).map((p) => p.fame));
+    expect(bestOf('QB')).toBeGreaterThan(bestOf('OL'));
+    expect(bestOf('DL')).toBeGreaterThan(bestOf('OL'));
+    expect(bestOf('TE')).toBeGreaterThan(bestOf('ST'));
+    for (const g of STAR_REQUIRED_GROUPS) expect(bestOf(g), g).toBeGreaterThanOrEqual(80);
+    for (const g of UNGUESSABLE_GROUPS) expect(bestOf(g), g).toBeLessThan(80);
   });
 });
 
