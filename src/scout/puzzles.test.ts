@@ -261,8 +261,14 @@ describe('higherLowerPuzzle', () => {
       expect(puzzle.numbers[0]).not.toBe(puzzle.numbers[1]);
       expect(statNumber(puzzle.values[0])).toBe(puzzle.numbers[0]);
       expect(statNumber(puzzle.values[1])).toBe(puzzle.numbers[1]);
-      // the answer is the subject AND the bigger of the two
-      expect(puzzle.answerPlayerId).toBe(player.id);
+      // The answer is whoever actually has the bigger number — NOT necessarily the subject.
+      // This used to assert `answerPlayerId === player.id`, which quietly required the subject to
+      // win every round. Because fame is partly derived from statistical leaderboards, that made
+      // "pick the more famous player" win 66% at the star tier. The subject now loses half the
+      // time by construction; see `higherLowerPuzzle` and `puzzles.tells.test.ts`.
+      expect([player.id, puzzle.cards.find((c) => c.playerId !== player.id)?.playerId]).toContain(
+        puzzle.answerPlayerId,
+      );
       const answerIndex = puzzle.cards.findIndex((c) => c.playerId === puzzle.answerPlayerId);
       expect(answerIndex).toBeGreaterThanOrEqual(0);
       expect(puzzle.numbers[answerIndex]).toBe(Math.max(...puzzle.numbers));

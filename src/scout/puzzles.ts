@@ -540,35 +540,70 @@ export function higherLowerPuzzle(
     const mine = statNumber(display);
     if (mine === null) continue;
     const board = index.statBoards.get(statBoardKey(player.group, label)) ?? [];
-    const lower = board.filter(
+
+    /*
+     * FAME MUST NOT PREDICT THE ANSWER — and randomising the direction is not enough to ensure it.
+     *
+     * Two earlier attempts failed. First the generator only took opponents with a LOWER value, so
+     * the subject was always the answer and only the display side varied. Making the direction a
+     * seeded coin flip did not help either, because fame here is partly DERIVED from statistical
+     * leaderboards: inside a high-fame band the bigger name genuinely does put up the bigger number.
+     * Measured at the `star` tier, "pick the more famous player" won 66.1% and then 69.2% of ~2,100
+     * rounds against 50% chance. The correlation lives in the data, so it has to be cancelled
+     * deliberately rather than randomised around.
+     *
+     * So: gather opponents in BOTH directions, split them by whether fame would hand you the right
+     * answer, and pick which bucket to draw from on a seeded coin. Half the rounds are upsets by
+     * construction, which makes name recognition worth exactly nothing. Note the aggregate across
+     * all tiers sat at chance throughout and hid every bit of this — which is why the tell harness
+     * measures per difficulty rather than reporting one number.
+     */
+    const opponents = board.filter(
       (e) =>
         e.player.id !== player.id &&
         e.season === line.season &&
-        e.value < mine &&
+        e.value !== mine &&
         e.player.group === player.group &&
         lastNameKey(e.player) !== lastNameKey(player),
     );
-    if (lower.length === 0) continue;
+    if (opponents.length === 0) continue;
     // Closest gap first, then take the third of the field this difficulty wants.
-    const byGap = lower.slice().sort((a, b) => mine - a.value - (mine - b.value) || a.player.id.localeCompare(b.player.id));
+    const byGap = opponents
+      .slice()
+      .sort((a, b) => Math.abs(mine - a.value) - Math.abs(mine - b.value) || a.player.id.localeCompare(b.player.id));
     const third = Math.max(1, Math.ceil(byGap.length / 3));
     const slice =
       gap === 'tight' ? byGap.slice(0, third) : gap === 'wide' ? byGap.slice(-third) : byGap.slice(third - 1, byGap.length - third + 1);
     const band = slice.length > 0 ? slice : byGap;
     const inBand = band.filter((e) => windows.some((w) => inWindow(e.player, w)));
     const pool = inBand.length > 0 ? inBand : band;
-    // An even matchup: a man of roughly the same standing, so "the famous one" is never the answer.
+    // Men of roughly the same standing, so the fame gap is small before we even balance it.
     const close = pool.filter((e) => Math.abs((e.player.fame || 0) - (player.fame || 0)) <= HIGHER_LOWER_FAME_SPREAD);
-    const candidates = close.length > 0 ? close : pool;
+    const evenly = close.length > 0 ? close : pool;
+
+    const mineFame = player.fame || 0;
+    /** Would "pick the bigger name" get this round right? */
+    const famePredicts = (e: (typeof evenly)[number]): boolean => {
+      const theirFame = e.player.fame || 0;
+      if (theirFame === mineFame) return false; // equal fame predicts nothing either way
+      return mine > e.value ? mineFame > theirFame : theirFame > mineFame;
+    };
+    const obvious = evenly.filter(famePredicts);
+    const upsets = evenly.filter((e) => !famePredicts(e));
+    const wantUpset = unit(seed, `hl|upset|${player.id}|${label}`) < 0.5;
+    const preferred = wantUpset ? upsets : obvious;
+    const candidates = preferred.length > 0 ? preferred : evenly;
     const chosen = stableOrder(candidates, seed, (e) => `hl|${player.id}|${label}|${e.player.id}`)[0];
     if (!chosen) continue;
 
     const mineCard = personCard(player, index.teamById.get(player.teamId));
     const theirCard = personCard(chosen.player, index.teamById.get(chosen.player.teamId));
-    const answerLeft = unit(seed, `hl|side|${player.id}|${label}`) < 0.5;
-    const cards: [ScoutPersonCard, ScoutPersonCard] = answerLeft ? [mineCard, theirCard] : [theirCard, mineCard];
-    const values: [string, string] = answerLeft ? [display, chosen.display] : [chosen.display, display];
-    const numbers: [number, number] = answerLeft ? [mine, chosen.value] : [chosen.value, mine];
+    // `mineLeft` is only about display order; the values decide who actually won. Keeping the two
+    // independent is what stops either the side or the seat from carrying a signal.
+    const mineLeft = unit(seed, `hl|side|${player.id}|${label}`) < 0.5;
+    const cards: [ScoutPersonCard, ScoutPersonCard] = mineLeft ? [mineCard, theirCard] : [theirCard, mineCard];
+    const values: [string, string] = mineLeft ? [display, chosen.display] : [chosen.display, display];
+    const numbers: [number, number] = mineLeft ? [mine, chosen.value] : [chosen.value, mine];
     return {
       type: 'higherLower',
       statLabel: label,
@@ -577,7 +612,7 @@ export function higherLowerPuzzle(
       cards,
       values,
       numbers,
-      answerPlayerId: player.id,
+      answerPlayerId: mine > chosen.value ? player.id : chosen.player.id,
     };
   }
   return null;

@@ -1,76 +1,90 @@
 import { describe, expect, it } from 'vitest';
 import { loadDataset, loadStatLines } from '@/data/nfl';
 import { buildScoutPuzzleSpecs } from './puzzles';
-import type { ScoutHigherLowerPuzzle, ScoutOddOneOutPuzzle, ScoutPuzzle } from './types';
+import type {
+  ScoutDifficulty,
+  ScoutHigherLowerPuzzle,
+  ScoutOddOneOutPuzzle,
+  ScoutPuzzle,
+} from './types';
 
-/** fame lives on the player record, not the card, so strategies need a lookup. */
-async function fameById(): Promise<ReadonlyMap<string, number>> {
-  const dataset = await loadDataset();
-  return new Map(dataset.players.map((p) => [p.id, p.fame]));
-}
+/**
+ * A choice puzzle can be correct and still be trivially solvable, if the wrong options are
+ * MANUFACTURED DIFFERENTLY FROM THE TRUTH. The round resolves properly, every other test passes,
+ * and the player wins by reading the generator instead of knowing any football.
+ *
+ * This file plays each choice puzzle with strategies that use NO knowledge — card position, fame
+ * rank, distance from the group's centre — and fails if any of them beats chance. Three lessons are
+ * encoded here rather than left to memory:
+ *
+ * 1. CORRECTNESS IS NOT DETECTABILITY. `oddOneOutFair` already proved no set had a second valid
+ *    outlier on any of four dimensions. It passed while the answer was the least famous card 72% of
+ *    the time, because the outlier came from the answer pool and the other three from a
+ *    fame-floored window. Two manufacturing processes, and the gap between them was the answer.
+ *
+ * 2. THE MEASUREMENT IS TWO-SIDED. A strategy that loses far more than chance is the same tell read
+ *    backwards: if "pick the most famous" wins 8%, then "avoid the most famous" wins 92%.
+ *
+ * 3. FIXING ONE AXIS CAN OPEN ANOTHER. Banding the cards around the outlier closed the fame tell,
+ *    but a band centred on the answer could just as easily make the answer reliably the CENTRAL
+ *    value — so centrality is measured too. And every strategy is measured PER DIFFICULTY, because
+ *    one aggregate number can average a tier-sized leak away to nothing.
+ */
 
-/** higherLower needs stat lines, which `loadDataset()` does not carry. */
+const SEEDS = ['tell-1', 'tell-2', 'tell-3', 'tell-4'];
+const TIERS: ScoutDifficulty[] = ['any', 'star', 'starter', 'rotation', 'deepCut'];
+
+/** A tier too thin to measure is not evidence of anything either way. */
+const MIN_SAMPLE = 40;
+
 async function puzzleDataset() {
   const [dataset, statLines] = await Promise.all([loadDataset(), loadStatLines()]);
   return { teams: dataset.teams, players: dataset.players, statLines };
 }
 
-/**
- * A choice puzzle can be correct and still be trivially solvable, if the wrong options are
- * MANUFACTURED DIFFERENTLY FROM THE TRUTH. The round resolves properly, every existing test passes,
- * and the player wins by reading the generator instead of knowing any football.
- *
- * The classic shape: distractors built by perturbing the answer leave the real value looking
- * "right" among artefacts, so you pick the plausible one and learn nothing. Scout's exposure is
- * `oddOneOut` (three players chosen because they share a trait, one chosen because it does not) and
- * `higherLower` (two real men, but the pairing could still favour one side).
- *
- * So these tests play each puzzle with strategies that use NO knowledge — position, fame, card
- * order — and fail if any of them beats chance. A tell is a statistical property, not a single
- * bad round, so they run over the whole generated pool rather than a handful of fixtures.
- */
+/** fame lives on the player record, not the card, so the strategies need a lookup. */
+async function fameById(): Promise<ReadonlyMap<string, number>> {
+  const dataset = await loadDataset();
+  return new Map(dataset.players.map((p) => [p.id, p.fame]));
+}
 
-const SAMPLE_SEEDS = ['tell-1', 'tell-2', 'tell-3', 'tell-4'];
-
-async function puzzlesOf<T extends 'oddOneOut' | 'higherLower'>(type: T): Promise<Array<Extract<ScoutPuzzle, { type: T }>>> {
-  const dataset = await puzzleDataset();
+function puzzlesOf<T extends 'oddOneOut' | 'higherLower'>(
+  dataset: Awaited<ReturnType<typeof puzzleDataset>>,
+  type: T,
+  difficulty: ScoutDifficulty,
+): Array<Extract<ScoutPuzzle, { type: T }>> {
   const out: Array<Extract<ScoutPuzzle, { type: T }>> = [];
-  for (const seed of SAMPLE_SEEDS) {
-    const specs = buildScoutPuzzleSpecs({
-      dataset,
-      modes: [type],
-      difficulty: 'any',
-      seed,
-      limit: 0,
-    });
-    for (const spec of specs) {
-      const p = spec.puzzle as ScoutPuzzle | undefined;
-      if (p?.type === type) out.push(p as Extract<ScoutPuzzle, { type: T }>);
+  for (const seed of SEEDS) {
+    for (const spec of buildScoutPuzzleSpecs({ dataset, modes: [type], difficulty, seed, limit: 0 })) {
+      if (spec.puzzle.type === type) out.push(spec.puzzle as Extract<ScoutPuzzle, { type: T }>);
     }
   }
   return out;
 }
 
-/** Two-sided margin either way: a strategy that LOSES far more than chance is a tell inverted. */
-function expectNearChance(hits: number, total: number, chance: number, label: string, slack = 0.12): void {
+function expectNearChance(hits: number, total: number, chance: number, label: string, slack: number): void {
+  if (total === 0) return;
   const rate = hits / total;
   expect(
     Math.abs(rate - chance),
-    `${label}: ${(rate * 100).toFixed(1)}% vs ${(chance * 100).toFixed(0)}% chance over ${total} puzzles`,
+    `${label}: ${(rate * 100).toFixed(1)}% vs ${(chance * 100).toFixed(0)}% chance over ${total} rounds`,
   ).toBeLessThan(slack);
 }
 
 describe('oddOneOut leaks no manufacturing tell', () => {
-  it('the outlier is not findable by card position, fame or team frequency', async () => {
-    const puzzles = await puzzlesOf('oddOneOut');
+  it.each(TIERS)('at difficulty "%s" the outlier is not findable without knowledge', async (difficulty) => {
+    const dataset = await puzzleDataset();
     const fame = await fameById();
-    expect(puzzles.length, 'need a real sample to measure a tell').toBeGreaterThan(40);
+    const puzzles = puzzlesOf(dataset, 'oddOneOut', difficulty) as ScoutOddOneOutPuzzle[];
+    if (puzzles.length < MIN_SAMPLE) return;
 
     const byPosition = [0, 0, 0, 0];
-    let highestFame = 0;
-    let lowestFame = 0;
+    let mostFamous = 0;
+    let leastFamous = 0;
+    let nearestCentre = 0;
+    let farthestFromCentre = 0;
 
-    for (const p of puzzles as ScoutOddOneOutPuzzle[]) {
+    for (const p of puzzles) {
       const answerIndex = p.cards.findIndex((c) => c.playerId === p.answerPlayerId);
       expect(answerIndex, 'every puzzle must contain its own answer').toBeGreaterThanOrEqual(0);
       byPosition[answerIndex] += 1;
@@ -78,54 +92,66 @@ describe('oddOneOut leaks no manufacturing tell', () => {
       const fames = p.cards.map((c) => fame.get(c.playerId) ?? 0);
       const max = Math.max(...fames);
       const min = Math.min(...fames);
-      // Only count when the extreme is unambiguous, so ties do not inflate either strategy.
-      if (fames.filter((f) => f === max).length === 1 && fames[answerIndex] === max) highestFame += 1;
-      if (fames.filter((f) => f === min).length === 1 && fames[answerIndex] === min) lowestFame += 1;
+      // Count only unambiguous extremes, so ties cannot inflate a strategy's apparent edge.
+      if (fames.filter((f) => f === max).length === 1 && fames[answerIndex] === max) mostFamous += 1;
+      if (fames.filter((f) => f === min).length === 1 && fames[answerIndex] === min) leastFamous += 1;
+
+      // Centrality. Cards are drawn from a band centred on the outlier, which could make the answer
+      // reliably the middle value — the tell the fame fix might itself have introduced.
+      const mean = fames.reduce((a, b) => a + b, 0) / fames.length;
+      const away = fames.map((f) => Math.abs(f - mean));
+      const nearest = Math.min(...away);
+      const farthest = Math.max(...away);
+      if (away.filter((d) => d === nearest).length === 1 && away[answerIndex] === nearest) nearestCentre += 1;
+      if (away.filter((d) => d === farthest).length === 1 && away[answerIndex] === farthest) farthestFromCentre += 1;
     }
 
     const n = puzzles.length;
-    byPosition.forEach((hits, i) => expectNearChance(hits, n, 0.25, `answer sits at card ${i}`));
-    expectNearChance(highestFame, n, 0.25, 'answer is the most famous card', 0.15);
-    expectNearChance(lowestFame, n, 0.25, 'answer is the least famous card', 0.15);
+    byPosition.forEach((hits, i) => expectNearChance(hits, n, 0.25, `[${difficulty}] answer at card ${i}`, 0.12));
+    expectNearChance(mostFamous, n, 0.25, `[${difficulty}] answer is the most famous`, 0.15);
+    expectNearChance(leastFamous, n, 0.25, `[${difficulty}] answer is the least famous`, 0.15);
+    expectNearChance(nearestCentre, n, 0.25, `[${difficulty}] answer is nearest the fame centre`, 0.15);
+    expectNearChance(farthestFromCentre, n, 0.25, `[${difficulty}] answer is farthest from the centre`, 0.15);
   });
 });
 
 describe('higherLower leaks no manufacturing tell', () => {
-  it('the answer is not findable by side or by fame', async () => {
-    const puzzles = (await puzzlesOf('higherLower')) as ScoutHigherLowerPuzzle[];
+  it.each(TIERS)('at difficulty "%s" the answer is not findable by side or fame', async (difficulty) => {
+    const dataset = await puzzleDataset();
     const fame = await fameById();
-    expect(puzzles.length).toBeGreaterThan(40);
+    const puzzles = puzzlesOf(dataset, 'higherLower', difficulty) as ScoutHigherLowerPuzzle[];
+    if (puzzles.length < MIN_SAMPLE) return;
 
     let leftWins = 0;
     let famousWins = 0;
-    let counted = 0;
+    let famousCounted = 0;
 
     for (const p of puzzles) {
       const answerIndex = p.cards.findIndex((c) => c.playerId === p.answerPlayerId);
       expect(answerIndex).toBeGreaterThanOrEqual(0);
       if (answerIndex === 0) leftWins += 1;
 
-      const [a, b] = p.cards;
-      const fa = fame.get(a.playerId) ?? 0;
-      const fb = fame.get(b.playerId) ?? 0;
+      const fa = fame.get(p.cards[0].playerId) ?? 0;
+      const fb = fame.get(p.cards[1].playerId) ?? 0;
       if (fa !== fb) {
-        counted += 1;
-        const famousIndex = fa > fb ? 0 : 1;
-        if (famousIndex === answerIndex) famousWins += 1;
+        famousCounted += 1;
+        if ((fa > fb ? 0 : 1) === answerIndex) famousWins += 1;
       }
     }
 
-    expectNearChance(leftWins, puzzles.length, 0.5, 'answer is the left card');
-    // "Pick the more famous player" is the strategy a lazy player actually uses. If it wins, the
-    // mode is testing name recognition rather than the stat it claims to ask about.
-    expectNearChance(famousWins, counted, 0.5, 'answer is the more famous player', 0.15);
+    expectNearChance(leftWins, puzzles.length, 0.5, `[${difficulty}] answer is the left card`, 0.12);
+    // "Pick the bigger name" is what a lazy player actually does. If it wins, the mode is testing
+    // name recognition rather than the stat it claims to be asking about.
+    expectNearChance(famousWins, famousCounted, 0.5, `[${difficulty}] answer is the more famous`, 0.15);
   });
 
-  it('never compares across position groups, and never ties', async () => {
-    const puzzles = (await puzzlesOf('higherLower')) as ScoutHigherLowerPuzzle[];
-    for (const p of puzzles) {
-      expect(p.values[0]).not.toBe(p.values[1]);
-      expect(p.statLabel.trim()).toBeTruthy();
+  it('never ties and always names its stat', async () => {
+    const dataset = await puzzleDataset();
+    for (const difficulty of TIERS) {
+      for (const p of puzzlesOf(dataset, 'higherLower', difficulty) as ScoutHigherLowerPuzzle[]) {
+        expect(p.values[0]).not.toBe(p.values[1]);
+        expect(p.statLabel.trim()).toBeTruthy();
+      }
     }
   });
 });
