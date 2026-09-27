@@ -80,6 +80,11 @@ export const SCOUT_DIVISION_KEYS: readonly string[] = SCOUT_CONFERENCES.flatMap(
 );
 
 /** Every puzzle type, in the order `SCOUT_MODES` lists them. */
+/**
+ * Every puzzle type the Report Card breaks accuracy down by. This list must stay exhaustive —
+ * a missing id means that mode's rounds are silently absent from the "by puzzle type" cut.
+ * `scoutStats.test.ts` asserts it covers `SCOUT_MODES`, so adding a mode fails loudly here.
+ */
 export const SCOUT_MODE_KEYS: readonly ScoutMode[] = [
   'silhouette',
   'faceZoom',
@@ -88,6 +93,12 @@ export const SCOUT_MODE_KEYS: readonly ScoutMode[] = [
   'statLine',
   'careerPath',
   'logoZoom',
+  'teammates',
+  'depthChart',
+  'draftClass',
+  'higherLower',
+  'oddOneOut',
+  'jersey',
 ];
 
 const TEAM_BY_ID: ReadonlyMap<string, ScoutTeamInfo> = new Map(SCOUT_TEAM_META.map((t) => [t.id, t]));

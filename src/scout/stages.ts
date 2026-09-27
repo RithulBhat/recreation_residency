@@ -21,6 +21,15 @@
  *   statLine               stat pairs one at a time (rung 0 shows one) → position → team
  *   careerPath             draft year (rung 0) → round/pick → college → team → jersey
  *   logoZoom               conference → division → venue (+ founded / Super Bowls / legend filler)
+ *   teammates              position → experience → jersey → first initial (never the club: the
+ *                          roster is on screen) and one more teammate card per rung
+ *   depthChart             conference → division → Super Bowls → venue → a legend (never the club's
+ *                          own name) and one more roster card per rung
+ *   draftClass             decade → five-year window → odd/even → earliest slot → two-year window
+ *   higherLower            position both play → season → the gap → one of the two numbers
+ *   oddOneOut              the category (rung 0) → the shared value → the odd man's position, plus
+ *                          one wrong card struck out per rung (never all three)
+ *   jersey                 conference → experience → draft → college → first initial
  *
  * `cropFocus` gives faceZoom and logoZoom a deterministic spot to zoom into: the same seed always
  * zooms the same feature. It is pure, so a screen can recompute it from `settings.seed` without
@@ -28,7 +37,20 @@
  */
 
 import { hashToUnit, type Rng } from '@/game/rng';
-import type { NflPlayer, NflTeam, PositionGroup, ScoutClue, ScoutMode, ScoutStage, ScoutSubject } from './types';
+import type {
+  NflPlayer,
+  NflTeam,
+  PositionGroup,
+  ScoutClue,
+  ScoutDraftClassPuzzle,
+  ScoutHigherLowerPuzzle,
+  ScoutMode,
+  ScoutOddOneOutPuzzle,
+  ScoutPersonCard,
+  ScoutPuzzle,
+  ScoutStage,
+  ScoutSubject,
+} from './types';
 
 export const SILHOUETTE_MAX = 0.85;
 export const FACE_ZOOM_MIN = 0.06;
@@ -36,6 +58,50 @@ export const FACE_ZOOM_MAX = 0.95;
 export const LOGO_ZOOM_MIN = 0.1;
 export const LOGO_ZOOM_MAX = 0.95;
 export const MAX_STAT_CLUES = 6;
+
+/**
+ * `visual` for the CHOICE-SHAPED modes (ADDED).
+ *
+ * The contract's `visual` is "how much of the visual is shown, 0 → 1", and for these modes the
+ * visual is the SET OF CARDS, so the same number keeps meaning the same thing:
+ *
+ *   teammates / draftClass  0.5 → 1     two of the four cards, up to all four
+ *   depthChart              0.4 → 1     two of the five, up to all five
+ *   oddOneOut               0 → 2/3     fraction of the WRONG cards struck out (never all three)
+ *   higherLower / jersey    0           nothing to uncover: both cards, or the number, are there
+ *                                       from rung 0 and the clue ladder does the narrowing
+ *
+ * Read them back with {@link visibleCards} and {@link ruledOutCardIds} rather than doing the maths
+ * at the call site — the stage components and the reveal share exactly one implementation.
+ */
+export const TEAMMATES_VISUAL_MIN = 0.5;
+export const DEPTH_CHART_VISUAL_MIN = 0.4;
+export const DRAFT_CLASS_VISUAL_MIN = 0.5;
+export const CARD_VISUAL_MAX = 1;
+export const ODD_ONE_OUT_VISUAL_MAX = 2 / 3;
+/** A set of cards is never opened one card at a time — two is the smallest readable prompt. */
+export const MIN_VISIBLE_CARDS = 2;
+
+/**
+ * What rung 0 of an `oddOneOut` says, and which clue kind carries the shared value.
+ *
+ * Deliberately a local table rather than an import from `@/scout/puzzles`: that module imports
+ * `GROUP_LABELS` from here, and one direction is all a dependency between two pure modules gets.
+ * `puzzles.test.ts` pins the two tables to each other.
+ */
+const ODD_PROMPTS: Readonly<Record<'college' | 'team' | 'draftRound' | 'positionGroup', string>> = {
+  college: 'a college',
+  team: 'a current club',
+  draftRound: 'a draft round',
+  positionGroup: 'a position group',
+};
+
+const ODD_CLUE_KINDS: Readonly<Record<'college' | 'team' | 'draftRound' | 'positionGroup', ScoutClue['kind']>> = {
+  college: 'college',
+  team: 'team',
+  draftRound: 'draft',
+  positionGroup: 'position',
+};
 
 export const GROUP_LABELS: Readonly<Record<PositionGroup, string>> = {
   QB: 'Quarterback',
@@ -47,6 +113,37 @@ export const GROUP_LABELS: Readonly<Record<PositionGroup, string>> = {
   LB: 'Linebacker',
   DB: 'Defensive back',
   ST: 'Special teams',
+};
+
+/**
+ * The same groups written as a PERSON, for a sentence (ADDED).
+ *
+ * `GROUP_LABELS` names the unit — 'Defensive line' is a room, not a man — which reads fine on a clue
+ * chip and badly in a question: "Which defensive line wears this?" is not English. These two tables
+ * are what the choice-shaped stages ask their questions with.
+ */
+export const GROUP_PERSON_LABELS: Readonly<Record<PositionGroup, string>> = {
+  QB: 'quarterback',
+  RB: 'running back',
+  WR: 'wide receiver',
+  TE: 'tight end',
+  OL: 'offensive lineman',
+  DL: 'defensive lineman',
+  LB: 'linebacker',
+  DB: 'defensive back',
+  ST: 'special teamer',
+};
+
+export const GROUP_PEOPLE_LABELS: Readonly<Record<PositionGroup, string>> = {
+  QB: 'quarterbacks',
+  RB: 'running backs',
+  WR: 'wide receivers',
+  TE: 'tight ends',
+  OL: 'offensive linemen',
+  DL: 'defensive linemen',
+  LB: 'linebackers',
+  DB: 'defensive backs',
+  ST: 'special teamers',
 };
 
 /** 0..1 point the zoom modes crop around. */
@@ -117,6 +214,42 @@ export function clueCounts(n: number, tries: number, base: number): number[] {
     out.push(Math.min(n, b + extra));
   }
   return out;
+}
+
+/** The cards a payload holds. `jersey` has none — it is a number and two colours. */
+function cardsOf(puzzle: ScoutPuzzle | undefined): readonly ScoutPersonCard[] {
+  if (!puzzle || puzzle.type === 'jersey') return [];
+  return puzzle.cards;
+}
+
+/** How many of `total` cards a rung shows. Never fewer than two, never more than there are. */
+export function visibleCardCount(total: number, visual: number): number {
+  if (total <= MIN_VISIBLE_CARDS) return total;
+  const v = Number.isFinite(visual) ? Math.max(0, Math.min(1, visual)) : 0;
+  return Math.max(MIN_VISIBLE_CARDS, Math.min(total, Math.round(v * total)));
+}
+
+/** The cards on screen at a rung, in payload order. */
+export function visibleCards(puzzle: ScoutPuzzle | undefined, visual: number): ScoutPersonCard[] {
+  const cards = cardsOf(puzzle);
+  // Both `higherLower` cards are on screen from rung 0 — its ladder narrows with clues, not cards.
+  if (puzzle?.type === 'higherLower') return cards.slice();
+  return cards.slice(0, visibleCardCount(cards.length, visual));
+}
+
+/**
+ * The wrong `oddOneOut` cards struck out at a rung, in the payload's own elimination order.
+ * Never all three: the last rung leaves a two-way choice, not the answer.
+ */
+export function ruledOutCardIds(puzzle: ScoutPuzzle | undefined, visual: number): string[] {
+  if (!puzzle || puzzle.type !== 'oddOneOut') return [];
+  const total = puzzle.ruleOutIds.length;
+  if (total === 0) return [];
+  const v = Number.isFinite(visual) ? Math.max(0, Math.min(1, visual)) : 0;
+  // `total - 1` is the promise, not an accident of the rounding: one wrong card always survives to
+  // the last rung, so the round always ends as a choice rather than as the answer handed over.
+  const n = Math.min(total - 1, Math.ceil(v * total));
+  return puzzle.ruleOutIds.slice(0, n);
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -325,10 +458,137 @@ function logoLadder(team: NflTeam, tries: number): ScoutClue[] {
   return out;
 }
 
+// ---------------------------------------------------------------------------------------------
+// Clue orders — the choice-shaped modes
+// ---------------------------------------------------------------------------------------------
+
+/** 1234 → '1,234'; decimals keep their tail. */
+function groupDigits(n: number): string {
+  const [whole, frac] = String(n).split('.');
+  const sign = whole.startsWith('-') ? '-' : '';
+  const digits = sign === '-' ? whole.slice(1) : whole;
+  const grouped = digits.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  return `${sign}${grouped}${frac === undefined ? '' : `.${frac}`}`;
+}
+
+/**
+ * `teammates`: the four faces are the puzzle, so the ladder never mentions the club — the roster is
+ * already on screen, and a 'Conference: AFC' chip next to four Chiefs is noise, not a clue.
+ */
+function teammatesLadder(player: NflPlayer, tries: number): ScoutClue[] {
+  const core: ScoutClue[] = [clue('position', 'Position', GROUP_LABELS[player.group])];
+  if (typeof player.exp === 'number') core.push(clue('experience', 'Experience', experienceValue(player.exp)));
+  if (player.jersey) core.push(clue('jersey', 'Jersey', `#${player.jersey}`));
+  const tail = [clue('initials', 'First initial', initialValue(player))];
+  const filler: ScoutClue[] = [];
+  if (player.college) filler.push(clue('college', 'College', player.college));
+  if (player.draft) filler.push(clue('draft', 'Drafted', String(player.draft.year)));
+  while (core.length + tail.length < tries - 1 && filler.length > 0) {
+    const next = filler.shift();
+    if (next) core.push(next);
+  }
+  return [...core, ...tail];
+}
+
+/**
+ * `depthChart`: name the franchise off five of its players. NOTHING here may name the club — not the
+ * nickname, not the city — so the ladder walks conference → division → trophies → venue → a legend.
+ */
+function depthChartLadder(team: NflTeam, tries: number): ScoutClue[] {
+  const out: ScoutClue[] = [
+    clue('conference', 'Conference', team.conference),
+    clue('division', 'Division', `${team.conference} ${team.division}`),
+    clue('superBowls', 'Super Bowls', superBowlValue(team)),
+  ];
+  if (out.length + 1 < tries) out.push(clue('founded', 'Founded', String(team.founded)));
+  out.push(clue('venue', 'Home venue', team.venue));
+  if (team.legends.length > 0) out.push(clue('legend', 'Franchise legend', team.legends[0]));
+  return out;
+}
+
+/**
+ * `draftClass`: the answer is a year, so every rung narrows the BAND it can be in —
+ * decade → five-year window → odd/even → the earliest slot on the board → a two-year window.
+ * Parity plus the two-year window pin the year exactly, which is what makes the last rung fair.
+ */
+function draftClassLadder(puzzle: ScoutDraftClassPuzzle, tries: number): ScoutClue[] {
+  const year = puzzle.year;
+  const decade = Math.floor(year / 10) * 10;
+  const bandStart = Math.floor(year / 5) * 5;
+  const out: ScoutClue[] = [
+    clue('draft', 'Era', `${decade}s`),
+    clue('draft', 'Somewhere in', `${bandStart}–${bandStart + 4}`),
+    clue('draft', 'Parity', year % 2 === 0 ? 'Even year' : 'Odd year'),
+  ];
+  if (out.length + 1 < tries && puzzle.earliest) {
+    out.push(clue('draft', 'Earliest slot shown', `Round ${puzzle.earliest.round}, pick ${puzzle.earliest.pick}`));
+  }
+  out.push(clue('draft', 'Down to two', `${year - 1} or ${year}`));
+  return out;
+}
+
+/**
+ * `higherLower`: a coin flip is not a ladder, so the rungs pay INFORMATION instead of more picture —
+ * the position both men play, the season, the size of the gap, and finally one of the two numbers.
+ * Gap + one number is the whole answer, which is the right price for burning most of your tries on
+ * a two-way question.
+ */
+function higherLowerLadder(puzzle: ScoutHigherLowerPuzzle, tries: number): ScoutClue[] {
+  const gap = Math.abs(puzzle.numbers[0] - puzzle.numbers[1]);
+  const out: ScoutClue[] = [
+    clue('position', 'Both play', GROUP_LABELS[puzzle.group]),
+    clue('stat', 'Season', String(puzzle.season)),
+  ];
+  if (out.length + 1 < tries) out.push(clue('stat', 'The gap', groupDigits(Math.round(gap * 10) / 10)));
+  out.push(clue('stat', `${puzzle.statLabel} · ${puzzle.cards[0].name}`, puzzle.values[0]));
+  return out;
+}
+
+/** 'The odd man out' clue: the first dimension that is not the one being asked about. */
+function oddOutHint(puzzle: ScoutOddOneOutPuzzle): ScoutClue | undefined {
+  const card = puzzle.cards.find((c) => c.playerId === puzzle.answerPlayerId);
+  if (!card) return undefined;
+  if (puzzle.trait !== 'positionGroup') return clue('position', 'The odd man out plays', GROUP_LABELS[card.group]);
+  if (card.college) return clue('college', 'The odd man out went to', card.college);
+  return clue('draft', 'The odd man out went', card.draftRound ? `in round ${card.draftRound}` : 'undrafted');
+}
+
+/**
+ * `oddOneOut`: rung 0 names the CATEGORY (without it the question is unanswerable), the next rung
+ * pays out the value the three share, and the rest of the narrowing is the eliminations `visual`
+ * carries. Tuned for three or four tries — two clues and two strike-outs is exactly four rungs.
+ */
+function oddOneOutLadder(puzzle: ScoutOddOneOutPuzzle): ScoutClue[] {
+  const out: ScoutClue[] = [clue('fact', 'Three of these share', ODD_PROMPTS[puzzle.trait])];
+  out.push(clue(ODD_CLUE_KINDS[puzzle.trait], `The shared ${puzzle.traitLabel.toLowerCase()}`, puzzle.sharedValue));
+  const hint = oddOutHint(puzzle);
+  if (hint) out.push(hint);
+  return out;
+}
+
+/**
+ * `jersey`: the number, the position and the colours are all on screen from rung 0, so the ladder
+ * starts where the other player modes get to third — conference, then the paperwork, then the
+ * initial. The club is never named: two colours and a number is the whole point.
+ */
+function jerseyLadder(player: NflPlayer, team: NflTeam | undefined, tries: number): ScoutClue[] {
+  const core: ScoutClue[] = [];
+  if (team) core.push(clue('conference', 'Conference', team.conference));
+  if (typeof player.exp === 'number') core.push(clue('experience', 'Experience', experienceValue(player.exp)));
+  core.push(clue('draft', player.draft ? 'Draft year' : 'Draft', draftValue(player)));
+  if (player.college) core.push(clue('college', 'College', player.college));
+  const tail = [clue('initials', 'First initial', initialValue(player))];
+  if (core.length + tail.length < tries && player.heightIn && player.weightLb) {
+    core.push(clue('physical', 'Build', `${Math.floor(player.heightIn / 12)}'${player.heightIn % 12}", ${player.weightLb} lb`));
+  }
+  return [...core, ...tail];
+}
+
 /** The full clue order for a mode + subject, before it is spread across the rungs. */
 export function clueOrderFor(mode: ScoutMode, subject: ScoutSubject, tries: number, rng?: Rng): ClueOrder {
   const player = subject.player;
   const team = subject.team;
+  const puzzle = subject.puzzle;
   switch (mode) {
     case 'silhouette':
       return {
@@ -371,6 +631,42 @@ export function clueOrderFor(mode: ScoutMode, subject: ScoutSubject, tries: numb
         clues: team ? logoLadder(team, tries) : [],
         base: 0,
         visual: { min: LOGO_ZOOM_MIN, max: LOGO_ZOOM_MAX },
+      };
+    case 'teammates':
+      return {
+        clues: player ? teammatesLadder(player, tries) : [],
+        base: 0,
+        visual: { min: TEAMMATES_VISUAL_MIN, max: CARD_VISUAL_MAX },
+      };
+    case 'depthChart':
+      return {
+        clues: team ? depthChartLadder(team, tries) : [],
+        base: 0,
+        visual: { min: DEPTH_CHART_VISUAL_MIN, max: CARD_VISUAL_MAX },
+      };
+    case 'draftClass':
+      return {
+        clues: puzzle?.type === 'draftClass' ? draftClassLadder(puzzle, tries) : [],
+        base: 0,
+        visual: { min: DRAFT_CLASS_VISUAL_MIN, max: CARD_VISUAL_MAX },
+      };
+    case 'higherLower':
+      return {
+        clues: puzzle?.type === 'higherLower' ? higherLowerLadder(puzzle, tries) : [],
+        base: 0,
+        visual: { min: 0, max: 0 },
+      };
+    case 'oddOneOut':
+      return {
+        clues: puzzle?.type === 'oddOneOut' ? oddOneOutLadder(puzzle) : [],
+        base: 1,
+        visual: { min: 0, max: ODD_ONE_OUT_VISUAL_MAX },
+      };
+    case 'jersey':
+      return {
+        clues: player ? jerseyLadder(player, team, tries) : [],
+        base: 0,
+        visual: { min: 0, max: 0 },
       };
     default:
       return { clues: [], base: 0, visual: { min: 0, max: 0 } };

@@ -3,15 +3,23 @@ import { motion, useReducedMotion } from 'motion/react';
 import { CornerDownLeft, Flag, SkipForward } from 'lucide-react';
 import { Button, Combobox, HighlightMatch, IconButton, cn } from '@/components/ui';
 import { GROUP_LABELS } from '@/scout/stages';
+import type { ScoutAnswerShape } from '@/scout/packs';
 import type { ScoutState, ScoutSubject, SubjectKind } from '@/scout/types';
 import { useCoarsePointer } from '@/hooks/useMediaQuery';
-import { canGuess as canGuessNow, triesLeft } from '@/scout/selectors';
+import { awaitingBuzz, canGuess as canGuessNow, currentFormat, triesLeft } from '@/scout/selectors';
+import { BLITZ_PENALTY_SECONDS } from './formatCopy';
 import { stageImage } from './SubjectStage';
 
 export interface GuessBoxProps {
   state: ScoutState;
   /** What this round is asking for. */
   kind: SubjectKind;
+  /**
+   * What the answer IS, which is not the same as the pool it came from: a `draftClass` round is built
+   * out of players but the answer is a YEAR, so the player index has nothing to suggest and the
+   * placeholder must not ask for a name. Defaults to the subject kind.
+   */
+  answerShape?: ScoutAnswerShape;
   query: string;
   onQueryChange: (q: string) => void;
   /** Ranked suggestions from `suggestSubjects` over the whole league. */
@@ -26,13 +34,28 @@ export interface GuessBoxProps {
   className?: string;
 }
 
-/** `Skip → next clue` / `Skip · reveal` on the last rung. */
+/**
+ * `Skip → clue` / `Skip · reveal` on the last rung — and in BLITZ neither, because a skip there buys
+ * no clue and reveals nothing: it burns the subject and five seconds of clock.
+ */
 export function skipLabel(state: ScoutState): string {
+  if (currentFormat(state) === 'blitz') return `Skip · −${BLITZ_PENALTY_SECONDS}s`;
   return triesLeft(state) <= 1 ? 'Skip · reveal' : 'Skip → clue';
 }
 
-function placeholderFor(kind: SubjectKind): string {
+function placeholderFor(kind: SubjectKind, shape: ScoutAnswerShape): string {
+  if (shape === 'year') return 'Which year?';
   return kind === 'team' ? 'Which franchise?' : 'Which player?';
+}
+
+/** A dead box needs to say WHY it is dead: in a buzzer duel the answer is "nobody has the buzzer". */
+function buzzPlaceholder(): string {
+  return 'Buzz in first — A or L';
+}
+
+function labelFor(kind: SubjectKind, shape: ScoutAnswerShape): string {
+  if (shape === 'year') return 'Your guess — which draft year';
+  return kind === 'team' ? 'Your guess — which team' : 'Your guess — which player';
 }
 
 function Option({ subject, query, big }: { subject: ScoutSubject; query: string; big: boolean }) {
@@ -77,6 +100,7 @@ function Option({ subject, query, big }: { subject: ScoutSubject; query: string;
 export function GuessBox({
   state,
   kind,
+  answerShape,
   query,
   onQueryChange,
   options,
@@ -93,6 +117,9 @@ export function GuessBox({
   const round = state.rounds[state.currentRound];
   const live = state.status === 'playing' && round?.status === 'playing';
   const allowed = canGuessNow(state);
+  const shape: ScoutAnswerShape = answerShape ?? kind;
+  const year = shape === 'year';
+  const waiting = awaitingBuzz(state);
   if (!round) return null;
 
   return (
@@ -102,28 +129,29 @@ export function GuessBox({
       animate={shakeKey > 0 && !reduce ? { x: [0, -10, 9, -7, 5, -2, 0] } : { x: 0 }}
       transition={{ duration: 0.42, ease: 'easeInOut' }}
       data-testid="scout-guess-box"
+      data-waiting={waiting ? 'buzz' : undefined}
     >
       <Combobox<ScoutSubject>
         className="min-w-0 flex-1"
         value={query}
         onChange={onQueryChange}
-        options={options}
-        loading={loading}
+        options={year ? [] : options}
+        loading={year ? false : loading}
         getKey={(s) => `${s.kind}:${s.id}`}
         getLabel={(s) => s.name}
         onSelect={(s) => onSubmit(s.name)}
         onSubmit={onSubmit}
         renderOption={(s, ctx) => <Option subject={s} query={ctx.query} big={coarse} />}
         touchAffordance={coarse}
-        placeholder={placeholderFor(kind)}
+        placeholder={waiting ? buzzPlaceholder() : placeholderFor(kind, shape)}
         disabled={!live || !allowed}
         size="lg"
-        inputMode="search"
+        inputMode={year ? 'text' : 'search'}
         minChars={1}
-        aria-label={kind === 'team' ? 'Your guess — which team' : 'Your guess — which player'}
+        aria-label={labelFor(kind, shape)}
         inputRef={inputRef}
         clearOnSelect
-        emptyMessage="No match — press Enter to guess it anyway"
+        emptyMessage={year ? 'Type the year and press Enter' : 'No match — press Enter to guess it anyway'}
         trailing={
           <IconButton
             aria-label="Submit guess"

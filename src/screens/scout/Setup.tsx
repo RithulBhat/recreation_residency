@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
-import { Binoculars, Info, Library, ListChecks, RotateCcw, Trophy, X } from 'lucide-react';
+import { Binoculars, Info, Library, ListChecks, Map, RotateCcw, Swords, Trophy, Users, X } from 'lucide-react';
+import { SCOUT_FORMAT_IDS, formatUses, isScoutMultiplayer, scoutFormat, scoutFormatInfo } from '@/scout/formats';
 import { SCOUT_MODES, scoutPack } from '@/scout/packs';
 import { SCOUT_MODE_IDS } from '@/scout/presets';
 import { decodeScoutChallenge, scoutChallengeSettings } from '@/scout/challenge';
@@ -13,36 +14,52 @@ import { R } from '@/routes';
 import {
   SCOUT_DIFFICULTY_ORDER,
   ScoutFooter,
+  ScoutFormatPicker,
+  ScoutGauntletBoard,
   ScoutModePicker,
   ScoutPackPicker,
   ScoutPresetRow,
   ScoutReplaceDialog,
   ScoutResumeBanner,
   ScoutRules,
+  ScoutRunBrief,
+  ScoutSeats,
   ScoutStartBar,
   roundsLabel,
-  scoutDifficultyApplies,
+  scoutFormatSwitch,
   scoutDifficultyLabel,
+  scoutFormatName,
   scoutModeName,
   scoutPackCounts,
   scoutPackNames,
   scoutPacksSummary,
   scoutPoolSize,
-  timerLabel,
-  triesLabel,
+  scoutRulesSummary,
+  seatsLabel,
   useScoutDataset,
   useStartScout,
 } from '@/components/scoutSetup';
-import type { ScoutDifficulty, ScoutMode, ScoutSettings } from '@/scout/types';
+import type { ScoutDifficulty, ScoutFormat, ScoutMode, ScoutSettings } from '@/scout/types';
 
 function isScoutMode(value: unknown): value is ScoutMode {
   return typeof value === 'string' && (SCOUT_MODE_IDS as readonly string[]).includes(value);
 }
 
+function isScoutFormat(value: unknown): value is ScoutFormat {
+  return typeof value === 'string' && (SCOUT_FORMAT_IDS as readonly string[]).includes(value);
+}
+
 /**
- * The Highlight Scout lobby. Query params: `mode`, `packs` (comma separated), `preset`,
- * `challenge` (a code from `#/scout/c/:code`) and `autostart=1` — applied once, then stripped so a
- * refresh cannot re-apply a mode the player has since changed.
+ * The Highlight Scout lobby — FORMAT first, then puzzle types.
+ *
+ * The format (standard, blitz, survival, gauntlet, duel, party) is what changes how a session feels,
+ * so it is the first and biggest choice on the page; everything below it is driven by
+ * `formatUses(format, key)`, which is also what hides the controls a format ignores. A puzzle type
+ * added to `SCOUT_MODES` shows up here on its own — nothing on this screen hardcodes the list.
+ *
+ * Query params: `format`, `mode`, `packs` (comma separated), `preset`, `challenge` (a code from
+ * `#/scout/c/:code`) and `autostart=1` — applied once, then stripped so a refresh cannot re-apply a
+ * format the player has since changed.
  */
 export default function ScoutSetup() {
   const game = useStartScout();
@@ -61,6 +78,10 @@ export default function ScoutSetup() {
     const store = useScoutSettingsStore.getState();
     const patch: Partial<ScoutSettings> = {};
 
+    const next = params.get('format');
+    // A deep link into a format goes through the same restore as the picker: the format being left
+    // may have forced `rounds: 0` (or a tier, or league-wide packs) that the new one can undo.
+    if (isScoutFormat(next)) Object.assign(patch, scoutFormatSwitch(store.settings, next));
     const mode = params.get('mode');
     if (isScoutMode(mode)) patch.mode = mode;
     const packs = (params.get('packs') ?? '')
@@ -91,6 +112,13 @@ export default function ScoutSetup() {
     setParams({}, { replace: true });
   }, [params, setParams, start]);
 
+  const format = scoutFormat(settings);
+  const formatInfo = scoutFormatInfo(format);
+  // The gauntlet chooses its own packs (it has to reach all 32 franchises), so the pack picker is
+  // replaced by the board rather than left as a control that cannot change anything.
+  const picksPacks = formatUses(format, 'packIds');
+  const multiplayer = isScoutMultiplayer(settings);
+
   // Pool maths only depends on these four fields — keep rounds/timer edits from recomputing.
   const poolKey = `${settings.mode}|${settings.mixModes}|${settings.difficulty}|${settings.packIds.join(',')}`;
   const counts = useMemo(
@@ -110,15 +138,9 @@ export default function ScoutSetup() {
 
   const packNames = scoutPackNames(settings.packIds);
   const modeInfo = SCOUT_MODES.find((m) => m.id === settings.mode);
-  // Does the panel show a Difficulty control at all? False on a franchise-only run, where every
-  // tier deals all 32 clubs (`ScoutRules` swaps the chips for the reason).
-  const tiersApply = scoutDifficultyApplies(settings);
-  // The tier worth NAMING in a summary — null at `any` (nothing to say) and on a franchise-only run
-  // (nothing it does). Not the same question as `tiersApply`: the control is there at `any`.
-  const tierLabel = scoutDifficultyLabel(settings);
-  const rulesSummary = [tierLabel, roundsLabel(settings.rounds), triesLabel(settings.tries), timerLabel(settings.roundTimer)]
-    .filter((part): part is string => part !== null)
-    .join(' · ');
+  // The tier worth NAMING in a summary — null at `any`, on a franchise-only run (nothing it does)
+  // and in the formats that set the tier themselves (survival, gauntlet).
+  const tierLabel = formatUses(format, 'difficulty') ? scoutDifficultyLabel(settings) : null;
 
   return (
     <div className="flex flex-col gap-4 pb-36 sm:gap-6 sm:pb-32">
@@ -126,7 +148,7 @@ export default function ScoutSetup() {
         as="h1"
         eyebrow="Highlight Scout · Lobby"
         title={<span id="scout-setup-title">Set up your scouting session</span>}
-        description="Pick how the clues arrive, who is in the pool and how many tries you get. Everything is remembered."
+        description="Format first — a clock, a last life, or a laptop being passed. Then pick what the clues look like. Everything is remembered."
         size="lg"
         action={
           <div className="hidden sm:block">
@@ -185,82 +207,92 @@ export default function ScoutSetup() {
       <ScoutPresetRow />
 
       {/*
-        Two columns that END TOGETHER at 1440. The pack picker is the tallest single block, so it
-        carries a column on its own with the short explainer under it; mode + rules share the other.
-        (Mode + Packs together left ~750 px of dead right column.)
+        FORMAT FIRST — the axis that changes how a session feels, so it gets the full width at the top
+        of the page. Below it, two INDEPENDENT two-column rows: the puzzle and the pool, then the
+        rules and the read-back. Two rows rather than one tall grid because the pack card and the
+        puzzle grid are nowhere near the same height; splitting them bounds the mismatch to one row
+        instead of leaving the ~750 px of dead right column a review measured at 1440×900.
 
-        Mode + rules still runs 100–190 px longer than packs + explainer, and that is not fixable by
-        reordering — no split of four blocks this size lands closer. So the slack is closed from both
-        ends: the pack grid shows six rows instead of five from `lg` up (COLLAPSED_PACKS_WIDE), and
-        the explainer grows into whatever is left. No `lg:items-start` here, so the right column is
-        as tall as the row and its last card can flex; below `lg` there is one card per row and
-        stretching is a no-op.
+        `lg:items-start` keeps the shorter card at its natural height — a stretched glass card with an
+        empty bottom reads as a bug, a shorter card does not — and `COLLAPSED_PACKS_WIDE` shows enough
+        packs from `lg` up that the first row's two columns land within ~50 px of each other at 1440.
+        `min-w-0` on every section is load-bearing: a grid item defaults to `min-width: auto` and the
+        collapsed-section summary is a `truncate` (nowrap) line, so one long summary would otherwise
+        widen the whole page on a phone.
       */}
-      <div className="grid gap-4 lg:grid-cols-2">
-        <div className="flex min-w-0 flex-col gap-4" data-col="left">
-          <SetupSection
-            id="scout-mode"
-            icon={<Binoculars />}
-            title="Mode"
-            summary={
-              settings.mixModes
-                ? 'Mixed bag · every mode shuffled'
-                : `${scoutModeName(settings.mode)} · ${modeInfo?.blurb ?? ''}`
-            }
-          >
-            <ScoutModePicker />
-          </SetupSection>
-          <SetupSection
-            id="scout-rules"
-            icon={<ListChecks />}
-            title={tiersApply ? 'Difficulty & rules' : 'Rules'}
-            summary={rulesSummary}
-            defaultOpen={!mobile}
-          >
-            <ScoutRules tierCounts={tierCounts} />
-          </SetupSection>
-        </div>
-        <div className="flex min-w-0 flex-col gap-4" data-col="right">
+      <SetupSection
+        id="scout-format"
+        className="min-w-0"
+        icon={<Swords />}
+        title="Format"
+        summary={`${formatInfo?.name ?? format} — ${formatInfo?.ends ?? ''}`}
+      >
+        <ScoutFormatPicker />
+      </SetupSection>
+
+      <div className="grid gap-4 lg:grid-cols-2 lg:items-start" data-row="puzzle-pool">
+        <SetupSection
+          id="scout-mode"
+          className="min-w-0"
+          icon={<Binoculars />}
+          title="Puzzle type"
+          summary={
+            settings.mixModes
+              ? 'Mixed bag · every puzzle type shuffled'
+              : `${scoutModeName(settings.mode)} · ${modeInfo?.blurb ?? ''}`
+          }
+        >
+          <ScoutModePicker />
+        </SetupSection>
+
+        {picksPacks ? (
           <SetupSection
             id="scout-packs"
+            className="min-w-0"
             icon={<Library />}
             title="Packs"
             summary={`${scoutPacksSummary(packNames)}${poolSize !== null ? ` · ${poolSize.toLocaleString()} in the pool` : ''}`}
           >
             <ScoutPackPicker counts={counts} poolSize={poolSize} loading={loading} />
           </SetupSection>
+        ) : (
+          <SetupSection
+            id="scout-board"
+            className="min-w-0"
+            icon={<Map />}
+            title="The board"
+            summary="All 32 franchises · one subject each"
+          >
+            <ScoutGauntletBoard />
+          </SetupSection>
+        )}
+      </div>
 
-          <div className="glass flex flex-col rounded-3xl p-4 sm:p-5 lg:flex-1" data-testid="scout-how-a-round">
-            <h2 className="font-display text-base font-bold text-fg">How a round plays</h2>
-            <p className="mt-1.5 text-sm text-muted">
-              {settings.mixModes
-                ? 'Every round picks a mode this subject can actually be played in — a silhouette, a redacted play, a stat sheet, a logo.'
-                : (modeInfo?.how ?? '')}
-            </p>
-            <ol className="mt-3 flex flex-col gap-2 text-sm text-fg lg:flex-1 lg:justify-between lg:gap-3">
-              <li className="flex gap-2.5">
-                <span className="grid size-5 shrink-0 place-items-center rounded-full bg-gradient-accent font-mono text-[10px] font-bold text-accent-fg">
-                  1
-                </span>
-                <span>You get the hardest rung first — barely anything.</span>
-              </li>
-              <li className="flex gap-2.5">
-                <span className="grid size-5 shrink-0 place-items-center rounded-full bg-surface-strong font-mono text-[10px] font-bold text-fg">
-                  2
-                </span>
-                <span>
-                  Every miss lifts the reveal and adds a clue. You have {triesLabel(settings.tries)} before the round is
-                  lost.
-                </span>
-              </li>
-              <li className="flex gap-2.5">
-                <span className="grid size-5 shrink-0 place-items-center rounded-full bg-surface-strong font-mono text-[10px] font-bold text-fg">
-                  3
-                </span>
-                <span>Solving on rung one is worth the most — the score falls with every try.</span>
-              </li>
-            </ol>
-          </div>
+      <div className="grid gap-4 lg:grid-cols-2 lg:items-start" data-row="rules-brief">
+        <SetupSection
+          id="scout-rules"
+          className="min-w-0"
+          icon={<ListChecks />}
+          title="Rules"
+          summary={scoutRulesSummary(settings)}
+          defaultOpen={!mobile}
+        >
+          <ScoutRules tierCounts={tierCounts} />
+        </SetupSection>
+
+        <div className="flex min-w-0 flex-col gap-4">
+          {multiplayer && (
+            <SetupSection
+              id="scout-players"
+              className="min-w-0"
+              icon={<Users />}
+              title="Players"
+              summary={`${seatsLabel(settings.players?.length ?? 0)} · ${scoutFormatName(format)}`}
+            >
+              <ScoutSeats />
+            </SetupSection>
+          )}
+          <ScoutRunBrief />
         </div>
       </div>
 

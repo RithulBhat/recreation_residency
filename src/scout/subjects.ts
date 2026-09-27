@@ -10,10 +10,17 @@
  * unrenderable subjects, deduplicates by kind + id, and orders the result. Seeded runs sort by
  * `hashToUnit('<seed>|<kind>:<id>')` — the same trick Songooner uses — so a subject that disappears
  * from one device's dataset only removes itself instead of reshuffling the whole run.
+ *
+ * The six CHOICE-SHAPED modes (`teammates`, `depthChart`, `draftClass`, `higherLower`, `oddOneOut`,
+ * `jersey`) need a SET of players per round rather than one subject, so `buildPool` also asks
+ * `@/scout/puzzles` for their payloads and attaches them as `subject.puzzle`. A subject carrying one
+ * is playable in that mode only, and its dedupe key carries the puzzle type — the same man can
+ * anchor a `teammates` round and a `jersey` round in one mixed pool.
  */
 
 import { createRng, hashToUnit, type Rng } from '@/game/rng';
 import { SCOUT_PACKS, type ScoutDraftFilter } from './packs';
+import { buildScoutPuzzleSpecs, draftYearAccepted, isScoutPuzzleMode, type ScoutPuzzleSpec } from './puzzles';
 import type {
   Conference,
   DivisionName,
@@ -26,6 +33,7 @@ import type {
   ScoutMode,
   ScoutPack,
   ScoutPackFilter,
+  ScoutPuzzle,
   ScoutSettings,
   ScoutSubject,
   StatLine,
@@ -35,8 +43,20 @@ import type {
 /** Fame thresholds (CLAUDE.md): star ≥ 80, starter 55–79, rotation 30–54, deepCut < 30. */
 export const TIER_THRESHOLDS = { star: 80, starter: 55, rotation: 30 } as const;
 
-export const PLAYER_MODES: readonly ScoutMode[] = ['silhouette', 'faceZoom', 'highlight', 'statLine', 'careerPath'];
-export const TEAM_MODES: readonly ScoutMode[] = ['teamTrivia', 'logoZoom'];
+export const PLAYER_MODES: readonly ScoutMode[] = [
+  'silhouette',
+  'faceZoom',
+  'highlight',
+  'statLine',
+  'careerPath',
+  // choice-shaped (ADDED) — the answer is a player, even where the round is answered by tapping
+  'teammates',
+  'draftClass',
+  'higherLower',
+  'oddOneOut',
+  'jersey',
+];
+export const TEAM_MODES: readonly ScoutMode[] = ['teamTrivia', 'logoZoom', 'depthChart'];
 export const ALL_SCOUT_MODES: readonly ScoutMode[] = [...PLAYER_MODES, ...TEAM_MODES];
 
 export const MIN_STAT_PAIRS = 2;
@@ -104,6 +124,8 @@ export interface SubjectSource {
   team?: NflTeam;
   play?: HighlightPlay;
   statLine?: StatLine;
+  /** ADDED — the payload of a choice-shaped round (`@/scout/puzzles`). */
+  puzzle?: ScoutPuzzle;
 }
 
 export function buildPlayerSubject(
@@ -138,9 +160,17 @@ export function buildTeamSubject(team: NflTeam): ScoutSubject {
   };
 }
 
-/** True when `mode` has everything it needs to render `subject`. */
+/**
+ * True when `mode` has everything it needs to render `subject`.
+ *
+ * A subject that carries a {@link ScoutPuzzle} is playable in THAT MODE AND NOTHING ELSE. Without
+ * that rule a `draftClass` subject — a player record whose accepted answer is a year — would also
+ * pass the silhouette check and a mixed run would show a headshot whose answer was '2019'.
+ */
 export function canRender(mode: ScoutMode, subject: ScoutSubject): boolean {
   if (subjectKindForMode(mode) !== subject.kind) return false;
+  if (subject.puzzle) return subject.puzzle.type === mode;
+  if (isScoutPuzzleMode(mode)) return false;
   switch (mode) {
     case 'silhouette':
     case 'faceZoom':
@@ -170,12 +200,55 @@ export function buildSubject(mode: ScoutMode, source: SubjectSource): ScoutSubje
   if (subjectKindForMode(mode) === 'team') {
     if (!source.team) return null;
     const subject = buildTeamSubject(source.team);
+    if (source.puzzle) subject.puzzle = source.puzzle;
     return canRender(mode, subject) ? subject : null;
   }
   if (!source.player) return null;
   const subject = buildPlayerSubject(source.player, source.team, { play: source.play, statLine: source.statLine });
+  if (source.puzzle) subject.puzzle = source.puzzle;
   return canRender(mode, subject) ? subject : null;
 }
+
+// ---------------------------------------------------------------------------------------------
+// Choice-shaped subjects
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * A {@link ScoutPuzzleSpec} → the subject a round is built around.
+ *
+ * `depthChart` answers a franchise, so it is a team subject. The rest answer a player — except
+ * `draftClass`, whose answer is a YEAR: that one deliberately carries NO `player`, because the
+ * matcher derives surname variants from `subject.player` and would otherwise accept the anchor's
+ * surname as a correct answer to "which draft?". It keeps his id and headshot (so the reveal has a
+ * face and `subjectImage` still resolves) and nothing else.
+ */
+export function buildPuzzleSubject(spec: ScoutPuzzleSpec): ScoutSubject | null {
+  if (spec.mode === 'depthChart') {
+    if (!spec.team) return null;
+    const subject = buildTeamSubject(spec.team);
+    subject.puzzle = spec.puzzle;
+    return canRender(spec.mode, subject) ? subject : null;
+  }
+  if (!spec.player) return null;
+  if (spec.answer) {
+    const subject: ScoutSubject = {
+      kind: 'player',
+      id: spec.player.id,
+      name: spec.answer.name,
+      accepted: spec.answer.accepted.slice(),
+      image: spec.player.headshot,
+      tier: tierOf(spec.player),
+      puzzle: spec.puzzle,
+    };
+    return canRender(spec.mode, subject) ? subject : null;
+  }
+  const subject = buildPlayerSubject(spec.player, spec.team);
+  subject.puzzle = spec.puzzle;
+  return canRender(spec.mode, subject) ? subject : null;
+}
+
+/** The accepted spellings of a `draftClass` answer, re-exported so screens can explain the answer. */
+export { draftYearAccepted };
 
 // ---------------------------------------------------------------------------------------------
 // Pack filters
@@ -191,6 +264,9 @@ export function playerMatchesFilter(player: NflPlayer, filter: ScoutPackFilter, 
   const draft = filter as ScoutDraftFilter;
   if (draft.undrafted === true && player.draft) return false;
   if (typeof draft.maxDraftRound === 'number' && (!player.draft || player.draft.round > draft.maxDraftRound)) {
+    return false;
+  }
+  if (typeof draft.minDraftYear === 'number' && (!player.draft || player.draft.year < draft.minDraftYear)) {
     return false;
   }
   if (!inList(filter.teamIds, player.teamId)) return false;
@@ -273,8 +349,13 @@ function pickStable<T>(list: readonly T[], key: string, seed: string | undefined
   return list[Math.min(list.length - 1, Math.floor(u * list.length))];
 }
 
+/**
+ * The dedupe / ordering key. A puzzle type is part of it: the same player anchors a `teammates` and
+ * a `jersey` round, and both belong in a mixed pool.
+ */
 function subjectKey(subject: ScoutSubject): string {
-  return `${subject.kind}:${subject.id}`;
+  const base = `${subject.kind}:${subject.id}`;
+  return subject.puzzle ? `${base}#${subject.puzzle.type}` : base;
 }
 
 /**
@@ -345,6 +426,34 @@ export function buildPool(
       if (teamPacks.length > 0 && !teamPacks.some((p) => teamMatchesFilter(team, p.filter))) continue;
       const subject = buildTeamSubject(team);
       if (playableModes(subject, modes).length === 0) continue;
+      const key = subjectKey(subject);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      subjects.push(subject);
+    }
+  }
+
+  // Choice-shaped rounds are not one subject revealed slowly: each one needs a SET of real players,
+  // so `@/scout/puzzles` reads the dataset and hands back payloads. Pack filters and the tier gate
+  // the ANSWER; the cards come out of the tier's fame band (see `cardFameWindows`).
+  const puzzleModes = modes.filter(isScoutPuzzleMode);
+  if (puzzleModes.length > 0) {
+    const specs = buildScoutPuzzleSpecs({
+      dataset,
+      modes: puzzleModes,
+      difficulty: settings.difficulty,
+      seed,
+      rng,
+      playerEligible: (player) => {
+        const team = teams.get(player.teamId);
+        if (playerPacks.length > 0 && !playerPacks.some((pk) => playerMatchesFilter(player, pk.filter, team))) return false;
+        return settings.difficulty === 'any' || tierOf(player) === settings.difficulty;
+      },
+      teamEligible: (team) => teamPacks.length === 0 || teamPacks.some((pk) => teamMatchesFilter(team, pk.filter)),
+    });
+    for (const spec of specs) {
+      const subject = buildPuzzleSubject(spec);
+      if (!subject) continue;
       const key = subjectKey(subject);
       if (seen.has(key)) continue;
       seen.add(key);

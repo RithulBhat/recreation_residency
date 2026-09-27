@@ -1,4 +1,5 @@
 import { Play, RotateCcw } from 'lucide-react';
+import { GAUNTLET_SIZE, scoutFormat } from '@/scout/formats';
 import { Button } from '@/components/ui/Button';
 import { Portal } from '@/components/ui/internal';
 import { useIsDesktop } from '@/hooks/useMediaQuery';
@@ -28,13 +29,16 @@ export function ScoutStartBar({ game, poolSize, datasetLoading }: ScoutStartBarP
   const kind = poolKind(settings);
   const emptyPool = poolSize === 0;
 
+  const gauntlet = scoutFormat(settings) === 'gauntlet';
   const poolLine = datasetLoading
     ? 'Loading the NFL dataset…'
     : poolSize === null
       ? 'Pick a pack to start'
       : emptyPool
         ? 'Nothing in this pool — widen the packs'
-        : `${poolLabel(poolSize, kind)} in the pool`;
+        : gauntlet
+          ? `${GAUNTLET_SIZE} franchises on the board · ${poolLabel(poolSize, kind)} to draw from`
+          : `${poolLabel(poolSize, kind)} in the pool`;
 
   return (
     <Portal>

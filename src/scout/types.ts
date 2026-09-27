@@ -136,7 +136,12 @@ export interface NflDataset {
 // Game
 // ---------------------------------------------------------------------------------------------
 
-export type ScoutMode =
+/**
+ * The original seven: every one of them REVEALS more of one subject each try.
+ * (Declared separately from {@link ScoutPuzzleMode} purely for documentation — `ScoutMode` still
+ * carries all thirteen members, and nothing that referred to these seven has changed.)
+ */
+export type ScoutRevealMode =
   | 'silhouette' // blacked-out headshot, revealed progressively
   | 'faceZoom' // extreme crop of the face, zooming out each try
   | 'highlight' // a real play with names redacted
@@ -144,6 +149,22 @@ export type ScoutMode =
   | 'statLine' // a season stat line
   | 'careerPath' // draft → college → team history
   | 'logoZoom'; // zoomed team logo
+
+/**
+ * The six CHOICE-SHAPED puzzle types (ADDED). These do not reveal one subject a bit at a time —
+ * they put a set of real players on screen and ask a different question of it. Each carries its
+ * payload on {@link ScoutSubject.puzzle}, built by `@/scout/puzzles` from the baked dataset, and
+ * `higherLower` / `oddOneOut` are answered by PICKING A CARD rather than typing.
+ */
+export type ScoutPuzzleMode =
+  | 'teammates' // four of his current teammates → name the player
+  | 'depthChart' // five men off one roster → name the franchise
+  | 'draftClass' // four men taken in one draft → name the year
+  | 'higherLower' // two players, one stat → who put up more (pick a card)
+  | 'oddOneOut' // four players, three share a trait → pick the outlier
+  | 'jersey'; // a number, a position and the club's colours, no photo
+
+export type ScoutMode = ScoutRevealMode | ScoutPuzzleMode;
 
 /**
  * The SESSION FORMAT — the shape of the whole run, orthogonal to {@link ScoutMode}.
@@ -237,6 +258,118 @@ export type ScoutClueKind =
   | 'legend'
   | 'colors';
 
+/**
+ * One player as a CARD on a choice-shaped puzzle (ADDED). Flattened on purpose: a stage component
+ * renders these and never reaches into the dataset, so `@/components/scoutPuzzles` stays pure and
+ * prop-driven and a fixture in a test is three lines long.
+ */
+export interface ScoutPersonCard {
+  playerId: string;
+  /** 'Travis Kelce' */
+  name: string;
+  /** Transparent-background headshot PNG (600 px, CORS-enabled). */
+  image: string;
+  /** Raw ESPN position abbreviation: 'TE', 'CB', 'PK'. */
+  pos: string;
+  group: PositionGroup;
+  jersey?: string;
+  teamId?: string;
+  /** 'KC' */
+  teamAbbr?: string;
+  college?: string;
+  draftRound?: number;
+  draftPick?: number;
+}
+
+/** `teammates`: four of the answer's CURRENT teammates. Name the man who is missing. */
+export interface ScoutTeammatesPuzzle {
+  type: 'teammates';
+  /** Four teammates, deterministic order. Never the answer himself. */
+  cards: ScoutPersonCard[];
+}
+
+/** `depthChart`: five men off one roster. Name the franchise. */
+export interface ScoutDepthChartPuzzle {
+  type: 'depthChart';
+  /** Five players from the answer club, deterministic order. */
+  cards: ScoutPersonCard[];
+}
+
+/** `draftClass`: four men taken in the same draft. Name the year. */
+export interface ScoutDraftClassPuzzle {
+  type: 'draftClass';
+  /** The answer. Never earlier than 2011 — older classes are too thin to be fair. */
+  year: number;
+  /** Four players all drafted in `year`, deterministic order. */
+  cards: ScoutPersonCard[];
+  /** Earliest draft slot among the four — the last clue before the answer. */
+  earliest?: { round: number; pick: number };
+}
+
+/** `higherLower`: two players, ONE stat, same position group. Who put up more? */
+export interface ScoutHigherLowerPuzzle {
+  type: 'higherLower';
+  /** 'Rec yds' — the one stat both men carry. */
+  statLabel: string;
+  season: number;
+  /** Both men play here. The mode NEVER compares across position groups. */
+  group: PositionGroup;
+  /** Left and right as displayed; which side the answer sits on is seeded, not fixed. */
+  cards: [ScoutPersonCard, ScoutPersonCard];
+  /** Display values in card order: ['1,499', '1,123']. Hidden until the reveal. */
+  values: [string, string];
+  /** Parsed values in card order. Never equal — a tie is not a question. */
+  numbers: [number, number];
+  /** The card with the bigger number. Always the round's subject. */
+  answerPlayerId: string;
+}
+
+/** Which dimension an `oddOneOut` round is about. Rotated so the answer is not always the school. */
+export type ScoutOddTrait = 'college' | 'team' | 'draftRound' | 'positionGroup';
+
+/** `oddOneOut`: four players, three share one trait. Pick the one who does not. */
+export interface ScoutOddOneOutPuzzle {
+  type: 'oddOneOut';
+  trait: ScoutOddTrait;
+  /** 'College' */
+  traitLabel: string;
+  /** What the other three share: 'Alabama', 'Kansas City Chiefs', 'Round 1', 'Wide receiver'. */
+  sharedValue: string;
+  /** Four players, deterministic order. Exactly one of them is the outlier. */
+  cards: ScoutPersonCard[];
+  /** The outlier. Always the round's subject. */
+  answerPlayerId: string;
+  /** The wrong cards in the order later rungs strike them out. */
+  ruleOutIds: string[];
+}
+
+/** `jersey`: a number, a position and the club's colours. No photo at all. */
+export interface ScoutJerseyPuzzle {
+  type: 'jersey';
+  /** '15' — the 9 of 460 recognisable players without one are never asked. */
+  number: string;
+  /** Raw ESPN position, shown from rung 0. */
+  pos: string;
+  group: PositionGroup;
+  /** Primary / secondary club colour. Load-bearing: numbers repeat across the league. */
+  colors: [string, string];
+}
+
+/**
+ * The payload a choice-shaped round needs, carried on the subject (ADDED).
+ *
+ * `type` doubles as the {@link ScoutPuzzleMode} the subject belongs to, and a subject that carries
+ * one is playable ONLY in that mode — otherwise a `draftClass` subject (whose answer is a year)
+ * could be served up as a silhouette.
+ */
+export type ScoutPuzzle =
+  | ScoutTeammatesPuzzle
+  | ScoutDepthChartPuzzle
+  | ScoutDraftClassPuzzle
+  | ScoutHigherLowerPuzzle
+  | ScoutOddOneOutPuzzle
+  | ScoutJerseyPuzzle;
+
 /** The thing being guessed, resolved to everything a round needs to render. */
 export interface ScoutSubject {
   kind: SubjectKind;
@@ -255,6 +388,11 @@ export interface ScoutSubject {
   statLine?: StatLine;
   /** Difficulty tier this subject landed in. */
   tier: ScoutDifficulty;
+  /**
+   * ADDED — the payload of a choice-shaped round (`@/scout/types#ScoutPuzzleMode`). Absent on every
+   * subject of the original seven modes, and its presence pins the subject to `puzzle.type`.
+   */
+  puzzle?: ScoutPuzzle;
 }
 
 export interface ScoutSettings {

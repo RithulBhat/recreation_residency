@@ -1,11 +1,19 @@
 import { Clock, Flame, Layers, Target } from 'lucide-react';
-import { CountdownRing, NumberTicker } from '@/components/ui';
+import { CountdownRing, NumberTicker, cn } from '@/components/ui';
 import { StatTile } from '@/components/StatTile';
 import { scoutMode, scoutPack } from '@/scout/packs';
+import type { ScoutState } from '@/scout/types';
 import type { ScoutGameRecord } from '@/store/scoutResultStore';
+import { SCOUT_FORMAT_ACCENT, scoutOutcome } from './formatCopy';
 
 export interface ResultsHeroProps {
   record: ScoutGameRecord;
+  /**
+   * The finished run. Optional, and only for the FORMAT's own headline — "14 in 90 seconds" beats
+   * "Elite eye" when the whole point of the run was the clock. `standard` has no format headline, so
+   * it keeps the accuracy verdict it always had.
+   */
+  state?: ScoutState;
 }
 
 /** The one-line verdict on a session. */
@@ -40,8 +48,14 @@ function duration(ms: number): string {
 const TILE = 'bg-bg-elevated/70! min-h-28 [&>*:last-child]:mt-auto';
 
 /** Score, accuracy, streak — the top of the results screen. */
-export function ResultsHero({ record }: ResultsHeroProps) {
+export function ResultsHero({ record, state }: ResultsHeroProps) {
   const accuracy = record.played > 0 ? record.correct / record.played : 0;
+  const outcome = state ? scoutOutcome(state) : null;
+  const headline = outcome?.headline ?? scoutHeadline(record);
+  // "You got to round 23 before the deep cuts got you" is four lines at the verdict's type size, which
+  // pushes the score and the actions off the fold. Long headlines step down a size.
+  const longHeadline = headline.length > 32;
+  const accent = outcome ? SCOUT_FORMAT_ACCENT[outcome.format] : undefined;
 
   return (
     <section
@@ -49,20 +63,35 @@ export function ResultsHero({ record }: ResultsHeroProps) {
       aria-labelledby="scout-results-title"
       data-testid="scout-results-hero"
     >
-      <div className="pointer-events-none absolute -left-24 -top-24 size-72 rounded-full bg-accent opacity-25 blur-3xl" aria-hidden />
+      <div
+        className="pointer-events-none absolute -left-24 -top-24 size-72 rounded-full bg-accent opacity-25 blur-3xl"
+        style={accent ? { background: accent } : undefined}
+        aria-hidden
+      />
       <div className="pointer-events-none absolute -bottom-24 -right-16 size-72 rounded-full bg-accent-2 opacity-20 blur-3xl" aria-hidden />
       <div className="relative">
         <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-accent" data-testid="scout-results-eyebrow">
+          {outcome && outcome.format !== 'standard' ? `${outcome.emoji} ${outcome.name} · ` : ''}
           {sessionLine(record)}
         </p>
         <div className="mt-3 flex items-center gap-5 sm:gap-8">
           <div className="min-w-0 flex-1">
             <h1
               id="scout-results-title"
-              className="font-display text-3xl font-black leading-tight tracking-tight text-fg sm:text-5xl"
+              className={cn(
+                'text-balance font-display font-black leading-tight tracking-tight text-fg',
+                longHeadline ? 'text-2xl sm:text-3xl lg:text-4xl' : 'text-3xl sm:text-4xl lg:text-5xl',
+              )}
+              data-testid="scout-results-headline"
+              data-format={outcome?.format ?? 'standard'}
             >
-              {scoutHeadline(record)}
+              {headline}
             </h1>
+            {outcome?.headline && (
+              <p className="mt-1 text-sm font-semibold text-muted" data-testid="scout-results-verdict">
+                {scoutHeadline(record)}
+              </p>
+            )}
             <div className="mt-2 flex items-baseline gap-2" data-testid="scout-final-score">
               <NumberTicker value={record.score} duration={1200} className="font-display text-5xl font-black text-gradient sm:text-6xl" />
               <span className="font-mono text-sm uppercase tracking-widest text-muted">pts</span>
@@ -99,14 +128,20 @@ export function ResultsHero({ record }: ResultsHeroProps) {
             hint={`${record.correct} of ${record.played} named`}
           />
           <StatTile size="sm" className={TILE} label="Best streak" icon={<Flame />} value={record.bestStreak} hint="in a row" />
-          <StatTile
-            size="sm"
-            className={TILE}
-            label="Avg look"
-            icon={<Layers />}
-            value={record.avgTryWhenRight > 0 ? `try ${record.avgTryWhenRight.toFixed(1)}` : '—'}
-            hint={record.correct > 0 ? `of ${record.tries} rungs` : 'nothing named'}
-          />
+          {/* Blitz freezes every subject on ONE rung, so an average try index is a number about the
+              format rather than about the player. It gets the rule instead. */}
+          {outcome?.format === 'blitz' ? (
+            <StatTile size="sm" className={TILE} label="Reveal" icon={<Layers />} value="one look" hint="same rung, every subject" />
+          ) : (
+            <StatTile
+              size="sm"
+              className={TILE}
+              label="Avg look"
+              icon={<Layers />}
+              value={record.avgTryWhenRight > 0 ? `try ${record.avgTryWhenRight.toFixed(1)}` : '—'}
+              hint={record.correct > 0 ? `of ${record.tries} rungs` : 'nothing named'}
+            />
+          )}
           <StatTile size="sm" className={TILE} label="Duration" icon={<Clock />} value={duration(record.durationMs)} hint="start to finish" />
         </div>
         {record.close > 0 && (

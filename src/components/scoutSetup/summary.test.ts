@@ -1,10 +1,19 @@
 import { describe, expect, it } from 'vitest';
+import { SCOUT_FORMATS, SCOUT_FORMAT_IDS } from '@/scout/formats';
 import { normalizeScoutSettings } from '@/scout/presets';
 import {
   SCOUT_DIFFICULTY_INFO,
+  SCOUT_FORMAT_ACCENT,
+  SCOUT_FORMAT_EMOJI,
+  SCOUT_FORMAT_LABEL,
   SCOUT_MODE_EMOJI,
   SCOUT_MODE_LABEL,
+  clockLabel,
+  dailyRunNoun,
+  duelStyleLabel,
   emptyPoolMessage,
+  formatSeatsLabel,
+  livesLabel,
   pct,
   poolKind,
   poolLabel,
@@ -12,8 +21,13 @@ import {
   scoutModeName,
   scoutPackNames,
   scoutPacksSummary,
+  scoutFormatFacts,
+  scoutFormatName,
   scoutRevealLadder,
+  scoutRulesSummary,
+  scoutRunSteps,
   scoutSettingsSummary,
+  seatsLabel,
   timerLabel,
   triesLabel,
 } from './summary';
@@ -59,7 +73,7 @@ describe('scoutPacksSummary', () => {
 });
 
 describe('scoutSettingsSummary', () => {
-  it('reads the whole run in one line', () => {
+  it('reads the whole run in one line, format first', () => {
     const s = normalizeScoutSettings({
       mode: 'silhouette',
       packIds: ['superstars'],
@@ -67,7 +81,7 @@ describe('scoutSettingsSummary', () => {
       tries: 4,
       rounds: 10,
     });
-    expect(scoutSettingsSummary(s)).toBe('10 rounds · Silhouette · Superstars · Superstars · 4 tries');
+    expect(scoutSettingsSummary(s)).toBe('Standard · 10 rounds · Silhouette · Superstars · Superstars · 4 tries');
   });
 
   it('says Mixed bag, the timer and hints-off when they apply', () => {
@@ -90,6 +104,149 @@ describe('scoutSettingsSummary', () => {
   it('omits difficulty when it is Any', () => {
     const s = normalizeScoutSettings({ mode: 'silhouette', packIds: ['superstars'], difficulty: 'any' });
     expect(scoutSettingsSummary(s)).not.toContain('Any');
+  });
+
+  // The whole point of the line: it can only name settings the FORMAT actually reads.
+  it('leads with the format and its own facts', () => {
+    const survival = normalizeScoutSettings({
+      format: 'survival',
+      mode: 'silhouette',
+      packIds: ['superstars'],
+      lives: 3,
+      tries: 5,
+    });
+    expect(scoutSettingsSummary(survival)).toBe('Survival · 3 lives · Silhouette · Superstars · 5 tries');
+
+    const blitz = normalizeScoutSettings({
+      format: 'blitz',
+      mode: 'faceZoom',
+      packIds: ['superstars'],
+      blitzDuration: 60,
+    });
+    const blitzLine = scoutSettingsSummary(blitz);
+    expect(blitzLine).toBe('Blitz · 60s clock · Face Off · Superstars');
+    // blitz reads neither of these, so neither may be advertised
+    expect(blitzLine).not.toContain('rounds');
+    expect(blitzLine).not.toContain('tries');
+
+    const duel = normalizeScoutSettings({
+      format: 'duel',
+      duelStyle: 'buzzer',
+      mode: 'highlight',
+      packIds: ['superstars'],
+      rounds: 10,
+      tries: 4,
+      hintsEnabled: false,
+    });
+    const duelLine = scoutSettingsSummary(duel);
+    expect(duelLine).toBe('Duel · Buzz-in · 10 rounds · Film Room · Superstars · 4 tries');
+    // duel has no hints at all, so "no hints" would be a lie
+    expect(duelLine).not.toContain('no hints');
+
+    const party = normalizeScoutSettings({
+      format: 'party',
+      mode: 'silhouette',
+      packIds: ['superstars'],
+      rounds: 12,
+      tries: 4,
+      players: [
+        { id: 'p1', name: 'A', emoji: '🦊', color: '#f97316' },
+        { id: 'p2', name: 'B', emoji: '🐙', color: '#a855f7' },
+        { id: 'p3', name: 'C', emoji: '🐸', color: '#34d399' },
+      ],
+    });
+    expect(scoutSettingsSummary(party)).toBe('Party · 3 players · 12 rounds · Silhouette · Superstars · 4 tries');
+
+    const gauntlet = normalizeScoutSettings({ format: 'gauntlet', mode: 'logoZoom', tries: 4 });
+    const gauntletLine = scoutSettingsSummary(gauntlet);
+    expect(gauntletLine).toBe('Gauntlet · 32 franchises · Logo Zoom · 4 tries');
+    // the gauntlet picks its own packs, so naming them would be noise
+    expect(gauntletLine).not.toContain('Franchises');
+  });
+});
+
+describe('scoutFormatFacts', () => {
+  it('names only what the format reads', () => {
+    const base = { mode: 'silhouette' as const, packIds: ['superstars'] };
+    expect(scoutFormatFacts(normalizeScoutSettings({ ...base, rounds: 8 }))).toEqual(['8 rounds']);
+    expect(scoutFormatFacts(normalizeScoutSettings({ ...base, format: 'blitz', blitzDuration: 120 }))).toEqual([
+      '120s clock',
+    ]);
+    expect(scoutFormatFacts(normalizeScoutSettings({ ...base, format: 'survival', lives: 1 }))).toEqual(['1 life']);
+    expect(scoutFormatFacts(normalizeScoutSettings({ ...base, format: 'gauntlet' }))).toEqual(['32 franchises']);
+  });
+});
+
+describe('scoutRulesSummary', () => {
+  it('lists exactly the controls the panel renders', () => {
+    const standard = normalizeScoutSettings({ mode: 'silhouette', packIds: ['superstars'], rounds: 10, tries: 5 });
+    expect(scoutRulesSummary(standard)).toBe('10 rounds · 5 tries · no timer');
+
+    const blitz = normalizeScoutSettings({ format: 'blitz', mode: 'silhouette', packIds: ['superstars'] });
+    expect(scoutRulesSummary(blitz)).toBe('90s clock');
+
+    const gauntlet = normalizeScoutSettings({ format: 'gauntlet', mode: 'silhouette', tries: 4, roundTimer: 30 });
+    expect(scoutRulesSummary(gauntlet)).toBe('4 tries · 30s timer');
+  });
+});
+
+describe('scoutRunSteps', () => {
+  it("describes each format in its own terms, with the draft's numbers", () => {
+    const blitz = scoutRunSteps(normalizeScoutSettings({ format: 'blitz', mode: 'silhouette', blitzDuration: 60 }));
+    expect(blitz).toHaveLength(3);
+    expect(blitz.join(' ')).toContain('60s clock');
+    expect(blitz.join(' ')).toContain('5s');
+
+    const survival = scoutRunSteps(normalizeScoutSettings({ format: 'survival', mode: 'silhouette', lives: 2 }));
+    expect(survival[0]).toContain('2 lives');
+
+    const gauntlet = scoutRunSteps(normalizeScoutSettings({ format: 'gauntlet', mode: 'logoZoom' }));
+    expect(gauntlet[0]).toContain('32 franchises');
+
+    const buzzer = scoutRunSteps(normalizeScoutSettings({ format: 'duel', duelStyle: 'buzzer', mode: 'silhouette' }));
+    expect(buzzer[0]).toContain('A for player one');
+    expect(buzzer[0]).toContain('L for player two');
+    const turns = scoutRunSteps(normalizeScoutSettings({ format: 'duel', duelStyle: 'turns', mode: 'silhouette' }));
+    expect(turns[0]).toContain('alternate');
+
+    // every format answers, including the default
+    for (const format of SCOUT_FORMAT_IDS) {
+      const steps = scoutRunSteps(normalizeScoutSettings({ format, mode: 'silhouette', packIds: ['superstars'] }));
+      expect(steps).toHaveLength(3);
+      for (const step of steps) expect(step.length).toBeGreaterThan(20);
+    }
+  });
+});
+
+describe('dailyRunNoun', () => {
+  it("reads the daily's own settings instead of assuming eight rounds", () => {
+    expect(dailyRunNoun(normalizeScoutSettings({ mode: 'silhouette', rounds: 8 }))).toBe('8 subjects');
+    expect(dailyRunNoun(normalizeScoutSettings({ format: 'blitz', mode: 'silhouette', blitzDuration: 90 }))).toBe(
+      '90 seconds',
+    );
+    expect(dailyRunNoun(normalizeScoutSettings({ format: 'gauntlet', mode: 'silhouette' }))).toBe('the whole board');
+  });
+});
+
+describe('format labels', () => {
+  it('names every format and seats it', () => {
+    for (const f of SCOUT_FORMATS) {
+      expect(scoutFormatName(f.id)).toBe(f.name);
+      expect(SCOUT_FORMAT_LABEL[f.id]).toBe(f.name);
+      expect(SCOUT_FORMAT_EMOJI[f.id]).not.toBe('');
+      expect(SCOUT_FORMAT_ACCENT[f.id]).toMatch(/^#[0-9a-f]{6}$/i);
+      expect(formatSeatsLabel(f.seats)).not.toBe('');
+    }
+    expect(formatSeatsLabel('solo')).toBe('Solo');
+    expect(formatSeatsLabel('pair')).toBe('2 players');
+    expect(formatSeatsLabel('group')).toBe('2–8 players');
+    expect(livesLabel(1)).toBe('1 life');
+    expect(livesLabel(3)).toBe('3 lives');
+    expect(clockLabel(90)).toBe('90s clock');
+    expect(seatsLabel(1)).toBe('1 player');
+    expect(seatsLabel(4)).toBe('4 players');
+    expect(duelStyleLabel('buzzer')).toBe('Buzz-in');
+    expect(duelStyleLabel('turns')).toBe('Turns');
   });
 });
 

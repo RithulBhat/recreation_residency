@@ -89,6 +89,17 @@ const STAGE_CLUES: Readonly<Record<ScoutMode, readonly ScoutClueKind[] | 'all' |
   statLine: ['stat'],
   teamTrivia: 'all',
   careerPath: 'all',
+  // The six choice-shaped boards are their OWN puzzle: the cards, the number, the colours. None of
+  // them typesets a clue chip, so every clue the ladder pays out belongs to the rail — including the
+  // two a board happens to echo (`higherLower`'s paid-out number, `oddOneOut`'s shared value), which
+  // is reinforcement rather than a contradiction, and keeps the rungs a board ignores from vanishing
+  // (the 'gap' on a Higher or Lower, the 'odd man out plays' hint on an Odd One Out).
+  teammates: 'none',
+  depthChart: 'none',
+  draftClass: 'none',
+  higherLower: 'none',
+  oddOneOut: 'none',
+  jersey: 'none',
 };
 
 export function stageOwnsAll(mode: ScoutMode): boolean {

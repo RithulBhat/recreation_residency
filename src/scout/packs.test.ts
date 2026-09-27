@@ -4,9 +4,12 @@ import {
   SCOUT_MODES,
   SCOUT_PACKS,
   SCOUT_PRESETS,
+  SCOUT_PUZZLE_PRESETS,
   SCOUT_TEAM_META,
   featuredScoutPacks,
   scoutMode,
+  scoutModeAnswer,
+  scoutModeIsChoice,
   scoutPack,
   scoutPacksOfKind,
   scoutPreset,
@@ -106,9 +109,25 @@ describe('SCOUT_PACKS', () => {
 });
 
 describe('SCOUT_MODES', () => {
-  it('describes all seven modes exactly once', () => {
-    const ids: ScoutMode[] = ['silhouette', 'faceZoom', 'highlight', 'teamTrivia', 'statLine', 'careerPath', 'logoZoom'];
-    expect(SCOUT_MODES).toHaveLength(7);
+  it('describes all thirteen modes exactly once', () => {
+    const ids: ScoutMode[] = [
+      // the reveal seven
+      'silhouette',
+      'faceZoom',
+      'highlight',
+      'teamTrivia',
+      'statLine',
+      'careerPath',
+      'logoZoom',
+      // the choice-shaped six
+      'teammates',
+      'depthChart',
+      'draftClass',
+      'higherLower',
+      'oddOneOut',
+      'jersey',
+    ];
+    expect(SCOUT_MODES).toHaveLength(13);
     expect(SCOUT_MODES.map((m) => m.id).sort()).toEqual([...ids].sort());
     for (const m of SCOUT_MODES) {
       expect(m.name.length).toBeGreaterThan(0);
@@ -117,7 +136,44 @@ describe('SCOUT_MODES', () => {
       expect(m.how.length).toBeGreaterThan(0);
       expect(m.guesses).toBe(subjectKindForMode(m.id));
       expect(scoutMode(m.id)).toBe(m);
+      expect(['player', 'team', 'year', 'option']).toContain(m.answer);
+      expect(['text', 'choice']).toContain(m.input);
+      // a typed answer must be namable: only the year mode answers something that is not a subject
+      if (m.input === 'text' && m.answer !== 'year') expect(m.answer).toBe(m.guesses);
+      // and only the two card-tapping modes may say 'option'
+      expect(m.answer === 'option').toBe(m.input === 'choice');
     }
+  });
+});
+
+describe('the choice-shaped modes', () => {
+  it('names the six, and only higherLower / oddOneOut are answered by tapping', () => {
+    const puzzles: ScoutMode[] = ['teammates', 'depthChart', 'draftClass', 'higherLower', 'oddOneOut', 'jersey'];
+    for (const id of puzzles) expect(scoutMode(id)).toBeDefined();
+    const choice = SCOUT_MODES.filter((m) => scoutModeIsChoice(m.id)).map((m) => m.id);
+    expect(choice.sort()).toEqual(['higherLower', 'oddOneOut']);
+    expect(scoutModeAnswer('draftClass')).toBe('year');
+    expect(scoutModeAnswer('depthChart')).toBe('team');
+    expect(scoutModeAnswer('jersey')).toBe('player');
+    expect(scoutModeIsChoice('silhouette')).toBe(false);
+  });
+
+  it('ships a pack for every one of them and a preset that reaches it', () => {
+    expect(scoutPack('household-names')?.filter.minFame).toBe(55);
+    expect(scoutPack('skill-stats')?.filter.groups).toEqual(['QB', 'RB', 'WR', 'TE']);
+    expect((scoutPack('draft-2011-on')?.filter as { minDraftYear?: number }).minDraftYear).toBe(2011);
+    const byMode = new Map(SCOUT_PUZZLE_PRESETS.map((p) => [p.settings.mode, p]));
+    for (const id of ['teammates', 'depthChart', 'draftClass', 'higherLower', 'oddOneOut', 'jersey'] as ScoutMode[]) {
+      const preset = byMode.get(id);
+      expect(preset, `preset for ${id}`).toBeDefined();
+      const settings = normalizeScoutSettings(preset!.settings);
+      expect(settings.mode).toBe(id);
+      expect(settings.packIds.some((pid) => scoutPack(pid)?.kind === subjectKindForMode(id))).toBe(true);
+    }
+    // a two-way question gets exactly one try; a second would be a free win
+    expect(scoutPreset('higher-or-lower')?.settings.tries).toBe(1);
+    // and every puzzle preset is part of the headline list
+    for (const p of SCOUT_PUZZLE_PRESETS) expect(SCOUT_PRESETS).toContain(p);
   });
 });
 

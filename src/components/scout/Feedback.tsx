@@ -2,8 +2,9 @@ import type { ReactNode } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { CircleCheckBig, CircleX, Flag, TimerOff, TrendingUp } from 'lucide-react';
 import { cn } from '@/components/ui';
+import { isScoutBuzzerDuel } from '@/scout/formats';
 import { isAmbiguousSurname, nameTokens } from '@/scout/names';
-import { triesLeft } from '@/scout/selectors';
+import { playerById, triesLeft } from '@/scout/selectors';
 import type { ScoutGuess, ScoutRound, ScoutState, ScoutSubject } from '@/scout/types';
 import { points } from './format';
 
@@ -100,6 +101,16 @@ export function verdictLine(state: ScoutState, round: ScoutRound, guess: ScoutGu
         : { tone: 'neutral', icon: <Flag />, text: 'Gave up on that one.' };
     default: {
       const miss = team ? 'Not that club.' : 'Not him.';
+      // A wrong BUZZ costs a seat, not a rung: saying "4 tries left" there would price it wrongly.
+      if (isScoutBuzzerDuel(state.settings) && guess.playerId !== undefined) {
+        const who = playerById(state, guess.playerId)?.name ?? 'That seat';
+        return {
+          tone: 'danger',
+          icon: <CircleX />,
+          text: round.status === 'playing' ? `${miss} ${who} is out of this round.` : `${miss} Nobody got it.`,
+          echo: guess.text,
+        };
+      }
       return {
         tone: 'danger',
         icon: <CircleX />,

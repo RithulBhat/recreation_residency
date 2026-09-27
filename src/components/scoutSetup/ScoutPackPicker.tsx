@@ -42,12 +42,13 @@ export const SCOUT_PACK_CATEGORIES: readonly Category[] = [
  * How many packs the grid shows before the "show all" expander.
  *
  * The grid is one column on a phone, so ten is already a long scroll there; from `lg` up it is two
- * columns beside the mode + rules stack, which is taller than the pack card — six rows instead of
- * five spends that slack on real content instead of leaving dead column. Keep this a multiple of
- * two so the desktop grid never ends on a half row.
+ * columns beside the PUZZLE TYPE grid, which is three columns of `SCOUT_MODES` and now runs about
+ * 1130 px at 1440 — twelve packs (six rows) left the pack card ~220 px short of it, so sixteen
+ * (eight rows) spends that slack on real content instead of leaving dead column. Keep this a
+ * multiple of two so the desktop grid never ends on a half row.
  */
 export const COLLAPSED_PACKS = 10;
-export const COLLAPSED_PACKS_WIDE = 12;
+export const COLLAPSED_PACKS_WIDE = 16;
 /** Tailwind's `lg` — the width at which the lobby splits into two columns. */
 const TWO_COLUMN = '(min-width: 64rem)';
 
@@ -107,7 +108,7 @@ export function ScoutPackPicker({ counts, poolSize, loading }: ScoutPackPickerPr
   const kind = poolKind(settings);
 
   return (
-    <div className="flex min-w-0 flex-col gap-3">
+    <div className="flex min-w-0 flex-col gap-3" data-setting="packIds">
       <ul className="flex flex-wrap items-center gap-2" aria-label="Selected packs">
         {selected.map((p) => (
           <li

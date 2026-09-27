@@ -6,8 +6,14 @@ import type { ScoutMode } from '@/scout/types';
 import { Switch } from '@/components/ui/Switch';
 import { cn } from '@/components/ui/cn';
 
-/** One accent per mode, so the seven cards read as seven different games. */
-export const SCOUT_MODE_ACCENT: Readonly<Record<ScoutMode, string>> = {
+/**
+ * One accent per puzzle type, so the cards read as different games.
+ *
+ * Deliberately PARTIAL: the list of puzzle types is `SCOUT_MODES`, and a new one may land without
+ * an entry here. Use {@link scoutModeAccent}, which falls back to the shared palette by position, so
+ * a new puzzle type still gets a colour of its own the moment it is added.
+ */
+export const SCOUT_MODE_ACCENT: Readonly<Partial<Record<ScoutMode, string>>> = {
   silhouette: '#a855f7',
   faceZoom: '#22d3ee',
   highlight: '#f472b6',
@@ -17,7 +23,33 @@ export const SCOUT_MODE_ACCENT: Readonly<Record<ScoutMode, string>> = {
   logoZoom: '#fb7185',
 };
 
-/** The seven Scout modes as a keyboard-navigable radiogroup, plus the Mixed bag switch. */
+const MODE_PALETTE: readonly string[] = [
+  '#a855f7',
+  '#22d3ee',
+  '#f472b6',
+  '#34d399',
+  '#fbbf24',
+  '#60a5fa',
+  '#fb7185',
+  '#c084fc',
+  '#2dd4bf',
+  '#f59e0b',
+];
+
+/** The accent for a puzzle type — its own, or one from the palette by position. */
+export function scoutModeAccent(mode: ScoutMode): string {
+  const own = SCOUT_MODE_ACCENT[mode];
+  if (own !== undefined) return own;
+  const i = SCOUT_MODES.findIndex((m) => m.id === mode);
+  return MODE_PALETTE[(i < 0 ? 0 : i) % MODE_PALETTE.length] ?? '#a855f7';
+}
+
+/**
+ * The PUZZLE TYPES as a keyboard-navigable radiogroup, plus the Mixed bag switch.
+ *
+ * Rendered from `SCOUT_MODES` at build time, never a hardcoded list of seven — a puzzle type added
+ * to `@/scout/packs` appears here (and in the presets, summaries and stats) with no change needed.
+ */
 export function ScoutModePicker() {
   const mode = useScoutSettingsStore((s) => s.settings.mode);
   const mixModes = useScoutSettingsStore((s) => s.settings.mixModes);
@@ -40,20 +72,21 @@ export function ScoutModePicker() {
   };
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex min-w-0 flex-col gap-4">
       <div
         ref={ref}
         role="radiogroup"
-        aria-label="Scouting mode"
+        aria-label="Puzzle type"
+        data-setting="mode"
         onKeyDown={onKeyDown}
         className={cn(
-          'grid min-w-0 grid-cols-2 gap-2.5 sm:grid-cols-3',
+          'grid min-w-0 auto-rows-fr grid-cols-2 gap-2.5 sm:grid-cols-3',
           mixModes && 'opacity-80',
         )}
       >
         {SCOUT_MODES.map((m) => {
           const selected = m.id === mode;
-          const accent = SCOUT_MODE_ACCENT[m.id];
+          const accent = scoutModeAccent(m.id);
           return (
             <button
               key={m.id}
@@ -98,7 +131,7 @@ export function ScoutModePicker() {
         })}
       </div>
 
-      <div className="rounded-2xl border border-border bg-bg/40 p-3">
+      <div className="rounded-2xl border border-border bg-bg/40 p-3" data-setting="mixModes">
         <Switch
           label={
             <span className="inline-flex items-center gap-1.5">
@@ -106,7 +139,7 @@ export function ScoutModePicker() {
               Mixed bag
             </span>
           }
-          description="Shuffle every mode into one run — players and franchises, a different game each round."
+          description="Shuffle every puzzle type into one run — players and franchises, a different game each round."
           checked={mixModes}
           onChange={(v) => update({ mixModes: v })}
         />

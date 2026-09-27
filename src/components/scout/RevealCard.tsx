@@ -27,6 +27,8 @@ export interface RevealCardProps {
   /** Verified clips by player id (`useScoutClips`). */
   clips: ReadonlyMap<string, PlayerClip>;
   onNext: () => void;
+  /** Overrides the primary button's label — a rotating format hands the laptop over instead. */
+  nextLabel?: string;
   /** Bump to open the tape from the T shortcut. */
   tapeSignal?: number;
   className?: string;
@@ -99,7 +101,7 @@ function TeamChip({ name, color, altColor }: { name: string; color: string; altC
  * are credited under it — a clip may live on a former team's channel, so it never captions who the
  * player plays for now (that comes from the dataset above it).
  */
-export function RevealCard({ state, clips, onNext, tapeSignal, className }: RevealCardProps) {
+export function RevealCard({ state, clips, onNext, nextLabel, tapeSignal, className }: RevealCardProps) {
   const reduce = useReducedMotion();
   const round = state.rounds[state.currentRound];
   if (!round || round.status === 'playing') return null;
@@ -252,7 +254,7 @@ export function RevealCard({ state, clips, onNext, tapeSignal, className }: Reve
         data-autofocus
         data-testid="scout-next"
       >
-        {last ? 'See results' : 'Next round'}
+        {nextLabel ?? (last ? 'See results' : 'Next round')}
         <span className="ml-2 hidden sm:inline-flex">
           <Kbd size="sm" className="border-white/20 bg-black/20 text-accent-fg">
             Enter

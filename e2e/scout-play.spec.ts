@@ -1,7 +1,8 @@
 import { expect, test, type Page } from '@playwright/test';
 import { mkdirSync, readFileSync } from 'node:fs';
 import type { PlayerClip } from '../src/data/nfl';
-import type { ScoutMode, ScoutSettings } from '../src/scout/types';
+import type { ScoutFormat, ScoutMode, ScoutSettings } from '../src/scout/types';
+import type { PlayerConfig } from '../src/types/game';
 
 const OUT = 'test-results/scout';
 mkdirSync(OUT, { recursive: true });
@@ -25,12 +26,36 @@ interface ScoutAnswer {
   tries: number;
   visual: number;
 }
+interface ScoutStoreState {
+  status: string;
+  totalScore: number;
+  endReason?: string;
+  currentRound: number;
+  blitzEndsAt?: number;
+  clearedTeamIds?: string[];
+  gauntletTeamIds?: string[];
+  players?: Array<{ id: string; name: string; score: number; lives?: number }>;
+  rounds: Array<{ index: number; status: string; mode: string; subject: { name: string } }>;
+  settings: { format?: string };
+}
 interface ScoutHandle {
   start: (settings: Partial<ScoutSettings>) => Promise<{ subjects: unknown[] }>;
   answer: () => ScoutAnswer | null;
   closeGuess: () => string | null;
   wrongGuess: () => string;
-  store: { getState: () => { state: { status: string; totalScore: number }; skip: () => void; giveUp: () => void; next: () => void } };
+  store: {
+    getState: () => {
+      state: ScoutStoreState;
+      skip: () => void;
+      giveUp: () => void;
+      next: () => void;
+      guess: (text: string) => void;
+      guessAs: (playerId: string, text: string) => void;
+      buzz: (playerId: string) => void;
+      tick: (now?: number) => void;
+      reset: () => void;
+    };
+  };
 }
 declare global {
   interface Window {
@@ -41,7 +66,7 @@ declare global {
 /** Read rather than import: Playwright's ESM loader wants an import attribute for JSON. */
 const clips: PlayerClip[] = JSON.parse(readFileSync('src/data/nfl/clips.json', 'utf8')) as PlayerClip[];
 const CLIP_IDS = new Set(clips.map((c) => c.id));
-const TEAM_MODES: readonly ScoutMode[] = ['teamTrivia', 'logoZoom'];
+const TEAM_MODES: readonly ScoutMode[] = ['teamTrivia', 'logoZoom', 'depthChart'];
 const ALL_MODES: readonly ScoutMode[] = [
   'silhouette',
   'faceZoom',
@@ -52,6 +77,19 @@ const ALL_MODES: readonly ScoutMode[] = [
   'logoZoom',
 ];
 
+/** The six choice-shaped puzzle types this wave wired in. */
+const PUZZLE_MODES: readonly ScoutMode[] = [
+  'teammates',
+  'depthChart',
+  'draftClass',
+  'higherLower',
+  'oddOneOut',
+  'jersey',
+];
+
+/** The two that are answered by TAPPING a card — they never show the guess box. */
+const TAP_MODES: readonly ScoutMode[] = ['higherLower', 'oddOneOut'];
+
 /** The stage each mode renders. */
 const STAGE_TESTID: Record<ScoutMode, string> = {
   silhouette: 'scout-stage-photo',
@@ -61,12 +99,23 @@ const STAGE_TESTID: Record<ScoutMode, string> = {
   statLine: 'scout-stage-stats',
   teamTrivia: 'scout-stage-trivia',
   careerPath: 'scout-stage-career',
+  teammates: 'scout-stage-teammates',
+  depthChart: 'scout-stage-depth-chart',
+  draftClass: 'scout-stage-draft-class',
+  higherLower: 'scout-stage-higher-lower',
+  oddOneOut: 'scout-stage-odd-one-out',
+  jersey: 'scout-stage-jersey',
 };
+
+/** The default pack for a mode: a franchise answer needs the franchise pool. */
+function packFor(mode: ScoutMode): string[] {
+  return TEAM_MODES.includes(mode) ? ['franchises-all'] : ['superstars'];
+}
 
 function settingsFor(mode: ScoutMode, over: Partial<ScoutSettings> = {}): Partial<ScoutSettings> {
   return {
     mode,
-    packIds: TEAM_MODES.includes(mode) ? ['franchises-all'] : ['superstars'],
+    packIds: packFor(mode),
     difficulty: 'any',
     tries: 5,
     rounds: 5,
@@ -76,15 +125,109 @@ function settingsFor(mode: ScoutMode, over: Partial<ScoutSettings> = {}): Partia
   };
 }
 
-/** Open /scout/play (which registers the DEV hook) and start a real session. */
+const DUO: PlayerConfig[] = [
+  { id: 'p1', name: 'Fox', emoji: '🦊', color: '#f97316' },
+  { id: 'p2', name: 'Octo', emoji: '🐙', color: '#a855f7' },
+];
+const TRIO: PlayerConfig[] = [...DUO, { id: 'p3', name: 'Frog', emoji: '🐸', color: '#34d399' }];
+
+/** One playable session per FORMAT, small enough to run to the end inside a test. */
+const FORMAT_SETTINGS: Record<ScoutFormat, Partial<ScoutSettings>> = {
+  standard: settingsFor('silhouette', { rounds: 3 }),
+  blitz: settingsFor('faceZoom', { format: 'blitz', blitzDuration: 90 }),
+  survival: settingsFor('silhouette', { format: 'survival', lives: 2, tries: 4, packIds: ['conf-afc', 'conf-nfc'] }),
+  gauntlet: settingsFor('logoZoom', { format: 'gauntlet', tries: 4 }),
+  duel: settingsFor('highlight', {
+    format: 'duel',
+    duelStyle: 'buzzer',
+    tries: 4,
+    rounds: 3,
+    packIds: ['conf-afc', 'conf-nfc'],
+    players: DUO,
+  }),
+  party: settingsFor('silhouette', { format: 'party', tries: 4, rounds: 6, players: TRIO }),
+};
+const FORMATS = Object.keys(FORMAT_SETTINGS) as ScoutFormat[];
+
+/**
+ * Start a real session and land on /scout/play.
+ *
+ * It parks on the home screen first on purpose: a FINISHED run still in the store makes /scout/play
+ * bounce straight to /scout/results (that is `useFinishScoutGame` doing its job), and starting the
+ * next session from there would then bounce on to /scout/setup. Home mounts neither screen, so the
+ * store can be reset and re-started without a redirect racing the navigation.
+ */
 async function startScout(page: Page, settings: Partial<ScoutSettings>): Promise<void> {
   await page.addInitScript(() => localStorage.clear());
-  if (!page.url().includes('/scout/play')) await page.goto('/#/scout/play');
+  await page.goto('/#/scout');
   await page.waitForFunction(() => typeof window.__scout?.start === 'function', null, { timeout: 30_000 });
   await page.evaluate(async (s) => {
+    window.__scout!.store.getState().reset();
     await window.__scout!.start(s);
   }, settings);
-  await expect(page.getByTestId('scout-try-ladder')).toBeVisible({ timeout: 20_000 });
+  await page.goto('/#/scout/play');
+  await expect(page.getByTestId('scout-top-bar')).toBeVisible({ timeout: 20_000 });
+}
+
+function scoutState(page: Page): Promise<ScoutStoreState> {
+  return page.evaluate(() => {
+    const s = window.__scout!.store.getState().state;
+    return JSON.parse(JSON.stringify({
+      status: s.status,
+      totalScore: s.totalScore,
+      endReason: s.endReason,
+      currentRound: s.currentRound,
+      blitzEndsAt: s.blitzEndsAt,
+      clearedTeamIds: s.clearedTeamIds,
+      gauntletTeamIds: s.gauntletTeamIds,
+      players: s.players,
+      rounds: s.rounds.map((r) => ({ index: r.index, status: r.status, mode: r.mode, subject: { name: r.subject.name } })),
+      settings: { format: s.settings.format },
+    })) as ScoutStoreState;
+  });
+}
+
+/**
+ * Play a live run to the end from inside the page: solve every round but every `missEvery`-th.
+ * Multiplayer runs answer as whoever the engine says is up (buzzing first in a buzzer duel).
+ */
+async function runToEnd(page: Page, opts: { max?: number; missEvery?: number } = {}): Promise<void> {
+  const { max = 40, missEvery = 3 } = opts;
+  await page.evaluate(
+    ({ max, missEvery }) => {
+      const h = window.__scout!;
+      for (let i = 0; i < max; i++) {
+        const store = h.store.getState();
+        if (store.state.status === 'finished') break;
+        const answer = h.answer();
+        if (!answer) break;
+        const seats = store.state.players ?? [];
+        const multi = store.state.settings.format === 'duel' || store.state.settings.format === 'party';
+        if ((i + 1) % missEvery === 0) store.giveUp();
+        else if (multi) {
+          const seat = seats[i % seats.length];
+          h.store.getState().buzz(seat.id);
+          h.store.getState().guessAs(seat.id, answer.accepted[0]);
+        } else store.guess(answer.accepted[0]);
+        const after = h.store.getState();
+        if (after.state.status === 'round-over') after.next();
+      }
+    },
+    { max, missEvery },
+  );
+}
+
+/** Set the theme the way `applyTheme` does, without a reload (a reload would drop the session). */
+async function setTheme(page: Page, theme: 'midnight' | 'daylight'): Promise<void> {
+  await page.evaluate((t) => {
+    document.documentElement.dataset.theme = t;
+    try {
+      localStorage.setItem('sg:theme', t);
+    } catch {
+      /* ignore */
+    }
+  }, theme);
+  await page.waitForTimeout(120);
 }
 
 function getAnswer(page: Page): Promise<ScoutAnswer | null> {
@@ -532,5 +675,363 @@ test('scout play · no horizontal overflow at 320 px in any mode', async ({ page
     await page.getByTestId('scout-give-up').click();
     await expect(page.getByTestId('scout-reveal')).toBeVisible();
     await expectNoHorizontalOverflow(page);
+  }
+});
+
+test('scout play · the new boards and the format chrome still fit a 320 px phone', async ({ page }) => {
+  await page.setViewportSize(VIEWPORTS.narrow);
+  for (const mode of PUZZLE_MODES) {
+    await startScout(page, settingsFor(mode, { tries: 4 }));
+    for (let i = 0; i < 3; i++) await page.getByTestId('scout-skip').click();
+    await expectNoHorizontalOverflow(page);
+    await page.getByTestId('scout-give-up').click();
+    await expect(page.getByTestId('scout-reveal')).toBeVisible();
+    await expectNoHorizontalOverflow(page);
+  }
+  for (const format of FORMATS) {
+    await startScout(page, FORMAT_SETTINGS[format]);
+    await expectNoHorizontalOverflow(page);
+    await expectIconButtonsLabelled(page);
+    // The gauntlet's board is a wrapping strip on a phone, and the seats stack — both are measured
+    // with something actually on them.
+    if (format !== 'standard') await runToEnd(page, { max: 3, missEvery: 3 });
+    await expectNoHorizontalOverflow(page);
+  }
+});
+
+// =============================================================================================
+// The six choice-shaped puzzle types
+// =============================================================================================
+
+test('scout play · every new puzzle type renders its own board', async ({ page }) => {
+  await page.setViewportSize(VIEWPORTS.desktop);
+  for (const mode of PUZZLE_MODES) {
+    await startScout(page, settingsFor(mode, { tries: 4 }));
+    const answer = await getAnswer(page);
+    expect(answer, `${mode} should have a subject`).not.toBeNull();
+    expect(answer!.mode).toBe(mode);
+    await expect(page.getByTestId(STAGE_TESTID[mode])).toBeVisible();
+    await expect(page.locator('h1')).toHaveCount(1);
+
+    if (TAP_MODES.includes(mode)) {
+      // A tap-only round replaces the guess box outright — it is not merely disabled.
+      await expect(page.getByTestId('scout-guess-box')).toHaveCount(0);
+      await expect(page.getByTestId('scout-choice-actions')).toBeVisible();
+      expect(await page.getByTestId('scout-puzzle-card').count(), `${mode} cards`).toBeGreaterThanOrEqual(2);
+    } else {
+      await expect(page.getByTestId('scout-guess-box')).toBeVisible();
+      await expect(page.getByTestId('scout-choice-actions')).toHaveCount(0);
+    }
+    await expectNoHorizontalOverflow(page);
+    await expectIconButtonsLabelled(page);
+  }
+});
+
+test('scout play · a draft class asks for a year, not a name', async ({ page }) => {
+  await page.setViewportSize(VIEWPORTS.desktop);
+  await startScout(page, settingsFor('draftClass', { tries: 4 }));
+  const box = page.getByTestId('scout-guess-box').getByRole('combobox');
+  await expect(box).toHaveAttribute('placeholder', 'Which year?');
+  // The player index has nothing to offer a year: typing a surname must not suggest players.
+  await box.fill('mah');
+  await page.waitForTimeout(250);
+  await expect(page.getByRole('option')).toHaveCount(0);
+
+  const answer = await getAnswer(page);
+  await box.fill(answer!.accepted[0]);
+  await box.press('Enter');
+  await expect(page.getByTestId('scout-reveal')).toHaveAttribute('data-verdict', 'correct');
+});
+
+test('scout play · Higher or Lower is answered by tapping, and a wrong tap is marked', async ({ page }) => {
+  await page.setViewportSize(VIEWPORTS.desktop);
+  await startScout(page, settingsFor('higherLower', { tries: 4 }));
+  const answer = await getAnswer(page);
+  const cards = page.getByTestId('scout-puzzle-card');
+  await expect(cards).toHaveCount(2);
+
+  const right = page.locator(`[data-testid="scout-puzzle-card"][data-player="${answer!.id}"]`);
+  const wrong = page.locator(`[data-testid="scout-puzzle-card"]:not([data-player="${answer!.id}"])`);
+  await wrong.click();
+  // The miss costs a rung and the card is marked — the round stays live.
+  await expect(wrong).toHaveAttribute('data-state', 'missed');
+  await expect(page.getByTestId('scout-reveal')).toHaveCount(0);
+
+  await right.click();
+  await expect(page.getByTestId('scout-reveal')).toHaveAttribute('data-verdict', 'correct');
+  await expect(page.getByTestId('scout-reveal-name')).toHaveText(answer!.name);
+  expect((await scoutState(page)).totalScore).toBeGreaterThan(0);
+});
+
+test('scout play · Odd One Out strikes out wrong cards and takes the number keys', async ({ page }) => {
+  await page.setViewportSize(VIEWPORTS.desktop);
+  await startScout(page, settingsFor('oddOneOut', { tries: 4 }));
+  const answer = await getAnswer(page);
+  const cards = page.getByTestId('scout-puzzle-card');
+  await expect(cards).toHaveCount(4);
+
+  // Rung 1 strikes one wrong card out; a struck-out card is no longer pickable.
+  await page.getByTestId('scout-skip').click();
+  await expect(page.locator('[data-testid="scout-puzzle-card"][data-state="ruledOut"]')).toHaveCount(1);
+
+  const ids = await cards.evaluateAll((els) => els.map((el) => el.getAttribute('data-player') ?? ''));
+  const index = ids.indexOf(answer!.id);
+  expect(index).toBeGreaterThanOrEqual(0);
+  await page.locator('body').press(String(index + 1));
+  await expect(page.getByTestId('scout-reveal')).toHaveAttribute('data-verdict', 'correct');
+});
+
+// =============================================================================================
+// The six session formats, start to finish
+// =============================================================================================
+
+test('scout play · blitz runs on one clock and a miss costs five seconds', async ({ page }) => {
+  await page.setViewportSize(VIEWPORTS.desktop);
+  await startScout(page, FORMAT_SETTINGS.blitz);
+
+  // The clock is the hero; there is no round counter and no try ladder to speak of.
+  await expect(page.getByTestId('scout-blitz-clock')).toBeVisible();
+  await expect(page.getByTestId('scout-blitz-tally')).toHaveText('0');
+  await expect(page.getByTestId('scout-try-ladder')).toHaveCount(0);
+  await expect(page.getByTestId('scout-blitz-rule')).toContainText('5 seconds');
+
+  const before = (await scoutState(page)).blitzEndsAt ?? 0;
+  const first = await getAnswer(page);
+  await guess(page, first!.accepted[0]);
+  // A correct answer opens the next subject immediately — no reveal, ever.
+  await expect(page.getByTestId('scout-reveal')).toHaveCount(0);
+  await expect(page.getByTestId('scout-blitz-tally')).toHaveText('1');
+  await expect(page.getByTestId('scout-blitz-flash')).toContainText(first!.name);
+
+  const missed = await getAnswer(page);
+  await page.getByTestId('scout-skip').click();
+  const after = (await scoutState(page)).blitzEndsAt ?? 0;
+  expect(before - after, 'a skip burns five seconds of clock').toBeGreaterThanOrEqual(5000);
+  await expect(page.getByTestId('scout-blitz-penalty')).toContainText('5s');
+  await expect(page.getByTestId('scout-blitz-flash')).toContainText(missed!.name);
+
+  // Run the clock out: the run ends on 'time' and the result counts names against seconds.
+  await page.evaluate(() => window.__scout!.store.getState().tick(Date.now() + 600_000));
+  await expect(page).toHaveURL(/#\/scout\/results$/);
+  const state = await scoutState(page);
+  expect(state.endReason).toBe('time');
+  await expect(page.getByTestId('scout-results-headline')).toHaveText(/^1 in 90 seconds$/);
+  await expect(page.getByTestId('scout-format-outcome')).toHaveAttribute('data-format', 'blitz');
+});
+
+test('scout play · survival spends lives and walks the league down a tier at a time', async ({ page }) => {
+  await page.setViewportSize(VIEWPORTS.desktop);
+  await startScout(page, FORMAT_SETTINGS.survival);
+
+  const rail = page.getByTestId('scout-survival-rail');
+  await expect(rail).toBeVisible();
+  await expect(page.getByTestId('scout-life')).toHaveCount(2);
+  await expect(page.locator('[data-testid="scout-life"][data-state="alive"]')).toHaveCount(2);
+  await expect(page.locator('[data-testid="scout-tier-step"][data-state="current"]')).toHaveText('Stars');
+
+  // A lost round costs a life; the escalation is on screen the whole time.
+  await page.evaluate(() => window.__scout!.store.getState().giveUp());
+  await expect(page.getByTestId('scout-reveal')).toBeVisible();
+  await page.getByTestId('scout-next').click();
+  await expect(page.locator('[data-testid="scout-life"][data-state="alive"]')).toHaveCount(1);
+
+  await runToEnd(page, { max: 40, missEvery: 1 });
+  await expect(page).toHaveURL(/#\/scout\/results$/);
+  expect((await scoutState(page)).endReason).toBe('lives');
+  await expect(page.getByTestId('scout-results-headline')).toContainText('You got to round');
+  await expect(page.getByTestId('scout-format-outcome')).toHaveAttribute('data-format', 'survival');
+});
+
+test('scout play · the gauntlet board is the progress bar', async ({ page }) => {
+  await page.setViewportSize(VIEWPORTS.desktop);
+  await startScout(page, FORMAT_SETTINGS.gauntlet);
+
+  const board = page.getByTestId('scout-franchise-board');
+  await expect(board.first()).toBeVisible();
+  await expect(page.getByTestId('scout-round-counter')).toContainText('0/32');
+  await expect(page.getByTestId('scout-franchise')).toHaveCount(32);
+  await expect(page.locator('[data-testid="scout-franchise"][data-state="current"]')).toHaveCount(1);
+
+  const answer = await getAnswer(page);
+  await guess(page, answer!.accepted[0]);
+  await expect(page.getByTestId('scout-reveal')).toBeVisible();
+  await page.getByTestId('scout-next').click();
+  await expect(page.locator('[data-testid="scout-franchise"][data-state="cleared"]')).toHaveCount(1);
+  await expect(page.getByTestId('scout-round-counter')).toContainText('1/32');
+
+  await runToEnd(page, { max: 40, missEvery: 4 });
+  await expect(page).toHaveURL(/#\/scout\/results$/);
+  expect((await scoutState(page)).endReason).toBe('gauntlet');
+  await expect(page.getByTestId('scout-results-headline')).toContainText('of 32 franchises');
+  await expect(page.getByTestId('scout-format-outcome')).toHaveAttribute('data-format', 'gauntlet');
+});
+
+test('scout play · a duel is fought on both buzzers', async ({ page }) => {
+  await page.setViewportSize(VIEWPORTS.desktop);
+  await startScout(page, FORMAT_SETTINGS.duel);
+
+  await expect(page.getByTestId('scout-seats')).toBeVisible();
+  await expect(page.getByTestId('scout-seat')).toHaveCount(2);
+  // Nobody may answer until somebody claims the round.
+  await expect(page.getByTestId('scout-guess-box')).toHaveAttribute('data-waiting', 'buzz');
+  await expect(page.getByTestId('scout-guess-box').getByRole('combobox')).toBeDisabled();
+  await expect(page.getByRole('button', { name: /Fox buzz in \(key A\)/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Octo buzz in \(key L\)/ })).toBeVisible();
+
+  // A: player one buzzes in and gets it wrong — locked out of this round, no rung spent.
+  await page.locator('body').press('a');
+  await expect(page.locator('[data-testid="scout-seat"][data-player="p1"]')).toHaveAttribute('data-active', 'true');
+  await guess(page, await page.evaluate(() => window.__scout!.wrongGuess()));
+  await expect(page.locator('[data-testid="scout-seat"][data-player="p1"]')).toHaveAttribute('data-locked', 'true');
+  await expect(page.getByTestId('scout-feedback')).toContainText('Fox is out of this round');
+
+  // L: player two takes it.
+  const answer = await getAnswer(page);
+  await page.locator('body').press('l');
+  await expect(page.locator('[data-testid="scout-seat"][data-player="p2"]')).toHaveAttribute('data-active', 'true');
+  await guess(page, answer!.accepted[0]);
+  await expect(page.getByTestId('scout-reveal')).toHaveAttribute('data-verdict', 'correct');
+  const mid = await scoutState(page);
+  expect(mid.players?.find((p) => p.id === 'p2')?.score).toBeGreaterThan(0);
+  expect(mid.players?.find((p) => p.id === 'p1')?.score).toBe(0);
+
+  await page.getByTestId('scout-next').click();
+  await runToEnd(page, { max: 8, missEvery: 5 });
+  await expect(page).toHaveURL(/#\/scout\/results$/);
+  await expect(page.getByTestId('scout-scoreboard')).toBeVisible();
+  await expect(page.getByTestId('scout-scoreboard-row')).toHaveCount(2);
+  await expect(page.getByTestId('scout-results-headline')).toContainText(/wins it|Dead level/);
+});
+
+test('scout play · a party hands the laptop over without leaking the answer', async ({ page }) => {
+  await page.setViewportSize(VIEWPORTS.desktop);
+  await startScout(page, FORMAT_SETTINGS.party);
+
+  await expect(page.getByTestId('scout-seat')).toHaveCount(3);
+  await expect(page.getByTestId('scout-seat-prompt')).toContainText('Fox');
+
+  const answer = await getAnswer(page);
+  await guess(page, answer!.accepted[0]);
+  await expect(page.getByTestId('scout-reveal')).toBeVisible();
+  // The reveal belongs to the player who just went; the primary action is the handover.
+  await expect(page.getByTestId('scout-next')).toContainText('Pass to Octo');
+  await page.getByTestId('scout-next').click();
+
+  // The curtain replaces the screen: no reveal, no answer, no previous subject anywhere in the DOM.
+  const curtain = page.getByTestId('scout-handover');
+  await expect(curtain).toBeVisible();
+  await expect(page.getByTestId('scout-reveal')).toHaveCount(0);
+  await expect(page.getByTestId('scout-stage-photo')).toHaveCount(0);
+  const surname = answer!.name.split(' ').pop()!;
+  expect((await page.locator('main').innerText()).toLowerCase(), 'the handover leaks the last answer').not.toContain(
+    surname.toLowerCase(),
+  );
+  await expect(curtain).toContainText("Octo, you're up");
+
+  await page.getByTestId('scout-handover-ready').click();
+  await expect(page.getByTestId('scout-handover')).toHaveCount(0);
+  await expect(page.getByTestId('scout-seat-prompt')).toContainText('Octo');
+  await expect(page.getByTestId('scout-round-counter')).toContainText('2/6');
+
+  await runToEnd(page, { max: 10, missEvery: 3 });
+  await expect(page).toHaveURL(/#\/scout\/results$/);
+  await expect(page.getByTestId('scout-scoreboard-row')).toHaveCount(3);
+});
+
+test('scout results · every format records the run and pays out progression', async ({ page }) => {
+  await page.setViewportSize(VIEWPORTS.desktop);
+  await page.addInitScript(() => localStorage.clear());
+  await startScout(page, FORMAT_SETTINGS.standard);
+  await runToEnd(page, { max: 6, missEvery: 3 });
+  await expect(page).toHaveURL(/#\/scout\/results$/);
+
+  // The lifetime record is folded in exactly once, and the card shows what it paid.
+  const card = page.getByTestId('scout-progression');
+  await expect(card).toBeVisible();
+  await expect(card).not.toContainText('already counted');
+  await expect(page.getByTestId('scout-rank-title')).toBeVisible();
+  const runs = await page.evaluate(() => JSON.parse(localStorage.getItem('sg:scout-stats') ?? '{}'));
+  expect(Array.isArray(runs?.state?.runs) ? runs.state.runs.length : 0).toBe(1);
+  await expect(page.getByTestId('scout-achievement').first()).toBeVisible();
+});
+
+// =============================================================================================
+// Visual sweep — every format and every new puzzle type, both laptop sizes, both themes
+// =============================================================================================
+
+const SHOT_SIZES = [
+  { name: '1440', width: 1440, height: 900 },
+  { name: '1920', width: 1920, height: 1080 },
+] as const;
+const SHOT_THEMES = ['midnight', 'daylight'] as const;
+
+/** Shoot the live screen at both laptop sizes in both themes. */
+async function shootEverywhere(page: Page, slug: string): Promise<void> {
+  for (const size of SHOT_SIZES) {
+    await page.setViewportSize({ width: size.width, height: size.height });
+    for (const theme of SHOT_THEMES) {
+      await setTheme(page, theme);
+      await expectNoHorizontalOverflow(page);
+      await page.screenshot({ path: `${OUT}/${slug}-${theme}-${size.name}.png` });
+    }
+  }
+  await setTheme(page, 'midnight');
+}
+
+test('scout play · every format looks right on a laptop, in both themes', async ({ page }) => {
+  test.slow();
+  for (const format of FORMATS) {
+    await startScout(page, FORMAT_SETTINGS[format]);
+    // Put something on the board so the chrome has state to show (a clock that has ticked, a life
+    // spent, franchises cleared, a seat locked out, a scoreboard that is not all zeroes).
+    if (format === 'duel') {
+      await page.evaluate(() => {
+        const store = window.__scout!.store.getState();
+        store.buzz('p1');
+        store.guessAs('p1', 'Zzyzx Quuxington');
+      });
+    } else if (format !== 'standard') {
+      await runToEnd(page, { max: format === 'gauntlet' ? 9 : 4, missEvery: 3 });
+    } else {
+      await page.getByTestId('scout-skip').click();
+    }
+    await page.waitForTimeout(400);
+    await shootEverywhere(page, `format-${format}`);
+    await expect(page.locator('h1')).toHaveCount(1);
+  }
+});
+
+test('scout play · every new puzzle type looks right on a laptop, in both themes', async ({ page }) => {
+  test.slow();
+  for (const mode of PUZZLE_MODES) {
+    await startScout(page, settingsFor(mode, { tries: 4 }));
+    await page.getByTestId('scout-skip').click();
+    await page.waitForTimeout(300);
+    await shootEverywhere(page, `puzzle-${mode}`);
+    await expect(page.locator('h1')).toHaveCount(1);
+  }
+});
+
+test('scout play · the party handover and the format results shoot clean', async ({ page }) => {
+  test.slow();
+  await startScout(page, FORMAT_SETTINGS.party);
+  const answer = await getAnswer(page);
+  await guess(page, answer!.accepted[0]);
+  await page.getByTestId('scout-next').click();
+  await expect(page.getByTestId('scout-handover')).toBeVisible();
+  await shootEverywhere(page, 'format-party-handover');
+
+  for (const format of ['blitz', 'survival', 'gauntlet', 'duel'] as const) {
+    await startScout(page, FORMAT_SETTINGS[format]);
+    if (format === 'blitz') {
+      await runToEnd(page, { max: 6, missEvery: 3 });
+      await page.evaluate(() => window.__scout!.store.getState().tick(Date.now() + 600_000));
+    } else {
+      await runToEnd(page, { max: 40, missEvery: format === 'survival' ? 1 : 4 });
+    }
+    await expect(page).toHaveURL(/#\/scout\/results$/);
+    await expect(page.getByTestId('scout-results-hero')).toBeVisible();
+    await page.waitForTimeout(1600); // the score ticker settles before the shot
+    await shootEverywhere(page, `results-${format}`);
   }
 });

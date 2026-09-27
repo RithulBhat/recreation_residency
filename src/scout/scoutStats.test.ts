@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   MAX_SCOUT_SUBJECTS,
+  SCOUT_MODE_KEYS,
   applyScoutRun,
   asScoutFameTier,
   asScoutFormat,
@@ -137,9 +138,10 @@ describe('summarizeScoutRun', () => {
 
   it('marks a perfect run and a first-rung sweep', () => {
     const r = record(everyModeRun());
-    expect(r.rounds).toBe(7);
-    expect(r.correct).toBe(7);
-    expect(r.firstRungSolves).toBe(7);
+    const modes = SCOUT_MODE_KEYS.length;
+    expect(r.rounds).toBe(modes);
+    expect(r.correct).toBe(modes);
+    expect(r.firstRungSolves).toBe(modes);
     expect(r.perfect).toBe(true);
     expect(r.avgRung).toBe(1);
   });
@@ -248,7 +250,7 @@ describe('applyScoutRun', () => {
     const totals = emptyScoutTotals();
     expect(Object.keys(totals.byGroup)).toHaveLength(9);
     expect(Object.keys(totals.byDivision)).toHaveLength(8);
-    expect(Object.keys(totals.byMode)).toHaveLength(7);
+    expect(Object.keys(totals.byMode)).toHaveLength(SCOUT_MODE_KEYS.length);
     expect(Object.keys(totals.byTeam)).toHaveLength(32);
     expect(Object.keys(totals.byTier)).toHaveLength(4);
   });
@@ -406,5 +408,19 @@ describe('coercions', () => {
     expect(blitz.rounds).toBe(8);
     expect(blitz.roundStats[0].rung).toBe(2);
     expect(ALL_FRANCHISE_IDS).toHaveLength(32);
+  });
+});
+
+describe('mode coverage cannot drift', () => {
+  it('SCOUT_MODE_KEYS covers every mode the lobby can offer', async () => {
+    const { SCOUT_MODES } = await import('./packs');
+    const offered = SCOUT_MODES.map((m) => m.id).sort();
+    expect([...SCOUT_MODE_KEYS].sort()).toEqual(offered);
+  });
+
+  it('every mode is priced in MODE_WEIGHTS', async () => {
+    const { SCOUT_MODES } = await import('./packs');
+    const { MODE_WEIGHTS } = await import('./scoring');
+    for (const m of SCOUT_MODES) expect(MODE_WEIGHTS[m.id], m.id).toBeGreaterThan(0);
   });
 });

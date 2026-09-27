@@ -217,8 +217,9 @@ export const SCOUT_ACHIEVEMENTS: readonly ScoutAchievement[] = [
     id: 'every-angle',
     name: 'Every Angle',
     emoji: '♟️',
-    description: 'Solve at least one round of all seven puzzle types.',
-    rarity: 'epic',
+    // Derived, so adding a puzzle type can never leave this sentence lying.
+    description: `Solve at least one round of all ${SCOUT_MODE_KEYS.length} puzzle types.`,
+    rarity: 'legendary',
     check: ({ totals }) => SCOUT_MODE_KEYS.every((mode) => (totals.byMode[mode]?.correct ?? 0) >= 1),
   },
 

@@ -1,7 +1,9 @@
 import { useMemo } from 'react';
-import { CalendarDays, Flame, Globe, ListChecks, Play, RotateCcw, Timer } from 'lucide-react';
+import { CalendarDays, Flame, Globe, Heart, Hourglass, ListChecks, Map, Play, RotateCcw, Timer } from 'lucide-react';
+import type { ReactNode } from 'react';
 import { todayISO } from '@/game/challenge';
 import { scoutDailySettings } from '@/scout/challenge';
+import { GAUNTLET_SIZE, formatUses, scoutBlitzDuration, scoutFormat, scoutFormatInfo, scoutLives } from '@/scout/formats';
 import { SCOUT_MODES, scoutPack } from '@/scout/packs';
 import { SectionHeading } from '@/components/SectionHeading';
 import { Button } from '@/components/ui/Button';
@@ -16,19 +18,24 @@ import {
 } from '@/components/daily';
 import {
   SCOUT_DIFFICULTY_INFO,
+  SCOUT_FORMAT_ACCENT,
   ScoutDailyResultCard,
   ScoutReplaceDialog,
   ScoutResumeBanner,
-  SCOUT_MODE_ACCENT,
+  clockLabel,
+  dailyRunNoun,
+  livesLabel,
   roundsLabel,
   scoutDailyRecord,
   scoutDailyResults,
+  scoutModeAccent,
+  scoutSettingsSummary,
   triesLabel,
   useStartScout,
 } from '@/components/scoutSetup';
 import { useScoutResultStore } from '@/store/scoutResultStore';
 
-/** One seeded run a day: the mode of the day, the pack of the day, identical for everyone. */
+/** One seeded run a day: the format of the day, the mode of the day, the pack of the day. */
 export default function ScoutDaily() {
   const game = useStartScout();
   const today = todayISO();
@@ -41,17 +48,42 @@ export default function ScoutDaily() {
 
   const mode = SCOUT_MODES.find((m) => m.id === settings.mode);
   const pack = scoutPack(settings.packIds[0] ?? '');
-  const accent = SCOUT_MODE_ACCENT[settings.mode];
+  const accent = scoutModeAccent(settings.mode);
+  // The daily is just seeded settings, so it can carry any session format. Everything below reads
+  // the format rather than assuming the eight-round standard run the daily shipped with.
+  const format = scoutFormat(settings);
+  const formatInfo = scoutFormatInfo(format);
+  const formatAccent = SCOUT_FORMAT_ACCENT[format];
 
-  const rules = [
-    { icon: <ListChecks />, text: `${roundsLabel(settings.rounds)}, ${triesLabel(settings.tries)} per subject` },
-    {
+  const rules: Array<{ icon: ReactNode; text: string }> = [];
+  if (formatUses(format, 'blitzDuration')) {
+    rules.push({ icon: <Hourglass />, text: `${clockLabel(scoutBlitzDuration(settings))} for the whole run` });
+  }
+  if (formatUses(format, 'lives')) {
+    rules.push({ icon: <Heart />, text: `${livesLabel(scoutLives(settings))} — the league gets harder as you go` });
+  }
+  if (format === 'gauntlet') {
+    rules.push({ icon: <Map />, text: `All ${GAUNTLET_SIZE} franchises, one subject each` });
+  }
+  if (formatUses(format, 'rounds') || formatUses(format, 'tries')) {
+    rules.push({
+      icon: <ListChecks />,
+      text: [
+        formatUses(format, 'rounds') ? roundsLabel(settings.rounds) : null,
+        formatUses(format, 'tries') ? `${triesLabel(settings.tries)} per subject` : null,
+      ]
+        .filter((part): part is string => part !== null)
+        .join(', '),
+    });
+  }
+  if (formatUses(format, 'roundTimer')) {
+    rules.push({
       icon: <Timer />,
       text: settings.roundTimer > 0 ? `${settings.roundTimer}s on the clock each round` : 'No clock — take your time',
-    },
-    { icon: <Globe />, text: 'Seeded by the date — everyone gets the same subjects in the same order' },
-    { icon: <RotateCcw />, text: 'One attempt per day. A new mode drops at local midnight' },
-  ];
+    });
+  }
+  rules.push({ icon: <Globe />, text: 'Seeded by the date — everyone gets the same subjects in the same order' });
+  rules.push({ icon: <RotateCcw />, text: 'One attempt per day. A new assignment drops at local midnight' });
 
   return (
     <div className="flex flex-col gap-5 pb-8 sm:gap-10">
@@ -67,18 +99,16 @@ export default function ScoutDaily() {
           </span>
         }
         title={<span id="scout-daily-title">Today's assignment</span>}
-        description="Eight subjects, five tries, one shot. The mode rotates every day and the order is fixed by the date, so you and your group are looking at exactly the same board."
+        description={`${scoutSettingsSummary(settings)} — one shot. The format and the puzzle type rotate, and the order is fixed by the date, so you and your group are looking at exactly the same board.`}
         size="lg"
       />
 
       <ScoutResumeBanner />
 
       {/*
-        Left column is the brief, right column is the button — and nothing is said in both. The mode
-        name, its blurb, its `how` line and the pack live in the card below; the rules live in the
-        one under it; the call to action carries only what belongs next to a button. (Both cards used
-        to print `mode.how` verbatim, side by side.) No `lg:items-start`, so the shorter column
-        stretches and the button sits at the optical centre of the row instead of leaving dead card.
+        Left column is the brief, right column is the button — and nothing is said in both. The format
+        of the day, the mode name, its blurb, its `how` line and the pack live in the card below; the
+        rules live in the one under it; the call to action carries only what belongs next to a button.
       */}
       <div className="grid gap-5 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
         <div className="flex flex-col gap-4">
@@ -96,7 +126,7 @@ export default function ScoutDaily() {
               style={{ background: accent }}
             />
             <div className="relative flex flex-col gap-2">
-              <span className="text-[11px] font-bold uppercase tracking-[0.18em] text-fg/70">Mode of the day</span>
+              <span className="text-[11px] font-bold uppercase tracking-[0.18em] text-fg/70">Assignment of the day</span>
               <h2 className="font-display text-2xl font-black leading-tight text-fg sm:text-3xl">
                 <span aria-hidden className="mr-1.5">
                   {mode?.emoji}
@@ -105,8 +135,18 @@ export default function ScoutDaily() {
               </h2>
               <p className="text-sm text-fg/85">{mode?.blurb}</p>
               <p className="font-mono text-xs text-fg/70">{mode?.how}</p>
+              <p
+                className="mt-1 inline-flex w-fit items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold text-fg"
+                style={{ background: `color-mix(in oklab, ${formatAccent} 30%, var(--sg-surface))` }}
+                data-testid="scout-daily-format"
+              >
+                <span aria-hidden>{formatInfo?.emoji}</span>
+                {formatInfo?.name ?? format}
+                {/* the `ends` line is the second half of the badge — it wraps on a phone, so it waits for sm */}
+                <span className="hidden font-normal text-fg/75 sm:inline">· {formatInfo?.ends}</span>
+              </p>
               {pack && (
-                <p className="mt-2 inline-flex flex-wrap items-center gap-1.5 text-sm text-muted">
+                <p className="mt-1 inline-flex flex-wrap items-center gap-1.5 text-sm text-muted">
                   <span aria-hidden>{pack.emoji}</span>
                   <span className="font-semibold text-fg">{pack.name}</span>
                   {settings.difficulty !== 'any' && (
@@ -142,7 +182,7 @@ export default function ScoutDaily() {
             <div className="relative flex flex-col items-start gap-4 lg:h-full lg:justify-center">
               <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-accent">Not played yet</div>
               <h2 className="font-display text-2xl font-black leading-tight text-fg sm:text-3xl">
-                One shot at <span className="text-gradient">today's eight</span>
+                One shot at <span className="text-gradient">today's {dailyRunNoun(settings)}</span>
               </h2>
               <p className="text-sm text-muted">
                 Solve on the first rung for the most points — every miss after that trades score for a
@@ -173,7 +213,7 @@ export default function ScoutDaily() {
               >
                 {game.loading ? 'Loading the roster…' : game.error ? 'Try again' : "Play today's assignment"}
               </Button>
-              <MidnightCountdown label="Today's mode changes in" />
+              <MidnightCountdown label="Today's assignment changes in" />
             </div>
           </Card>
         )}

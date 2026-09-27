@@ -22,6 +22,8 @@ export interface ScoutDraftFilter extends ScoutPackFilter {
   maxDraftRound?: number;
   /** Keep only players with no draft record at all. */
   undrafted?: boolean;
+  /** ADDED — keep only players drafted in this year or later (the `draftClass` floor is 2011). */
+  minDraftYear?: number;
 }
 
 interface ScoutPackDraft extends Omit<ScoutPack, 'filter'> {
@@ -246,6 +248,51 @@ const SPECIAL_PACKS: readonly ScoutPackDraft[] = [
   },
 ];
 
+/**
+ * Packs for the CHOICE-SHAPED modes (ADDED).
+ *
+ * `household-names` is the measured pool those modes were designed against: fame ≥ 55 is exactly
+ * the 460 players the data survey found recognisable, and every one of them has four teammates and
+ * a jersey number to build a round from. `skill-stats` is the slice that actually carries stat
+ * lines, so a Higher or Lower run never comes up empty. `draft-2011-on` is the `draftClass` floor —
+ * older classes no longer have four recognisable men on a roster.
+ */
+const PUZZLE_PACKS: readonly ScoutPackDraft[] = [
+  {
+    id: 'household-names',
+    name: 'Household Names',
+    emoji: '🪪',
+    tagline: 'Fame 55 and up: the faces a fan can actually name.',
+    accent: '#7dd3fc',
+    kind: 'player',
+    tags: ['difficulty', 'teammates', 'jersey', 'recognisable'],
+    filter: { minFame: 55 },
+    approxSize: 460,
+  },
+  {
+    id: 'skill-stats',
+    name: 'Skill Positions',
+    emoji: '📈',
+    tagline: 'QBs, backs and pass catchers — the men with stat lines.',
+    accent: '#a3e635',
+    kind: 'player',
+    tags: ['position', 'stats', 'higher or lower'],
+    filter: { groups: ['QB', 'RB', 'WR', 'TE'], minFame: 45 },
+    approxSize: 300,
+  },
+  {
+    id: 'draft-2011-on',
+    name: 'Draft Classes',
+    emoji: '🎓',
+    tagline: 'Every man taken from the 2011 draft onwards.',
+    accent: '#c084fc',
+    kind: 'player',
+    tags: ['draft', 'class', 'modern'],
+    filter: { minDraftYear: 2011 },
+    approxSize: 700,
+  },
+];
+
 const TEAM_GUESS_PACKS: readonly ScoutPack[] = [
   {
     id: 'franchises-all',
@@ -283,9 +330,10 @@ const TEAM_GUESS_PACKS: readonly ScoutPack[] = [
   },
 ];
 
-/** Every pack, ordered: specials → positions → divisions → conferences → franchises → rosters. */
+/** Every pack: specials → choice-shaped → positions → divisions → conferences → franchises → rosters. */
 export const SCOUT_PACKS: readonly ScoutPack[] = [
   ...SPECIAL_PACKS,
+  ...PUZZLE_PACKS,
   ...GROUP_POSITION_PACKS,
   ...DIVISION_PACKS,
   ...CONFERENCE_PACKS,
@@ -311,6 +359,13 @@ export function scoutPacksOfKind(kind: SubjectKind): ScoutPack[] {
 // Modes
 // ---------------------------------------------------------------------------------------------
 
+/**
+ * What a mode's answer IS (ADDED). Not the same thing as its subject kind: `draftClass` is built out
+ * of player records but the answer is a YEAR, and the two choice modes are answered by tapping a
+ * card rather than by naming anything.
+ */
+export type ScoutAnswerShape = 'player' | 'team' | 'year' | 'option';
+
 export interface ScoutModeInfo {
   id: ScoutMode;
   name: string;
@@ -318,7 +373,12 @@ export interface ScoutModeInfo {
   blurb: string;
   /** One line: how a round actually plays. */
   how: string;
+  /** Which pool the mode draws from — unchanged, and still `subjectKindForMode(id)`. */
   guesses: SubjectKind;
+  /** ADDED — what the player is actually naming. */
+  answer: ScoutAnswerShape;
+  /** ADDED — `'choice'` modes never use the guess box; the stage collects the answer. */
+  input: 'text' | 'choice';
 }
 
 export const SCOUT_MODES: readonly ScoutModeInfo[] = [
@@ -329,6 +389,8 @@ export const SCOUT_MODES: readonly ScoutModeInfo[] = [
     blurb: 'A blacked-out player, lit up one try at a time.',
     how: 'Guess the player; every miss lifts the shadow and adds a clue.',
     guesses: 'player',
+    answer: 'player',
+    input: 'text',
   },
   {
     id: 'faceZoom',
@@ -337,6 +399,8 @@ export const SCOUT_MODES: readonly ScoutModeInfo[] = [
     blurb: 'One eyebrow. One chinstrap. Good luck.',
     how: 'The crop pulls back each try until the whole headshot shows.',
     guesses: 'player',
+    answer: 'player',
+    input: 'text',
   },
   {
     id: 'highlight',
@@ -345,6 +409,8 @@ export const SCOUT_MODES: readonly ScoutModeInfo[] = [
     blurb: 'A real play, with every name blacked out.',
     how: 'Read the redacted play text, then earn team, situation and position.',
     guesses: 'player',
+    answer: 'player',
+    input: 'text',
   },
   {
     id: 'teamTrivia',
@@ -353,6 +419,8 @@ export const SCOUT_MODES: readonly ScoutModeInfo[] = [
     blurb: 'Obscure franchise facts, easiest one last.',
     how: 'Name the team; each miss trades a fact for an easier fact.',
     guesses: 'team',
+    answer: 'team',
+    input: 'text',
   },
   {
     id: 'statLine',
@@ -361,6 +429,8 @@ export const SCOUT_MODES: readonly ScoutModeInfo[] = [
     blurb: 'A season in numbers. Whose numbers?',
     how: 'Stat pairs appear one at a time, then position, then team.',
     guesses: 'player',
+    answer: 'player',
+    input: 'text',
   },
   {
     id: 'careerPath',
@@ -369,6 +439,8 @@ export const SCOUT_MODES: readonly ScoutModeInfo[] = [
     blurb: 'Draft slot, college, team. Follow the paperwork.',
     how: 'Starts at the draft year and walks forward to the jersey number.',
     guesses: 'player',
+    answer: 'player',
+    input: 'text',
   },
   {
     id: 'logoZoom',
@@ -377,8 +449,81 @@ export const SCOUT_MODES: readonly ScoutModeInfo[] = [
     blurb: 'Three pixels of a helmet decal.',
     how: 'The logo zooms out each try while conference clues land.',
     guesses: 'team',
+    answer: 'team',
+    input: 'text',
+  },
+  // ------------------------------------------------------------------- the choice-shaped six
+  {
+    id: 'teammates',
+    name: 'Locker Room',
+    emoji: '🪪',
+    blurb: 'Four of his teammates. Name the man missing.',
+    how: 'Two faces to start, another every miss, then position and jersey.',
+    guesses: 'player',
+    answer: 'player',
+    input: 'text',
+  },
+  {
+    id: 'depthChart',
+    name: 'Depth Chart',
+    emoji: '📋',
+    blurb: 'Five names off one roster. Whose?',
+    how: 'Name the club; misses add a name, then conference, division, venue.',
+    guesses: 'team',
+    answer: 'team',
+    input: 'text',
+  },
+  {
+    id: 'draftClass',
+    name: 'Draft Class',
+    emoji: '🎓',
+    blurb: 'Four men taken in the same draft. Which year?',
+    how: 'The window narrows from a decade to two years as you miss.',
+    guesses: 'player',
+    answer: 'year',
+    input: 'text',
+  },
+  {
+    id: 'higherLower',
+    name: 'Higher or Lower',
+    emoji: '⚖️',
+    blurb: 'Two players, one stat. Who put up more?',
+    how: 'Tap a card. No typing — same position, same season, no ties.',
+    guesses: 'player',
+    answer: 'option',
+    input: 'choice',
+  },
+  {
+    id: 'oddOneOut',
+    name: 'Odd One Out',
+    emoji: '🧩',
+    blurb: 'Three of these four share something. One does not.',
+    how: 'The category is free; the shared value and the strike-outs cost tries.',
+    guesses: 'player',
+    answer: 'option',
+    input: 'choice',
+  },
+  {
+    id: 'jersey',
+    name: 'Numbers Game',
+    emoji: '🔢',
+    blurb: 'A number, a position, two colours. No photo.',
+    how: 'Name the man wearing it; misses buy conference, draft, college.',
+    guesses: 'player',
+    answer: 'player',
+    input: 'text',
   },
 ];
+
+/** What the player is naming in this mode. */
+export function scoutModeAnswer(id: ScoutMode): ScoutAnswerShape {
+  return scoutMode(id)?.answer ?? 'player';
+}
+
+/** True when the round is answered by tapping a card instead of typing a name. */
+export function scoutModeIsChoice(id: ScoutMode): boolean {
+  return scoutMode(id)?.input === 'choice';
+}
 
 export function scoutMode(id: ScoutMode): ScoutModeInfo | undefined {
   return SCOUT_MODES.find((m) => m.id === id);
@@ -396,7 +541,7 @@ export interface ScoutPreset {
   settings: Partial<ScoutSettings>;
 }
 
-export const SCOUT_PRESETS: readonly ScoutPreset[] = [
+const CLASSIC_SCOUT_PRESETS: readonly ScoutPreset[] = [
   {
     id: 'silhouette-sprint',
     name: 'Silhouette Sprint',
@@ -514,6 +659,104 @@ export const SCOUT_PRESETS: readonly ScoutPreset[] = [
     },
   },
 ];
+
+/**
+ * One preset per choice-shaped mode (ADDED) — this is how they are reachable from the lobby.
+ *
+ * The try counts are deliberate. Higher or Lower is a two-way question, so it gets ONE try: a second
+ * try would be a free win. Odd One Out has four options and three tries, which leaves brute force
+ * possible but expensive (the try ladder pays 1 → 0.8 → 0.65).
+ */
+export const SCOUT_PUZZLE_PRESETS: readonly ScoutPreset[] = [
+  {
+    id: 'locker-room',
+    name: 'Locker Room',
+    emoji: '🪪',
+    blurb: 'Four teammates on the board. Name the man who is missing.',
+    settings: {
+      mode: 'teammates',
+      packIds: ['household-names'],
+      difficulty: 'any',
+      tries: 4,
+      rounds: 10,
+      mixModes: false,
+    },
+  },
+  {
+    id: 'depth-chart',
+    name: 'Depth Chart',
+    emoji: '📋',
+    blurb: 'Five men off one roster. Name the club they play for.',
+    settings: {
+      mode: 'depthChart',
+      packIds: ['franchises-all'],
+      difficulty: 'any',
+      tries: 5,
+      rounds: 12,
+      mixModes: false,
+    },
+  },
+  {
+    id: 'draft-class',
+    name: 'Draft Class',
+    emoji: '🎓',
+    blurb: 'Four men, one draft. Name the year — 2011 or later.',
+    settings: {
+      mode: 'draftClass',
+      packIds: ['draft-2011-on'],
+      difficulty: 'any',
+      tries: 4,
+      rounds: 10,
+      mixModes: false,
+    },
+  },
+  {
+    id: 'higher-or-lower',
+    name: 'Higher or Lower',
+    emoji: '⚖️',
+    blurb: 'One stat, two players, one tap. Fifteen snap calls.',
+    settings: {
+      mode: 'higherLower',
+      packIds: ['skill-stats'],
+      difficulty: 'any',
+      tries: 1,
+      rounds: 15,
+      roundTimer: 15,
+      mixModes: false,
+    },
+  },
+  {
+    id: 'odd-one-out',
+    name: 'Odd One Out',
+    emoji: '🧩',
+    blurb: 'Three share a school, a club, a round or a room. One does not.',
+    settings: {
+      mode: 'oddOneOut',
+      packIds: ['household-names'],
+      difficulty: 'any',
+      tries: 3,
+      rounds: 12,
+      mixModes: false,
+    },
+  },
+  {
+    id: 'numbers-game',
+    name: 'Numbers Game',
+    emoji: '🔢',
+    blurb: 'A number and two colours. No face, no stat line, no mercy.',
+    settings: {
+      mode: 'jersey',
+      packIds: ['household-names'],
+      difficulty: 'any',
+      tries: 5,
+      rounds: 10,
+      mixModes: false,
+    },
+  },
+];
+
+/** Every standard-format preset: the reveal seven first, then the choice-shaped six. */
+export const SCOUT_PRESETS: readonly ScoutPreset[] = [...CLASSIC_SCOUT_PRESETS, ...SCOUT_PUZZLE_PRESETS];
 
 export function scoutPreset(id: string): ScoutPreset | undefined {
   return SCOUT_PRESETS.find((p) => p.id === id);

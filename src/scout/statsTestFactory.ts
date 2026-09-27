@@ -16,6 +16,7 @@ import { BLITZ_RUNG } from './formats';
 import { SCOUT_TEAM_META } from './packs';
 import { buildPlayerSubject, buildTeamSubject } from './subjects';
 import { FIXTURE_PLAYERS, FIXTURE_TEAMS, makePlayer } from './fixtures';
+import { SCOUT_MODE_KEYS } from './scoutStats';
 import type { ScoutSeenRound } from './engine';
 import type {
   NflPlayer,
@@ -423,15 +424,18 @@ export function partyRun(seats = 3, ownerWins = true, over: ScoutRunOpts = {}): 
 
 /** A run that touches all seven puzzle types, winning each on the first rung. */
 export function everyModeRun(over: ScoutRunOpts = {}): ScoutState {
-  const rounds: ScoutRoundSpec[] = [
-    { mode: 'silhouette', rung: 0, teamId: '12', group: 'QB' },
-    { mode: 'faceZoom', rung: 0, teamId: '2', group: 'RB' },
-    { mode: 'highlight', rung: 0, teamId: '21', group: 'WR' },
-    { mode: 'statLine', rung: 0, teamId: '25', group: 'TE' },
-    { mode: 'careerPath', rung: 0, teamId: '9', group: 'OL' },
-    { mode: 'teamTrivia', rung: 0, team: 'KC' },
-    { mode: 'logoZoom', rung: 0, team: 'SF' },
-  ];
+  // Derived from the canonical mode list: adding a puzzle type must extend this run, otherwise
+  // the "Every Angle" achievement would quietly become unreachable.
+  const TEAM_ANSWER_MODES = new Set<ScoutMode>(['teamTrivia', 'logoZoom', 'depthChart']);
+  const GROUPS = ['QB', 'RB', 'WR', 'TE', 'OL', 'DL', 'LB', 'DB'] as const;
+  const TEAM_IDS = ['12', '2', '21', '25', '9', '14', '4', '27'];
+  const TEAM_ABBRS = ['KC', 'SF', 'PHI', 'BAL', 'DAL', 'GB'];
+  let teamAnswerSeen = 0;
+  const rounds: ScoutRoundSpec[] = SCOUT_MODE_KEYS.map((mode, i) =>
+    TEAM_ANSWER_MODES.has(mode)
+      ? { mode, rung: 0, team: TEAM_ABBRS[teamAnswerSeen++ % TEAM_ABBRS.length] }
+      : { mode, rung: 0, teamId: TEAM_IDS[i % TEAM_IDS.length], group: GROUPS[i % GROUPS.length] },
+  );
   return makeScoutRun({ id: 'scout-every-mode-1', settings: { mixModes: true }, rounds, ...over });
 }
 

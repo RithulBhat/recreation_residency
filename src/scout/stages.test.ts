@@ -1,19 +1,40 @@
 import { describe, expect, it } from 'vitest';
 import { createRng } from '@/game/rng';
 import {
+  CARD_VISUAL_MAX,
+  DEPTH_CHART_VISUAL_MIN,
+  DRAFT_CLASS_VISUAL_MIN,
   FACE_ZOOM_MAX,
   FACE_ZOOM_MIN,
+  GROUP_LABELS,
+  GROUP_PEOPLE_LABELS,
+  GROUP_PERSON_LABELS,
   LOGO_ZOOM_MAX,
   LOGO_ZOOM_MIN,
+  MIN_VISIBLE_CARDS,
+  ODD_ONE_OUT_VISUAL_MAX,
   SILHOUETTE_MAX,
+  TEAMMATES_VISUAL_MIN,
   buildFocusStages,
   buildStages,
   clueCounts,
   clueOrderFor,
   cropFocus,
   newClues,
+  ruledOutCardIds,
+  visibleCardCount,
+  visibleCards,
   visualLadder,
 } from './stages';
+import {
+  DEPTH_CHART_CARDS,
+  ODD_TRAIT_PROMPTS,
+  SCOUT_PUZZLE_MODES,
+  buildPuzzleIndex,
+  buildScoutPuzzleSpecs,
+  depthChartPuzzle,
+} from './puzzles';
+import { makePuzzleDataset } from './puzzleTestFactory';
 import {
   FIXTURE_PLAYS,
   FIXTURE_STAT_LINES,
@@ -22,8 +43,8 @@ import {
   findFixtureTeam,
   makePlayer,
 } from './fixtures';
-import { buildPlayerSubject, buildTeamSubject } from './subjects';
-import type { ScoutMode, ScoutStage, ScoutSubject } from './types';
+import { buildPlayerSubject, buildPuzzleSubject, buildTeamSubject } from './subjects';
+import type { PositionGroup, ScoutMode, ScoutPuzzleMode, ScoutStage, ScoutSubject } from './types';
 
 function teamFor(teamId: string) {
   return FIXTURE_TEAMS.find((t) => t.id === teamId);
@@ -302,5 +323,239 @@ describe('cropFocus', () => {
 
   it('centres text modes', () => {
     expect(cropFocus(PLAYER, 'highlight')).toEqual({ x: 0.5, y: 0.5 });
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// The choice-shaped ladders
+// ---------------------------------------------------------------------------------------------
+
+describe('the choice-shaped ladders', () => {
+  const dataset = makePuzzleDataset();
+  const index = buildPuzzleIndex(dataset);
+  const specs = buildScoutPuzzleSpecs({
+    dataset,
+    index,
+    modes: [...SCOUT_PUZZLE_MODES],
+    difficulty: 'any',
+    seed: 'ladder-seed',
+    playerEligible: (p) => p.fame >= 55,
+  });
+
+  function subjectFor(mode: ScoutPuzzleMode): ScoutSubject {
+    const spec = specs.find((s) => s.mode === mode);
+    if (!spec) throw new Error(`no spec for ${mode}`);
+    const subject = buildPuzzleSubject(spec);
+    if (!subject) throw new Error(`no subject for ${mode}`);
+    return subject;
+  }
+
+  const SUBJECTS = new Map<ScoutPuzzleMode, ScoutSubject>(
+    ([...SCOUT_PUZZLE_MODES] as ScoutPuzzleMode[]).map((m) => [m, subjectFor(m)]),
+  );
+
+  it('returns exactly `tries` rungs with cumulative clues, for every mode and every try count', () => {
+    for (const [mode, subject] of SUBJECTS) {
+      for (const tries of [1, 2, 3, 4, 5, 6]) {
+        const stages = buildStages(mode, subject, tries);
+        expect(stages, `${mode} × ${tries}`).toHaveLength(tries);
+        for (let i = 1; i < stages.length; i++) {
+          expect(stages[i].clues.length).toBeGreaterThanOrEqual(stages[i - 1].clues.length);
+          expect(stages[i].clues.slice(0, stages[i - 1].clues.length)).toEqual(stages[i - 1].clues);
+          expect(stages[i].visual).toBeGreaterThanOrEqual(stages[i - 1].visual);
+        }
+      }
+    }
+  });
+
+  it('gives every rung something new — a clue, another card, or a strike-out', () => {
+    for (const [mode, subject] of SUBJECTS) {
+      for (const tries of [3, 4]) {
+        const stages = buildStages(mode, subject, tries);
+        for (let i = 1; i < stages.length; i++) {
+          const gained =
+            stages[i].clues.length > stages[i - 1].clues.length ||
+            visibleCards(subject.puzzle, stages[i].visual).length > visibleCards(subject.puzzle, stages[i - 1].visual).length ||
+            ruledOutCardIds(subject.puzzle, stages[i].visual).length > ruledOutCardIds(subject.puzzle, stages[i - 1].visual).length;
+          expect(gained, `${mode} × ${tries} rung ${i}`).toBe(true);
+        }
+      }
+    }
+  });
+
+  it('opens the card modes on two cards and ends on all of them', () => {
+    for (const mode of ['teammates', 'depthChart', 'draftClass'] as ScoutPuzzleMode[]) {
+      const subject = SUBJECTS.get(mode)!;
+      const total = visibleCards(subject.puzzle, 1).length;
+      expect(total).toBe(mode === 'depthChart' ? DEPTH_CHART_CARDS : 4);
+      const stages = buildStages(mode, subject, 4);
+      expect(visibleCards(subject.puzzle, stages[0].visual)).toHaveLength(MIN_VISIBLE_CARDS);
+      expect(visibleCards(subject.puzzle, stages[3].visual)).toHaveLength(total);
+      // and the cards only ever grow, in payload order
+      let previous = 0;
+      for (const stage of stages) {
+        const shown = visibleCards(subject.puzzle, stage.visual);
+        expect(shown.length).toBeGreaterThanOrEqual(previous);
+        expect(shown).toEqual(visibleCards(subject.puzzle, 1).slice(0, shown.length));
+        previous = shown.length;
+      }
+    }
+  });
+
+  it('shows both higherLower cards from rung 0 and never hides one', () => {
+    const subject = SUBJECTS.get('higherLower')!;
+    for (const tries of [1, 3, 6]) {
+      for (const stage of buildStages('higherLower', subject, tries)) {
+        expect(stage.visual).toBe(0);
+        expect(visibleCards(subject.puzzle, stage.visual)).toHaveLength(2);
+        expect(ruledOutCardIds(subject.puzzle, stage.visual)).toEqual([]);
+      }
+    }
+  });
+
+  it('strikes out at most two of the three wrong odd-one-out cards', () => {
+    const subject = SUBJECTS.get('oddOneOut')!;
+    const puzzle = subject.puzzle!;
+    if (puzzle.type !== 'oddOneOut') throw new Error('expected an oddOneOut payload');
+    for (const tries of [1, 2, 3, 4, 5, 6]) {
+      const stages = buildStages('oddOneOut', subject, tries);
+      expect(ruledOutCardIds(puzzle, stages[0].visual)).toEqual([]);
+      const last = ruledOutCardIds(puzzle, stages[stages.length - 1].visual);
+      expect(last.length).toBeLessThanOrEqual(2);
+      for (const stage of stages) {
+        const out = ruledOutCardIds(puzzle, stage.visual);
+        expect(out).not.toContain(puzzle.answerPlayerId);
+        expect(out).toEqual(puzzle.ruleOutIds.slice(0, out.length));
+      }
+      if (tries >= 3) expect(last.length).toBeGreaterThan(0);
+    }
+    // rung 0 names the category; the next rung pays out the value the three share
+    const stages = buildStages('oddOneOut', subject, 4);
+    expect(stages[0].clues).toHaveLength(1);
+    expect(stages[0].clues[0].value).toBe(ODD_TRAIT_PROMPTS[puzzle.trait]);
+    const values = stages[3].clues.map((c) => c.value);
+    expect(values).toContain(puzzle.sharedValue);
+  });
+
+  it('never names the club in a depth-chart ladder', () => {
+    for (const team of dataset.teams) {
+      const spec = { mode: 'depthChart' as const, puzzle: depthChartPuzzle(index, team, { seed: 's' })!, team };
+      const subject = buildPuzzleSubject(spec)!;
+      const text = buildStages('depthChart', subject, 6)
+        .flatMap((s) => s.clues)
+        .map((c) => `${c.label} ${c.value}`)
+        .join(' | ')
+        .toLowerCase();
+      expect(text).not.toContain(team.name.toLowerCase());
+      expect(text).not.toContain(team.location.toLowerCase());
+      expect(text).not.toContain(team.displayName.toLowerCase());
+    }
+  });
+
+  it('never names the club in a teammates or jersey ladder either', () => {
+    for (const mode of ['teammates', 'jersey'] as ScoutPuzzleMode[]) {
+      const subject = SUBJECTS.get(mode)!;
+      const team = subject.team!;
+      const text = buildStages(mode, subject, 6)
+        .flatMap((s) => s.clues)
+        .map((c) => c.value)
+        .join(' | ')
+        .toLowerCase();
+      expect(text).not.toContain(team.name.toLowerCase());
+      expect(text).not.toContain(team.location.toLowerCase());
+    }
+  });
+
+  it('narrows a draft class from a decade to two years, consistently', () => {
+    for (const spec of specs.filter((s) => s.mode === 'draftClass')) {
+      const subject = buildPuzzleSubject(spec)!;
+      if (spec.puzzle.type !== 'draftClass') continue;
+      const year = spec.puzzle.year;
+      const clues = buildStages('draftClass', subject, 5)[4].clues;
+      const value = (label: string) => clues.find((c) => c.label === label)?.value;
+      expect(value('Era')).toBe(`${Math.floor(year / 10) * 10}s`);
+      const band = value('Somewhere in')!.split('–').map(Number);
+      expect(year).toBeGreaterThanOrEqual(band[0]);
+      expect(year).toBeLessThanOrEqual(band[1]);
+      expect(value('Parity')).toBe(year % 2 === 0 ? 'Even year' : 'Odd year');
+      // parity plus the two-year window pins the answer exactly
+      const pair = value('Down to two')!.split(' or ').map(Number);
+      expect(pair).toContain(year);
+      expect(pair.filter((y) => y % 2 === year % 2)).toEqual([year]);
+      // and the answer itself is the year, not the anchor's name
+      expect(subject.name).toBe(String(year));
+      expect(subject.player).toBeUndefined();
+    }
+  });
+
+  it('prices a higherLower round in information: the gap, then one of the two numbers', () => {
+    const subject = SUBJECTS.get('higherLower')!;
+    const puzzle = subject.puzzle!;
+    if (puzzle.type !== 'higherLower') throw new Error('expected a higherLower payload');
+    const clues = buildStages('higherLower', subject, 4)[3].clues;
+    expect(clues[0].value).toBe(GROUP_LABELS[puzzle.group]);
+    expect(clues.some((c) => c.value === String(puzzle.season))).toBe(true);
+    const gap = Math.abs(puzzle.numbers[0] - puzzle.numbers[1]);
+    expect(clues.some((c) => c.label === 'The gap' && c.value.replace(/,/g, '') === String(Math.round(gap * 10) / 10))).toBe(true);
+    const last = clues[clues.length - 1];
+    expect(last.label).toBe(`${puzzle.statLabel} · ${puzzle.cards[0].name}`);
+    expect(last.value).toBe(puzzle.values[0]);
+    // rung 0 gives nothing away
+    expect(buildStages('higherLower', subject, 4)[0].clues).toEqual([]);
+  });
+
+  it('keeps the documented visual bounds for every choice-shaped mode', () => {
+    const bounds: Record<string, { min: number; max: number }> = {
+      teammates: { min: TEAMMATES_VISUAL_MIN, max: CARD_VISUAL_MAX },
+      depthChart: { min: DEPTH_CHART_VISUAL_MIN, max: CARD_VISUAL_MAX },
+      draftClass: { min: DRAFT_CLASS_VISUAL_MIN, max: CARD_VISUAL_MAX },
+      higherLower: { min: 0, max: 0 },
+      oddOneOut: { min: 0, max: ODD_ONE_OUT_VISUAL_MAX },
+      jersey: { min: 0, max: 0 },
+    };
+    for (const [mode, subject] of SUBJECTS) {
+      const order = clueOrderFor(mode, subject, 4);
+      expect(order.visual.min, mode).toBeCloseTo(bounds[mode].min, 6);
+      expect(order.visual.max, mode).toBeCloseTo(bounds[mode].max, 6);
+      const stages = buildStages(mode, subject, 4);
+      expect(stages[0].visual).toBeCloseTo(bounds[mode].min, 2);
+      expect(stages[3].visual).toBeCloseTo(bounds[mode].max, 2);
+    }
+  });
+
+  it('reads a card count off any visual, and clamps the silly ones', () => {
+    const subject = SUBJECTS.get('depthChart')!;
+    expect(visibleCardCount(5, 0)).toBe(MIN_VISIBLE_CARDS);
+    expect(visibleCardCount(5, 1)).toBe(5);
+    expect(visibleCardCount(5, 2)).toBe(5);
+    expect(visibleCardCount(5, Number.NaN)).toBe(MIN_VISIBLE_CARDS);
+    expect(visibleCardCount(2, 0)).toBe(2);
+    expect(visibleCardCount(0, 1)).toBe(0);
+    expect(visibleCards(undefined, 1)).toEqual([]);
+    expect(ruledOutCardIds(undefined, 1)).toEqual([]);
+    expect(ruledOutCardIds(subject.puzzle, 1)).toEqual([]);
+  });
+
+  it('is deterministic: the same subject and try count build the same ladder', () => {
+    for (const [mode, subject] of SUBJECTS) {
+      expect(buildStages(mode, subject, 4)).toEqual(buildStages(mode, subject, 4));
+    }
+  });
+});
+
+describe('position group labels', () => {
+  it('names every group as a unit and as a man', () => {
+    const groups: PositionGroup[] = ['QB', 'RB', 'WR', 'TE', 'OL', 'DL', 'LB', 'DB', 'ST'];
+    for (const g of groups) {
+      expect(GROUP_LABELS[g].length).toBeGreaterThan(0);
+      expect(GROUP_PERSON_LABELS[g].length).toBeGreaterThan(0);
+      expect(GROUP_PEOPLE_LABELS[g].length).toBeGreaterThan(GROUP_PERSON_LABELS[g].length - 1);
+      // a person label is lower case, so it drops into the middle of a sentence
+      expect(GROUP_PERSON_LABELS[g]).toBe(GROUP_PERSON_LABELS[g].toLowerCase());
+    }
+    // the unit and the man are genuinely different words where it matters
+    expect(GROUP_PERSON_LABELS.DL).toBe('defensive lineman');
+    expect(GROUP_PEOPLE_LABELS.DL).toBe('defensive linemen');
+    expect(GROUP_LABELS.DL).toBe('Defensive line');
   });
 });

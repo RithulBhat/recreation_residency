@@ -21,6 +21,9 @@ import {
 } from './subjects';
 import { scoutPack } from './packs';
 import { DEFAULT_SCOUT_SETTINGS } from './presets';
+import { SCOUT_PUZZLE_MODES, buildPuzzleIndex, buildScoutPuzzleSpecs } from './puzzles';
+import { buildPuzzleSubject } from './subjects';
+import { makePuzzleDataset } from './puzzleTestFactory';
 import {
   FIXTURE_PLAYS,
   FIXTURE_STAT_LINES,
@@ -30,7 +33,7 @@ import {
   findFixtureTeam,
   makePlayer,
 } from './fixtures';
-import type { ScoutMode, ScoutSettings, ScoutSubject } from './types';
+import type { ScoutMode, ScoutPuzzleMode, ScoutSettings, ScoutSubject } from './types';
 
 function settings(over: Partial<ScoutSettings> = {}): ScoutSettings {
   return { ...DEFAULT_SCOUT_SETTINGS, packIds: [...DEFAULT_SCOUT_SETTINGS.packIds], ...over };
@@ -199,7 +202,8 @@ describe('pack filters', () => {
 describe('activeModes', () => {
   it('is the single mode, or everything when mixing', () => {
     expect(activeModes({ mode: 'silhouette', mixModes: false })).toEqual(['silhouette']);
-    expect(activeModes({ mode: 'silhouette', mixModes: true }).length).toBe(7);
+    // seven reveal modes + the six choice-shaped ones
+    expect(activeModes({ mode: 'silhouette', mixModes: true }).length).toBe(13);
   });
 });
 
@@ -350,5 +354,141 @@ describe('every mode can build a playable pool from the fixtures', () => {
     const pool = buildPool(fixtureBundle(), settings({ mode, packIds }), createRng('a'));
     expect(pool.length).toBeGreaterThan(0);
     for (const s of pool) expect(canRender(mode, s)).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// Choice-shaped subjects in the pool
+// ---------------------------------------------------------------------------------------------
+
+describe('choice-shaped subjects', () => {
+  const dataset = makePuzzleDataset();
+  const index = buildPuzzleIndex(dataset);
+  const settings = (over: Partial<ScoutSettings> = {}): ScoutSettings => ({
+    ...DEFAULT_SCOUT_SETTINGS,
+    packIds: [],
+    difficulty: 'any',
+    seed: 'pool-seed',
+    ...over,
+  });
+
+  function specFor(mode: ScoutPuzzleMode) {
+    const spec = buildScoutPuzzleSpecs({
+      dataset,
+      index,
+      modes: [mode],
+      difficulty: 'any',
+      seed: 'pool-seed',
+      playerEligible: (p) => p.fame >= 55,
+      limit: 1,
+    })[0];
+    if (!spec) throw new Error(`no spec for ${mode}`);
+    return spec;
+  }
+
+  it('pins a subject carrying a payload to that mode and nothing else', () => {
+    for (const mode of SCOUT_PUZZLE_MODES) {
+      const subject = buildPuzzleSubject(specFor(mode as ScoutPuzzleMode))!;
+      expect(subject.puzzle?.type).toBe(mode);
+      expect(playableModes(subject)).toEqual([mode]);
+      expect(canRender(mode, subject)).toBe(true);
+      for (const other of ['silhouette', 'faceZoom', 'statLine', 'teamTrivia', 'logoZoom'] as ScoutMode[]) {
+        expect(canRender(other, subject), `${mode} must not render as ${other}`).toBe(false);
+      }
+    }
+  });
+
+  it('never lets an ordinary subject stand in for a choice-shaped round', () => {
+    const player = findFixturePlayer('Patrick Mahomes');
+    const subject = buildPlayerSubject(player, findFixtureTeam('KC'));
+    for (const mode of SCOUT_PUZZLE_MODES) expect(canRender(mode, subject)).toBe(false);
+    expect(buildSubject('teammates', { player })).toBeNull();
+  });
+
+  it('carries a payload through buildSubject', () => {
+    const spec = specFor('teammates');
+    const subject = buildSubject('teammates', { player: spec.player, team: spec.team, puzzle: spec.puzzle });
+    expect(subject?.puzzle).toBe(spec.puzzle);
+    expect(subject?.name).toBe(spec.player!.name);
+  });
+
+  it('answers a draft class with the YEAR, and carries no player record to leak the anchor', () => {
+    const spec = specFor('draftClass');
+    const subject = buildPuzzleSubject(spec)!;
+    if (spec.puzzle.type !== 'draftClass') throw new Error('expected a draftClass payload');
+    expect(subject.name).toBe(String(spec.puzzle.year));
+    expect(subject.accepted).toContain(String(spec.puzzle.year));
+    expect(subject.accepted.some((a) => a.includes(spec.player!.last.toLowerCase()))).toBe(false);
+    expect(subject.player).toBeUndefined();
+    // the headshot still resolves, so the reveal has a face and `subjectImage` keeps working
+    expect(subject.image).toBe(spec.player!.headshot);
+    expect(subject.id).toBe(spec.player!.id);
+  });
+
+  it('answers a depth chart with the franchise', () => {
+    const spec = specFor('depthChart');
+    const subject = buildPuzzleSubject(spec)!;
+    expect(subject.kind).toBe('team');
+    expect(subject.name).toBe(spec.team!.displayName);
+    expect(subject.accepted).toContain(spec.team!.abbr.toLowerCase());
+  });
+
+  it('builds a pool of nothing but that mode when the mode is chosen', () => {
+    for (const mode of SCOUT_PUZZLE_MODES) {
+      const pool = buildPool(dataset, settings({ mode, mixModes: false }));
+      expect(pool.length, mode).toBeGreaterThan(0);
+      for (const subject of pool) {
+        expect(subject.puzzle?.type, mode).toBe(mode);
+        expect(subject.kind).toBe(subjectKindForMode(mode));
+      }
+    }
+  });
+
+  it('lets one man anchor two different choice-shaped rounds in a mixed pool', () => {
+    const pool = buildPool(dataset, settings({ mode: 'teammates', mixModes: true }));
+    const modes = new Set(pool.map((s) => s.puzzle?.type ?? 'reveal'));
+    expect(modes.has('reveal')).toBe(true);
+    for (const mode of SCOUT_PUZZLE_MODES) expect(modes.has(mode), mode).toBe(true);
+    const byPlayer = new Map<string, Set<string>>();
+    for (const s of pool) {
+      if (!s.puzzle || s.kind !== 'player') continue;
+      const set = byPlayer.get(s.id) ?? new Set<string>();
+      set.add(s.puzzle.type);
+      byPlayer.set(s.id, set);
+    }
+    expect([...byPlayer.values()].some((set) => set.size > 1)).toBe(true);
+  });
+
+  it('keeps the difficulty tier and the pack filter meaning what they say', () => {
+    const stars = buildPool(dataset, settings({ mode: 'teammates', difficulty: 'star' }));
+    expect(stars.length).toBeGreaterThan(0);
+    for (const s of stars) expect(s.tier).toBe('star');
+
+    const chiefs = buildPool(dataset, settings({ mode: 'jersey', packIds: ['team-kc'] }));
+    expect(chiefs.length).toBeGreaterThan(0);
+    for (const s of chiefs) expect(s.team?.abbr).toBe('KC');
+
+    // a team pack gates which franchises a depth chart may ask about
+    const afc = buildPool(dataset, settings({ mode: 'depthChart', packIds: ['franchises-afc'] }));
+    expect(afc.length).toBeGreaterThan(0);
+    for (const s of afc) expect(s.team?.conference).toBe('AFC');
+  });
+
+  it('is deterministic for a seed and shuffles without one', () => {
+    const keys = (pool: ReturnType<typeof buildPool>) => pool.map((s) => `${s.kind}:${s.id}#${s.puzzle?.type ?? ''}`);
+    const a = buildPool(dataset, settings({ mode: 'oddOneOut' }));
+    const b = buildPool(dataset, settings({ mode: 'oddOneOut' }));
+    expect(keys(b)).toEqual(keys(a));
+    // this dataset is small enough that every eligible man makes a round under either seed, so the
+    // seed shows up as a different ORDER and a different board rather than a different cast list
+    const other = buildPool(dataset, settings({ mode: 'oddOneOut', seed: 'another' }));
+    expect(keys(other)).not.toEqual(keys(a));
+    const cardsOf = (pool: ReturnType<typeof buildPool>, id: string) =>
+      pool.find((s) => s.id === id)?.puzzle?.type === 'oddOneOut'
+        ? (pool.find((s) => s.id === id)!.puzzle as { cards: Array<{ playerId: string }> }).cards.map((c) => c.playerId)
+        : [];
+    expect(cardsOf(other, 'p-12-0')).not.toEqual(cardsOf(a, 'p-12-0'));
+    const unseeded = buildPool(dataset, { ...settings({ mode: 'oddOneOut' }), seed: undefined }, createRng('rng'));
+    expect(unseeded.length).toBeGreaterThan(0);
   });
 });

@@ -39,6 +39,14 @@ export const MODE_WEIGHTS: Readonly<Record<ScoutMode, number>> = {
   careerPath: 0.9,
   teamTrivia: 0.8,
   logoZoom: 0.75,
+  // Choice-shaped puzzles. A question with the answer already on the board is worth less than
+  // pulling a name out of the air, so they are priced below the reveal modes.
+  jersey: 1.15, // no photo at all
+  draftClass: 1.05,
+  teammates: 1,
+  depthChart: 0.95,
+  oddOneOut: 0.75, // one in four
+  higherLower: 0.6, // one in two
 };
 
 export function modeWeight(mode: ScoutMode): number {

@@ -64,6 +64,22 @@ export { TryLadder, rungStatuses, type TryLadderProps } from './TryLadder';
 export { GuessBox, skipLabel, type GuessBoxProps } from './GuessBox';
 export { Feedback, closeCopy, verdictLine, type CloseCopy, type FeedbackProps } from './Feedback';
 export { TopBar, type TopBarProps } from './TopBar';
+export { BlitzClock, BLITZ_DANGER_MS, type BlitzClockProps } from './BlitzClock';
+export { BlitzFlash, BLITZ_FLASH_MS, type BlitzFlashProps } from './BlitzFlash';
+export { SurvivalRail, type SurvivalRailProps } from './SurvivalRail';
+export { FranchiseBoard, franchiseStates, type FranchiseBoardProps, type FranchiseState } from './FranchiseBoard';
+export { SeatBar, type SeatBarProps } from './SeatBar';
+export { HandoverCard, type HandoverCardProps } from './HandoverCard';
+export { ChoiceActions, type ChoiceActionsProps } from './ChoiceActions';
+export {
+  BLITZ_PENALTY_SECONDS,
+  SCOUT_FORMAT_ACCENT,
+  SURVIVAL_TIER_CHIPS,
+  SURVIVAL_TIER_COPY,
+  pickedCardIds,
+  scoutOutcome,
+  type ScoutOutcome,
+} from './formatCopy';
 export { RevealCard, breakdownFor, isLastRound, streakBefore, type RevealCardProps } from './RevealCard';
 export { WatchTape, TAPE_CAVEAT, tapeEmbedUrl, type WatchTapeProps } from './WatchTape';
 export {
@@ -104,6 +120,9 @@ export { useFinishScoutGame, isDiscardedScoutGame, scoutAttempted } from './useF
 export { SessionPanel, type SessionPanelProps } from './SessionPanel';
 export { ResultsHero, scoutHeadline, sessionLine, type ResultsHeroProps } from './ResultsHero';
 export { RoundList, type RoundListProps } from './RoundList';
+export { Scoreboard, type ScoreboardProps } from './Scoreboard';
+export { FormatOutcome, type FormatOutcomeProps } from './FormatOutcome';
+export { ProgressionCard, type ProgressionCardProps } from './ProgressionCard';
 export {
   ResultActions,
   challengeSubjectKeys,

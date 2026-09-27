@@ -1,3 +1,4 @@
+import { SCOUT_MODE_KEYS } from './scoutStats';
 import { describe, expect, it } from 'vitest';
 import {
   BLIND_ACCURACY,
@@ -85,7 +86,7 @@ describe('cuts', () => {
     expect(report.byDivision[0].key).toBe('AFC East');
     expect(report.byDivision[0].short).toBe('AFC E');
     expect(report.byTier.map((c) => c.key)).toEqual(['star', 'starter', 'rotation', 'deepCut']);
-    expect(report.byMode).toHaveLength(7);
+    expect(report.byMode).toHaveLength(SCOUT_MODE_KEYS.length);
     expect(report.byFormat).toHaveLength(6);
     expect(report.teams).toHaveLength(32);
     for (const cut of [...report.byGroup, ...report.byMode, ...report.byFormat]) {

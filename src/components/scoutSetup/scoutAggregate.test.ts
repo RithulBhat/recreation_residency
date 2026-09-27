@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createInitialScoutState, reduce } from '@/scout/engine';
+import { SCOUT_MODES } from '@/scout/packs';
 import { normalizeScoutSettings } from '@/scout/presets';
 import { buildPool } from '@/scout/subjects';
 import { fixtureBundle } from '@/scout/fixtures';
@@ -179,7 +180,8 @@ describe('standings', () => {
 
   it('keeps every mode on the axis and finds the sharpest', () => {
     const standings = scoutModeStandings(totals);
-    expect(standings).toHaveLength(7);
+    // One row per puzzle type, however many there are — `SCOUT_MODES` grows.
+    expect(standings).toHaveLength(SCOUT_MODES.length);
     expect(standings.find((s) => s.mode === 'statLine')!.rounds).toBe(0);
     expect(sharpestScoutMode(standings)!.mode).toBe('silhouette');
     expect(sharpestScoutMode(scoutModeStandings(emptyScoutTotals()))).toBeNull();

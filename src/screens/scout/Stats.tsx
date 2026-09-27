@@ -1,34 +1,46 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router';
-import { Activity, Binoculars, Crosshair, Flame, Ghost, Library, Play, Timer, Trophy } from 'lucide-react';
-import { formatScore } from '@/stats/share';
+import { Activity, Binoculars, Crosshair, Map as MapIcon, Medal, Play, Trophy } from 'lucide-react';
+import { buildScoutReport } from '@/scout/report';
+import { useScoutStatsStore } from '@/store/scoutStatsStore';
+import { R } from '@/routes';
 import { SectionHeading } from '@/components/SectionHeading';
-import { StatTile } from '@/components/StatTile';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
-import { Dialog } from '@/components/ui/Dialog';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Skeleton } from '@/components/ui/Skeleton';
-import { formatDuration } from '@/components/stats/format';
-import { R } from '@/routes';
+import { ScoutFooter } from '@/components/scoutSetup';
 import {
-  ScoutFooter,
-  ScoutModeChart,
-  ScoutNemesisList,
-  ScoutPackStandings,
-  ScoutRecentRuns,
-  scoutAccuracy,
-  scoutAvgScore,
-  scoutNemeses,
-  scoutPackStandings,
-  scoutSubjects,
-  scoutTotals,
-} from '@/components/scoutSetup';
-import { useScoutResultStore } from '@/store/scoutResultStore';
+  ScoutAchievementCabinet,
+  ScoutBestCall,
+  ScoutCutBars,
+  ScoutDataTools,
+  ScoutLeagueMap,
+  ScoutNemesisPanel,
+  ScoutRankHero,
+  ScoutRecentForm,
+  ScoutVerdict,
+} from '@/components/scoutReport';
 
-/** Dev affordance: `#/scout/stats?demo=1` seeds a fake history so the page can be reviewed. */
-function useScoutDemoSeed(): boolean {
-  const [params] = useSearchParams();
+/** Eyebrow with its icon — every section on this page wears one. */
+function Eyebrow({ icon, children }: { icon: ReactNode; children: ReactNode }) {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span className="[&>svg]:size-3" aria-hidden>
+        {icon}
+      </span>
+      {children}
+    </span>
+  );
+}
+
+/**
+ * DEV affordance: `#/scout/stats?demo=1` folds a sample history into the real ledger so the Report
+ * Card can be reviewed without grinding out thirteen runs. `clear` drops the query param, so a reset
+ * cannot be undone by a reload.
+ */
+function useScoutDemoSeed(): { ready: boolean; clear: () => void } {
+  const [params, setParams] = useSearchParams();
   const wanted = import.meta.env.DEV && params.get('demo') === '1';
   const [ready, setReady] = useState(!wanted);
 
@@ -38,8 +50,8 @@ function useScoutDemoSeed(): boolean {
       return;
     }
     let alive = true;
-    void import('@/components/scoutSetup/scoutDemoSeed')
-      .then((mod) => mod.seedScoutDemoStats())
+    void import('@/components/scoutReport/demoSeed')
+      .then((mod) => mod.seedScoutReportDemo())
       .catch(() => {
         /* dev-only helper — never break the page */
       })
@@ -51,42 +63,54 @@ function useScoutDemoSeed(): boolean {
     };
   }, [wanted]);
 
-  return ready;
+  return {
+    ready,
+    clear: () => {
+      if (!params.has('demo')) return;
+      const next = new URLSearchParams(params);
+      next.delete('demo');
+      setParams(next, { replace: true });
+    },
+  };
 }
 
-function LoadingStats() {
+function LoadingReport() {
   return (
     <div className="flex flex-col gap-4" aria-busy="true" aria-label="Loading your scouting record">
-      <Skeleton className="h-44 rounded-4xl" />
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        {Array.from({ length: 6 }, (_, i) => (
-          <Skeleton key={i} className="h-24 rounded-3xl" />
+      <Skeleton className="h-48 rounded-4xl" />
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        {Array.from({ length: 6 }, (_unused, i) => (
+          <Skeleton key={i} className="h-28 rounded-3xl" />
         ))}
       </div>
-      <Skeleton className="h-64 rounded-4xl" />
+      <Skeleton className="h-56 rounded-5xl" />
+      <Skeleton className="h-80 rounded-4xl" />
     </div>
   );
 }
 
 /**
- * Highlight Scout's own record. Separate ledger from Songooner's (`sg:scout-stats`), because the
- * shapes have nothing in common — no clip buckets here, and `@/scout` exposes no achievement
- * engine, so there is deliberately no trophy cabinet on this page.
+ * Highlight Scout's Report Card.
+ *
+ * Every number on this page comes out of one call to `buildScoutReport` over the lifetime ledger in
+ * `@/store/scoutStatsStore` — the rank ladder, the verdict, the six accuracy cuts, the 32-franchise
+ * map, the best call, the badges and recent form. This screen only lays them out; it computes
+ * nothing, which is why the copy can afford to be blunt.
+ *
+ * Songooner's stats live in a different store and a different screen; the two ledgers never mix.
  */
 export default function ScoutStats() {
-  const ready = useScoutDemoSeed();
-  const records = useScoutResultStore((s) => s.records);
-  const reset = useScoutResultStore((s) => s.resetHistory);
-  const [wiping, setWiping] = useState(false);
+  const { ready, clear } = useScoutDemoSeed();
+  const totals = useScoutStatsStore((s) => s.totals);
+  const runs = useScoutStatsStore((s) => s.runs);
+  const subjects = useScoutStatsStore((s) => s.subjects);
+  const achievements = useScoutStatsStore((s) => s.achievements);
 
-  const byRecency = useMemo(() => [...records].sort((a, b) => b.finishedAt - a.finishedAt), [records]);
-  const totals = useMemo(() => scoutTotals(records), [records]);
-  const subjects = useMemo(() => scoutSubjects(records), [records]);
-  const dailies = useMemo(() => new Set(records.map((r) => r.daily).filter(Boolean)).size, [records]);
-  const accuracy = scoutAccuracy(totals);
-  const hasGames = totals.games > 0;
-  const packRows = scoutPackStandings(totals);
-  const nemeses = scoutNemeses(subjects, 8);
+  const report = useMemo(
+    () => buildScoutReport({ totals, records: runs, subjects: Object.values(subjects) }),
+    [totals, runs, subjects],
+  );
+  const hasRuns = report.runs > 0;
 
   return (
     <div className="flex flex-col gap-8 pb-4 sm:gap-14">
@@ -94,193 +118,190 @@ export default function ScoutStats() {
         as="h1"
         eyebrow="Local · private · yours"
         title={<span id="scout-stats-title">Your scouting record</span>}
-        description="Every round sharpens this page: which modes you read fastest, which packs own you, and the players who keep walking away unnamed."
+        description="The report card: which rooms you own, which ones own you, and how much of the league you can actually name."
         size="lg"
         action={
-          hasGames ? (
-            <span className="hidden sm:block">
-              <Button variant="glow" to={R.scout.setup} leadingIcon={<Play className="fill-current" />}>
-                Play
-              </Button>
-            </span>
-          ) : undefined
+          <span className="hidden sm:block">
+            <Button variant="glow" to={R.scout.setup} leadingIcon={<Play className="fill-current" />}>
+              Play
+            </Button>
+          </span>
         }
       />
 
       {!ready ? (
-        <LoadingStats />
-      ) : !hasGames ? (
-        <>
-          <Card padding="lg" glow className="overflow-hidden">
-            <div className="pointer-events-none absolute -left-20 -top-24 size-64 rounded-full bg-accent opacity-25 blur-3xl" aria-hidden />
-            <div className="pointer-events-none absolute -bottom-24 -right-16 size-64 rounded-full bg-accent-2 opacity-20 blur-3xl" aria-hidden />
-            <div className="relative">
-              <EmptyState
-                icon={<Binoculars />}
-                title="Nothing scouted yet"
-                description="Play one run and this page fills up — accuracy in all seven modes, your strongest and weakest packs, your best streak, and the players you keep missing."
-                action={
-                  <Button variant="glow" size="lg" to={R.scout.setup} leadingIcon={<Play className="fill-current" />}>
-                    Start scouting
-                  </Button>
-                }
-              />
-              {import.meta.env.DEV && (
-                <p className="mt-4 text-center font-mono text-xs text-muted">
-                  dev:{' '}
-                  <Link to={`${R.scout.stats}?demo=1`} className="text-accent underline-offset-2 hover:underline">
-                    ?demo=1
-                  </Link>{' '}
-                  seeds sample runs
-                </p>
-              )}
-            </div>
-          </Card>
-
-          <section aria-labelledby="scout-modes-empty">
-            <SectionHeading
-              eyebrow={
-                <span className="inline-flex items-center gap-1.5">
-                  <Crosshair className="size-3" aria-hidden /> Waiting for you
-                </span>
-              }
-              title={<span id="scout-modes-empty">Seven modes to be measured on</span>}
-              description="Each one tests a different kind of recognition. The chart fills in as you play them."
-              className="mb-4"
-            />
-            <ScoutModeChart totals={totals} />
-          </section>
-        </>
+        <LoadingReport />
       ) : (
         <>
-          <section aria-labelledby="scout-totals-title">
-            <h2 id="scout-totals-title" className="sr-only">
-              Lifetime totals
+          <section aria-labelledby="scout-rank-title">
+            <h2 id="scout-rank-title" className="sr-only">
+              Rank and lifetime totals
             </h2>
-            <Card padding="lg" glow className="overflow-hidden">
-              <div className="pointer-events-none absolute -right-20 -top-24 size-64 rounded-full bg-accent opacity-20 blur-3xl" aria-hidden />
-              <div className="relative flex flex-col gap-5">
-                <div className="flex flex-wrap items-end justify-between gap-3">
-                  <div>
-                    <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-accent">Lifetime</div>
-                    <p className="mt-1 font-display text-3xl font-black tabular text-fg sm:text-4xl">
-                      <span className="text-gradient">{formatScore(totals.score)}</span>
-                      <span className="ml-1.5 text-base font-semibold text-muted">points scouted</span>
-                    </p>
-                    <p className="mt-1 text-sm text-muted">
-                      {totals.games} {totals.games === 1 ? 'run' : 'runs'} · {totals.rounds} rounds ·{' '}
-                      {formatScore(scoutAvgScore(totals))} avg per run
-                      {dailies > 0 && ` · ${dailies} ${dailies === 1 ? 'daily' : 'dailies'}`}
-                    </p>
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                  <StatTile
-                    variant="opaque"
-                    label="Runs"
-                    value={totals.games}
+            <ScoutRankHero report={report} totals={totals} />
+          </section>
+
+          <section aria-labelledby="scout-verdict-title">
+            <h2 id="scout-verdict-title" className="sr-only">
+              The verdict
+            </h2>
+            <ScoutVerdict report={report} />
+          </section>
+
+          {!hasRuns && (
+            <section aria-labelledby="scout-empty-title">
+              <Card padding="lg" glow className="overflow-hidden">
+                <div
+                  className="pointer-events-none absolute -left-20 -top-24 size-64 rounded-full bg-accent opacity-25 blur-3xl"
+                  aria-hidden
+                />
+                <div
+                  className="pointer-events-none absolute -bottom-24 -right-16 size-64 rounded-full bg-accent-2 opacity-20 blur-3xl"
+                  aria-hidden
+                />
+                <div className="relative">
+                  <EmptyState
                     icon={<Binoculars />}
-                    hint={`${totals.rounds} rounds played`}
+                    title={<span id="scout-empty-title">Nothing scouted yet</span>}
+                    description="One run fills in the bars below, lights up the league map and starts the badge count. Twenty graded rounds and the verdict up top stops hedging."
+                    action={
+                      <Button
+                        variant="glow"
+                        size="lg"
+                        to={R.scout.setup}
+                        leadingIcon={<Play className="fill-current" />}
+                      >
+                        Start scouting
+                      </Button>
+                    }
                   />
-                  <StatTile
-                    variant="opaque"
-                    label="Accuracy"
-                    value={Math.round(accuracy * 100)}
-                    suffix="%"
-                    icon={<Crosshair />}
-                    tone={accuracy >= 0.5 ? 'success' : accuracy >= 0.3 ? 'warn' : 'danger'}
-                    hint={`${totals.correct} of ${totals.rounds} named`}
-                  />
-                  <StatTile
-                    variant="opaque"
-                    label="Best streak"
-                    value={totals.bestStreak}
-                    icon={<Flame />}
-                    tone="warn"
-                    hint="Rounds in a row"
-                  />
-                  <StatTile
-                    variant="opaque"
-                    label="First look"
-                    value={totals.firstTry}
-                    icon={<Trophy />}
-                    hint="Solved on rung one"
-                  />
-                  <StatTile
-                    variant="opaque"
-                    label="Time scouting"
-                    value={formatDuration(totals.timePlayedMs)}
-                    icon={<Timer />}
-                    hint="Across every run"
-                  />
-                  <StatTile
-                    variant="opaque"
-                    label="Packs played"
-                    value={packRows.length}
-                    icon={<Library />}
-                    hint={nemeses.length > 0 ? `${nemeses.length} still beating you` : 'Nothing unfinished'}
-                  />
+                  {import.meta.env.DEV && (
+                    <p className="mt-4 text-center font-mono text-xs text-muted">
+                      dev:{' '}
+                      <Link to={`${R.scout.stats}?demo=1`} className="text-accent underline-offset-2 hover:underline">
+                        ?demo=1
+                      </Link>{' '}
+                      seeds a sample record
+                    </p>
+                  )}
                 </div>
-              </div>
-            </Card>
-          </section>
-
-          <section aria-labelledby="scout-modes-title">
-            <SectionHeading
-              eyebrow={
-                <span className="inline-flex items-center gap-1.5">
-                  <Crosshair className="size-3" aria-hidden /> Your eye
-                </span>
-              }
-              title={<span id="scout-modes-title">Which clues you read fastest</span>}
-              description="Accuracy per mode, so you can see whether you are a silhouette reader or a stat-sheet reader."
-              className="mb-4"
-            />
-            <ScoutModeChart totals={totals} />
-          </section>
-
-          {packRows.length > 0 && (
-            <section aria-labelledby="scout-packs-title">
-              <SectionHeading
-                eyebrow={
-                  <span className="inline-flex items-center gap-1.5">
-                    <Library className="size-3" aria-hidden /> Packs
-                  </span>
-                }
-                title={<span id="scout-packs-title">Where you shine, where you don't</span>}
-                description="Accuracy counts per round, so a mixed-pack run counts towards every pack it pulled from. Tap a row for a rematch."
-                className="mb-4"
-              />
-              <ScoutPackStandings totals={totals} />
+              </Card>
             </section>
           )}
 
-          <section aria-labelledby="scout-nemesis-title">
+          <section aria-labelledby="scout-eye-title">
             <SectionHeading
-              eyebrow={
-                <span className="inline-flex items-center gap-1.5">
-                  <Ghost className="size-3" aria-hidden /> Unfinished business
-                </span>
+              eyebrow={<Eyebrow icon={<Crosshair />}>Your eye</Eyebrow>}
+              title={<span id="scout-eye-title">What you can actually see</span>}
+              description={
+                hasRuns
+                  ? 'Share of rounds you named the subject, cut six ways. A row needs six sightings before it can be called your sharpest or your blind spot — below that it stays marked thin.'
+                  : 'Share of rounds you named the subject. Every row stays on the axis from the first run, so the shape never jumps around as history arrives.'
               }
-              title={<span id="scout-nemesis-title">The ones you keep missing</span>}
-              description="Every subject you have faced, ranked by how often they have walked away unnamed."
               className="mb-4"
             />
-            <ScoutNemesisList subjects={subjects} />
+            <div className="grid gap-3 sm:gap-4 lg:grid-cols-2">
+              <div className="flex flex-col gap-3 sm:gap-4">
+                <ScoutCutBars
+                  title="Position groups"
+                  hint="Offence, defence, special teams — the real skill split."
+                  cuts={report.byGroup}
+                  testId="scout-cut-groups"
+                />
+                {hasRuns && (
+                  <>
+                    <ScoutCutBars
+                      title="Conference"
+                      hint="Do you watch one half of the league and not the other?"
+                      cuts={report.byConference}
+                      long
+                      testId="scout-cut-conference"
+                    />
+                    <ScoutCutBars
+                      title="Session formats"
+                      hint="Gauntlet and Survival ask harder questions than Standard."
+                      cuts={report.byFormat}
+                      long
+                      testId="scout-cut-formats"
+                    />
+                  </>
+                )}
+              </div>
+              <div className="flex flex-col gap-3 sm:gap-4">
+                <ScoutCutBars
+                  title="Puzzle types"
+                  hint="Which clue you read fastest — shadow, crop, play text or paperwork."
+                  cuts={report.byMode}
+                  long
+                  testId="scout-mode-chart"
+                />
+                {hasRuns && (
+                  <>
+                    <ScoutCutBars
+                      title="Fame tiers"
+                      hint="Superstars down to deep cuts. This is the curve that separates a fan from a scout."
+                      cuts={report.byTier}
+                      long
+                      testId="scout-cut-tiers"
+                    />
+                    <ScoutCutBars
+                      title="Divisions"
+                      hint="Eight divisions, four rosters each."
+                      cuts={report.byDivision}
+                      testId="scout-cut-divisions"
+                    />
+                  </>
+                )}
+              </div>
+            </div>
+            {!hasRuns && (
+              <p className="mt-3 text-sm text-muted">
+                Four more axes — fame tier, conference, division and session format — appear here once you have
+                played a run.
+              </p>
+            )}
+          </section>
+
+          <section aria-labelledby="scout-map-title">
+            <SectionHeading
+              eyebrow={<Eyebrow icon={<MapIcon />}>The league map</Eyebrow>}
+              title={<span id="scout-map-title">All 32 rosters, and how well you know them</span>}
+              description="Every franchise you have faced, washed in its own colour. The bar under each crest is the share of its subjects you named."
+              className="mb-4"
+            />
+            <ScoutLeagueMap report={report} />
+          </section>
+
+          <section aria-labelledby="scout-call-title">
+            <SectionHeading
+              eyebrow={<Eyebrow icon={<Medal />}>Highlights</Eyebrow>}
+              title={<span id="scout-call-title">Your best call, and your unfinished business</span>}
+              description="The shortest rung you ever named anybody at — and the men who keep walking away unnamed."
+              className="mb-4"
+            />
+            <div className="grid gap-3 sm:gap-4 lg:grid-cols-2">
+              <ScoutBestCall report={report} firstLooks={totals.firstRungSolves} />
+              <ScoutNemesisPanel nemeses={report.nemeses} />
+            </div>
+          </section>
+
+          <section aria-labelledby="scout-achievements-title">
+            <SectionHeading
+              eyebrow={<Eyebrow icon={<Trophy />}>Trophy cabinet</Eyebrow>}
+              title={<span id="scout-achievements-title">Forty-seven badges</span>}
+              description="Naming a man from the pure black shadow, clearing a division, surviving twenty. Volume alone unlocks almost none of these."
+              className="mb-4"
+            />
+            <ScoutAchievementCabinet unlocks={achievements} />
           </section>
 
           <section aria-labelledby="scout-form-title">
             <SectionHeading
-              eyebrow={
-                <span className="inline-flex items-center gap-1.5">
-                  <Activity className="size-3" aria-hidden /> Recent form
-                </span>
-              }
-              title={<span id="scout-form-title">How you've been scouting</span>}
-              description="Your last runs, newest first."
+              eyebrow={<Eyebrow icon={<Activity />}>Recent form</Eyebrow>}
+              title={<span id="scout-form-title">How you have been scouting</span>}
+              description="Accuracy per run, oldest to newest, and the last sessions in full."
               className="mb-4"
             />
-            <ScoutRecentRuns records={byRecency} />
+            <ScoutRecentForm report={report} runs={runs} />
           </section>
 
           <section aria-labelledby="scout-data-title">
@@ -289,37 +310,7 @@ export default function ScoutStats() {
               description="Everything on this page lives in this browser only. Wiping it cannot be undone."
               className="mb-4"
             />
-            <div className="glass flex flex-wrap items-center justify-between gap-3 rounded-3xl p-4">
-              <p className="text-sm text-muted">
-                {totals.games} runs · {Object.keys(subjects).length} subjects · {dailies} dailies
-              </p>
-              <Button variant="danger" onClick={() => setWiping(true)} data-testid="scout-wipe">
-                Wipe Scout stats
-              </Button>
-            </div>
-            <Dialog
-              open={wiping}
-              onClose={() => setWiping(false)}
-              title="Wipe your scouting record?"
-              description="Every run, subject and daily on this page goes. Songooner's stats are untouched."
-              footer={
-                <>
-                  <Button variant="ghost" onClick={() => setWiping(false)}>
-                    Keep it
-                  </Button>
-                  <Button
-                    variant="danger"
-                    onClick={() => {
-                      reset();
-                      setWiping(false);
-                    }}
-                    data-testid="scout-wipe-confirm"
-                  >
-                    Wipe it
-                  </Button>
-                </>
-              }
-            />
+            <ScoutDataTools onAfterReset={clear} />
           </section>
         </>
       )}

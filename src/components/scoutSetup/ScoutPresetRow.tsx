@@ -1,9 +1,11 @@
 import { useMemo, useState } from 'react';
 import { Sparkles } from 'lucide-react';
-import { SCOUT_PRESETS, type ScoutPreset } from '@/scout/packs';
+import type { ScoutPreset } from '@/scout/packs';
+import { ALL_SCOUT_PRESETS } from '@/scout/presets';
 import { useScoutSettingsStore } from '@/store/scoutStore';
 import type { ScoutSettings } from '@/scout/types';
 import { Chip } from '@/components/ui/Chip';
+import { SCOUT_FORMAT_ACCENT, scoutFormatName } from './summary';
 
 function sameValue(a: unknown, b: unknown): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
@@ -16,14 +18,22 @@ export function scoutPresetMatches(preset: ScoutPreset, settings: ScoutSettings)
   );
 }
 
-/** Preset chips: tap to apply. The one matching the draft is highlighted. */
+/**
+ * Preset chips: tap to apply. One flat row over `ALL_SCOUT_PRESETS` — the puzzle-type presets that
+ * shipped first (Silhouette Sprint, Mixed Bag, Sicko Mode…) and the SESSION FORMAT presets (Sixty
+ * Second Scout, Last Man Standing, Around the League, Film Room Duel, Pass the Laptop), because from
+ * the player's side they are the same offer: one tap, a whole run set up.
+ *
+ * The chip carries the preset's own emoji and is tinted by the FORMAT it sets, so the blitz ones read
+ * as blitz before you read the label. The one matching the draft is highlighted.
+ */
 export function ScoutPresetRow() {
   const settings = useScoutSettingsStore((s) => s.settings);
   const applyPreset = useScoutSettingsStore((s) => s.applyPreset);
   const [lastApplied, setLastApplied] = useState<string | null>(null);
 
-  const active = useMemo(() => SCOUT_PRESETS.find((p) => scoutPresetMatches(p, settings)), [settings]);
-  const shown = active ?? (lastApplied ? SCOUT_PRESETS.find((p) => p.id === lastApplied) : undefined);
+  const active = useMemo(() => ALL_SCOUT_PRESETS.find((p) => scoutPresetMatches(p, settings)), [settings]);
+  const shown = active ?? (lastApplied ? ALL_SCOUT_PRESETS.find((p) => p.id === lastApplied) : undefined);
 
   return (
     <div className="flex flex-col gap-2.5">
@@ -35,22 +45,32 @@ export function ScoutPresetRow() {
         className="scrollbar-none -mx-4 -my-1 flex gap-2 overflow-x-auto px-4 py-1 sm:mx-0 sm:flex-wrap sm:px-0"
         role="group"
         aria-label="Presets"
+        data-testid="scout-presets"
       >
-        {SCOUT_PRESETS.map((p) => (
-          <Chip
-            key={p.id}
-            size="md"
-            selected={active?.id === p.id}
-            onClick={() => {
-              applyPreset(p.id);
-              setLastApplied(p.id);
-            }}
-            aria-label={`${p.name} preset: ${p.blurb}`}
-            icon={<span aria-hidden>{p.emoji}</span>}
-          >
-            {p.name}
-          </Chip>
-        ))}
+        {ALL_SCOUT_PRESETS.map((p) => {
+          // Only the FORMAT presets set a format; a puzzle-type preset leaves whatever is selected
+          // alone, so it gets no format dot and claims none in its label.
+          const format = p.settings.format;
+          return (
+            <Chip
+              key={p.id}
+              size="sm"
+              selected={active?.id === p.id}
+              color={format ? SCOUT_FORMAT_ACCENT[format] : undefined}
+              onClick={() => {
+                applyPreset(p.id);
+                setLastApplied(p.id);
+              }}
+              aria-label={
+                format ? `${p.name} preset — ${scoutFormatName(format)}: ${p.blurb}` : `${p.name} preset: ${p.blurb}`
+              }
+              icon={<span aria-hidden>{p.emoji}</span>}
+              data-preset={p.id}
+            >
+              {p.name}
+            </Chip>
+          );
+        })}
       </div>
       <p className="min-h-4 text-xs text-muted" aria-live="polite">
         {shown ? (
@@ -60,7 +80,7 @@ export function ScoutPresetRow() {
             {shown.blurb}
           </>
         ) : (
-          'Tap a preset to set the mode, packs and rules in one go.'
+          'Tap a preset to set the format, the puzzle type, the packs and the rules in one go.'
         )}
       </p>
     </div>
