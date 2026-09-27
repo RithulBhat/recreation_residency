@@ -125,6 +125,14 @@ const NARROW_ROUTES = [
   '/songooner/stats',
   '/songooner/duel',
   ...SCOUT_ROUTES,
+  '/price',
+  '/price/setup',
+  '/price/daily',
+  '/price/party',
+  '/hilo',
+  '/hilo/setup',
+  '/hilo/daily',
+  '/hilo/party',
 ] as const;
 const H1_ROUTES = [
   '/',
@@ -135,6 +143,14 @@ const H1_ROUTES = [
   '/songooner/stats',
   '/songooner/c/invalid',
   ...SCOUT_ROUTES,
+  '/price',
+  '/price/setup',
+  '/price/daily',
+  '/price/party',
+  '/hilo',
+  '/hilo/setup',
+  '/hilo/daily',
+  '/hilo/party',
 ] as const;
 const DUPLICATE_ID_ROUTES = [
   '/',
@@ -143,6 +159,14 @@ const DUPLICATE_ID_ROUTES = [
   '/songooner/stats?demo=1',
   ...SCOUT_ROUTES,
   '/scout/stats?demo=1',
+  '/price',
+  '/price/setup',
+  '/price/daily',
+  '/price/party',
+  '/hilo',
+  '/hilo/setup',
+  '/hilo/daily',
+  '/hilo/party',
 ] as const;
 
 /** Short, stable names — a challenge route carries a ~100-char code nobody wants in a filename. */

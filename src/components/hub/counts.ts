@@ -44,3 +44,15 @@ export const SCOUT_FORMAT_COUNT = 6;
 
 /** `sg:stats` — the key `src/store/statsStore.ts` persists under. Asserted in `useLastVisit.test.ts`. */
 export const STATS_KEY = 'sg:stats';
+
+/** Σ items over `src/data/price/*.json` — every one an author estimate, never a sourced figure. */
+export const PRICE_ITEM_COUNT = 66;
+
+/** `src/data/price/*.json`.length */
+export const PRICE_PACK_COUNT = 3;
+
+/** Σ items over `src/data/hilo/*.json` — all sourced, all carrying a real `asOf`. */
+export const HILO_ITEM_COUNT = 2061;
+
+/** `src/data/hilo/*.json`.length */
+export const HILO_PACK_COUNT = 6;

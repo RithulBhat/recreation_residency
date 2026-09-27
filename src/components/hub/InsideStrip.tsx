@@ -1,4 +1,4 @@
-import { Disc3, Film, ScanFace, Sigma } from 'lucide-react';
+import { Disc3, Film, Receipt, ScanFace, Sigma, TrendingUp } from 'lucide-react';
 import type { ReactNode } from 'react';
 import {
   SCOUT_CLIP_COUNT,
@@ -7,6 +7,8 @@ import {
   SCOUT_TEAM_COUNT,
   SONGOONER_PACK_COUNT,
   SONGOONER_TRACK_FLOOR,
+  HILO_ITEM_COUNT,
+  PRICE_ITEM_COUNT,
 } from './counts';
 
 interface Fact {
@@ -45,11 +47,25 @@ const FACTS: readonly Fact[] = [
     hint: 'official channels',
     icon: <Film />,
   },
+  {
+    value: HILO_ITEM_COUNT.toLocaleString(),
+    label: 'sourced figures',
+    hint: 'World Bank, ESPN, Deezer',
+    icon: <TrendingUp />,
+  },
+  {
+    value: PRICE_ITEM_COUNT.toLocaleString(),
+    label: 'priced things',
+    // Said plainly here too, so the one approximate number on the strip is never mistaken for
+    // the sourced ones beside it.
+    hint: 'hand-written estimates',
+    icon: <Receipt />,
+  },
 ];
 
 /**
  * The quiet strip: what the house actually holds. Deliberately typographic rather than a row of
- * stat cards — the two game cards above it are the loud part of the page.
+ * stat cards — the game cards above it are the loud part of the page.
  */
 export function InsideStrip() {
   return (
