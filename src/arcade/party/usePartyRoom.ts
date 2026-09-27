@@ -120,8 +120,8 @@ export function usePartyRoom(): UsePartyRoom {
             createRoom(roomCode, game, {
               id: hostId,
               name: identity.name,
-              emoji: identity.emoji,
-              color: identity.color,
+              emoji: identityEmoji(hostId, []),
+              color: identityColor(hostId),
             }),
           );
           setStatus('connected');
@@ -146,7 +146,10 @@ export function usePartyRoom(): UsePartyRoom {
                 type: 'join',
                 playerId: conn.peer,
                 name: msg.name,
-                emoji: msg.emoji,
+                emoji: identityEmoji(
+                  conn.peer,
+                  current.players.map((p) => p.emoji),
+                ),
                 color: identityColor(conn.peer),
               });
               setRoom(next);
@@ -263,10 +266,31 @@ export function usePartyRoom(): UsePartyRoom {
 }
 
 const PALETTE = ['#f97316', '#a855f7', '#34d399', '#22d3ee', '#f472b6', '#fbbf24', '#818cf8', '#fb7185'];
+const AVATARS = ['🦊', '🐙', '🐸', '🐼', '🐱', '🐝', '👻', '🦖', '🦉', '🐧', '🦁', '🐳'];
 
-/** Stable colour per peer so a player keeps the same one across a reconnect. */
-function identityColor(peerId: string): string {
+function hashOf(peerId: string): number {
   let hash = 0;
   for (let i = 0; i < peerId.length; i++) hash = (hash * 31 + peerId.charCodeAt(i)) >>> 0;
-  return PALETTE[hash % PALETTE.length];
+  return hash;
+}
+
+/** Stable colour per peer, so a player keeps theirs across a reconnect. */
+function identityColor(peerId: string): string {
+  return PALETTE[hashOf(peerId) % PALETTE.length];
+}
+
+/**
+ * Stable avatar per peer, assigned by the HOST rather than taken from the join message.
+ *
+ * Every client sends the same default emoji for a given game, so trusting it gave a whole room
+ * identical avatars and a leaderboard you could only read by name. Deriving it here also means
+ * a client cannot pick someone else's face to confuse a room.
+ */
+function identityEmoji(peerId: string, taken: readonly string[]): string {
+  const start = hashOf(peerId) % AVATARS.length;
+  for (let i = 0; i < AVATARS.length; i++) {
+    const candidate = AVATARS[(start + i) % AVATARS.length];
+    if (!taken.includes(candidate)) return candidate;
+  }
+  return AVATARS[start];
 }

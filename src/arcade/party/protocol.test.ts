@@ -60,7 +60,7 @@ describe('parsePlayer', () => {
 });
 
 describe('parseRoomState', () => {
-  const good = { ...createRoom('ABC234', 'price', HOST), seed: 's' };
+  const good = { ...createRoom("ABC234", "price", HOST), seed: "s" };
 
   it('round-trips a real state', () => {
     const parsed = parseRoomState(JSON.parse(JSON.stringify(good)));
@@ -92,6 +92,27 @@ describe('parseRoomState', () => {
     expect(parseRoomState(null)).toBeNull();
     expect(parseRoomState('nope')).toBeNull();
     expect(parseRoomState({ code: 'X' })).toBeNull();
+  });
+});
+
+describe('parseRoomState — the lobby case', () => {
+  it('accepts a lobby room, which has no seed until the host starts', () => {
+    const lobby = createRoom('ABC234', 'price', HOST);
+    expect(lobby.seed).toBe('');
+    const parsed = parseRoomState(JSON.parse(JSON.stringify(lobby)));
+    expect(parsed, 'a lobby state must survive the wire or no guest can ever join').not.toBeNull();
+    expect(parsed?.seed).toBe('');
+  });
+
+  it('accepts a welcome carrying a lobby state', () => {
+    const lobby = createRoom('ABC234', 'price', HOST);
+    const msg = parseMessage({ type: 'welcome', v: 1, playerId: 'g', state: lobby });
+    expect(msg?.type).toBe('welcome');
+  });
+
+  it('still rejects a seed of the wrong type', () => {
+    const lobby = { ...createRoom('ABC234', 'price', HOST), seed: 42 };
+    expect(parseRoomState(lobby)).toBeNull();
   });
 });
 

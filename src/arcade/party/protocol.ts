@@ -165,8 +165,12 @@ const PHASES: readonly PartyPhase[] = ['lobby', 'question', 'reveal', 'finished'
 export function parseRoomState(raw: unknown): PartyRoomState | null {
   if (!isRecord(raw)) return null;
   const code = str(raw.code, ROOM_CODE_LENGTH);
-  const seed = str(raw.seed, 64);
-  if (!code || !seed) return null;
+  if (!code) return null;
+  // A lobby has no seed yet — it is set when the host starts. Requiring one here rejected every
+  // welcome message a guest was ever sent, so guests joined successfully on the host's screen
+  // and then sat on a spinner forever. Only found by running two browsers against each other.
+  if (raw.seed !== undefined && raw.seed !== null && typeof raw.seed !== 'string') return null;
+  const seed = typeof raw.seed === 'string' ? raw.seed.slice(0, 64) : '';
   if (raw.game !== 'price' && raw.game !== 'hilo') return null;
   if (typeof raw.phase !== 'string' || !PHASES.includes(raw.phase as PartyPhase)) return null;
   if (!Array.isArray(raw.players)) return null;
