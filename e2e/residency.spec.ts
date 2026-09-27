@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import { GAME_LABEL } from '../src/routes';
 import { mkdirSync } from 'node:fs';
 
 /**
@@ -48,12 +49,18 @@ test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => localStorage.clear());
 });
 
-test('both worlds render, with their own art and their own pitch', async ({ page }) => {
+test('every world renders, with its own art and its own pitch', async ({ page }) => {
   await page.setViewportSize(WIDTHS.desktop);
   await openHub(page);
 
   await expect(page.getByRole('heading', { level: 1 })).toHaveText("Rithul's Recreation Residency");
-  await expect(page.getByTestId('residency-games').locator('> li')).toHaveCount(2);
+  // Derived, never a literal. This asserted 2 and broke the moment a third game shipped — the
+  // hub was correct and the test was stale, which is the same shape as the hub's own "7 clue
+  // modes" card and the engine's "the subject always wins" assertion. A count typed by hand is a
+  // claim that stops being true without anything failing at the time it stops being true.
+  await expect(page.getByTestId('residency-games').locator('> li')).toHaveCount(
+    Object.keys(GAME_LABEL).length,
+  );
 
   await expect(songooner(page).getByRole('heading', { level: 2 })).toHaveText('Songooner');
   await expect(songooner(page).getByText('Name the track from 0.1 seconds')).toBeVisible();
