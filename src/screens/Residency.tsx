@@ -72,11 +72,11 @@ const GAMES: readonly HubGame[] = [
  */
 export default function Residency() {
   return (
-    <div className="flex flex-col gap-8 pb-2 sm:gap-14">
+    <div className="flex flex-col gap-8 pb-2 sm:gap-14 lg:gap-9 2xl:gap-14">
       <HubHero />
 
       <section aria-labelledby="hub-games">
-        <div className="mb-4 flex items-center gap-3 sm:mb-5">
+        <div className="mb-4 flex items-center gap-3 sm:mb-5 lg:mb-3">
           <h2
             id="hub-games"
             className="font-mono text-[11px] font-semibold uppercase tracking-[0.28em] text-muted"

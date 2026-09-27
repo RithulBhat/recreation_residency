@@ -205,16 +205,20 @@ describe('buildStages — clue ladders', () => {
     expect(all[all.length - 1]).toBe('First initial');
   });
 
-  it('teamTrivia opens on the most obscure fact and ends on the colours', () => {
+  it('teamTrivia opens on the most obscure fact and ends on the venue', () => {
     const team = findFixtureTeam('KC');
     const stages = buildStages('teamTrivia', TEAM, 6, createRng('s'));
     expect(stages[0].clues).toHaveLength(1);
     expect(stages[0].clues[0].kind).toBe('fact');
     expect(stages[0].clues[0].value).toBe(team.facts[0]);
     const last = stages[5].clues;
-    expect(last[last.length - 1].kind).toBe('colors');
-    // the colours are the LAST thing the player gets, never earlier
-    for (let i = 0; i < 5; i++) expect(stages[i].clues.some((c) => c.kind === 'colors')).toBe(false);
+    // Arrowhead means the Chiefs and nothing else — the venue is the answer, so it goes last.
+    expect(last[last.length - 1].kind).toBe('venue');
+    expect(last[last.length - 2].kind).toBe('colors');
+    // The colours moved one rung earlier when the venue took the last one; they are still the
+    // second-strongest thing the round knows and still arrive at the very end of the ladder.
+    for (let i = 0; i < 4; i++) expect(stages[i].clues.some((c) => c.kind === 'colors')).toBe(false);
+    for (let i = 0; i < 5; i++) expect(stages[i].clues.some((c) => c.kind === 'venue')).toBe(false);
     expect(labels(stages[5])).toContain('Home venue');
     expect(labels(stages[5])).toContain('Super Bowls');
     expect(labels(stages[5])).toContain('Franchise legend');
@@ -256,11 +260,33 @@ describe('buildStages — clue ladders', () => {
     expect(labels(stages[4])).toContain('College');
   });
 
-  it('logoZoom adds conference → division → venue', () => {
+  it('logoZoom adds conference → division → …, and never reaches the venue before the last rung', () => {
     const stages = buildStages('logoZoom', TEAM, 4, createRng('s'));
     expect(stages[0].clues).toEqual([]);
     const last = labels(stages[3]);
-    expect(last.slice(0, 3)).toEqual(['Conference', 'Division', 'Home venue']);
+    expect(last.slice(0, 2)).toEqual(['Conference', 'Division']);
+    expect(last[last.length - 1]).toBe('Home venue');
+    for (let i = 0; i < 3; i++) expect(labels(stages[i])).not.toContain('Home venue');
+  });
+
+  it('never puts the home venue on anything but the final rung', () => {
+    // Allegiant Stadium IS the Raiders; Arrowhead IS the Chiefs. A clue that names the building has
+    // named the franchise, so it can only ever be the last thing a round gives away. It used to sit
+    // third of five in logoZoom, ahead of 'Founded: 1960' — the ladder got easier, then harder.
+    for (const mode of ['logoZoom', 'teamTrivia'] as ScoutMode[]) {
+      for (const abbr of ['KC', 'BUF', 'SF']) {
+        const subject = buildTeamSubject(findFixtureTeam(abbr));
+        for (const tries of [1, 2, 3, 4, 5, 6]) {
+          const stages = buildStages(mode, subject, tries, createRng('venue-seed'));
+          for (let i = 0; i < stages.length - 1; i++) {
+            expect(
+              stages[i].clues.some((c) => c.kind === 'venue'),
+              `${mode} × ${tries} rung ${i} leaked the venue`,
+            ).toBe(false);
+          }
+        }
+      }
+    }
   });
 
   it('drops clues the data cannot support and still fills the ladder', () => {
@@ -370,7 +396,10 @@ describe('the choice-shaped ladders', () => {
 
   it('gives every rung something new — a clue, another card, or a strike-out', () => {
     for (const [mode, subject] of SUBJECTS) {
-      for (const tries of [3, 4]) {
+      // 5 and 6 are in here because oddOneOut used to fail exactly there: three wrong cards means
+      // the eliminations can only pay out twice, so rungs 1 and 2 were identical boards and rungs
+      // 3 and 4 were identical boards — two of a five-try round's rungs bought nothing at all.
+      for (const tries of [3, 4, 5, 6]) {
         const stages = buildStages(mode, subject, tries);
         for (let i = 1; i < stages.length; i++) {
           const gained =
@@ -437,6 +466,52 @@ describe('the choice-shaped ladders', () => {
     expect(values).toContain(puzzle.sharedValue);
   });
 
+  it('gives oddOneOut a real ladder at every try count — it used to ignore `tries` entirely', () => {
+    // Three wrong cards, one of which always survives, means the strike-outs can only pay out
+    // TWICE. With a three-clue ladder that left a five-try round showing rungs 1 and 2 as identical
+    // boards and rungs 3 and 4 as identical boards: two rungs that bought literally nothing.
+    for (const spec of specs.filter((s) => s.mode === 'oddOneOut')) {
+      if (spec.puzzle.type !== 'oddOneOut') continue;
+      const puzzle = spec.puzzle;
+      const subject = buildPuzzleSubject(spec)!;
+      for (const tries of [1, 2, 3, 4, 5, 6]) {
+        const stages = buildStages('oddOneOut', subject, tries);
+        const boards = stages.map(
+          (st) => `${st.clues.map((c) => `${c.label}=${c.value}`).join('|')}//${ruledOutCardIds(puzzle, st.visual).join(',')}`,
+        );
+        expect(new Set(boards).size, `oddOneOut × ${tries} repeated a rung`).toBe(tries);
+        // and the ladder never says something the round already contradicted
+        for (const st of stages) {
+          const shared = st.clues.filter((c) => c.value === puzzle.sharedValue);
+          expect(shared.length).toBeLessThanOrEqual(1);
+        }
+      }
+      // The sharpest hint — his value on the very dimension being asked about — comes last.
+      const last = buildStages('oddOneOut', subject, 5)[4].clues;
+      expect(last[last.length - 1].kind).toBe(
+        ({ college: 'college', team: 'team', draftRound: 'draft', positionGroup: 'position' } as const)[puzzle.trait],
+      );
+      expect(last[last.length - 1].label.startsWith('The odd man out')).toBe(true);
+    }
+  });
+
+  it('never puts the home venue on a depth-chart rung before the last', () => {
+    for (const team of dataset.teams) {
+      const spec = { mode: 'depthChart' as const, puzzle: depthChartPuzzle(index, team, { seed: 's' })!, team };
+      const subject = buildPuzzleSubject(spec)!;
+      for (const tries of [1, 2, 3, 4, 5, 6]) {
+        const stages = buildStages('depthChart', subject, tries);
+        for (let i = 0; i < stages.length - 1; i++) {
+          expect(
+            stages[i].clues.some((c) => c.kind === 'venue'),
+            `${team.abbr} × ${tries} rung ${i} leaked the venue`,
+          ).toBe(false);
+        }
+        expect(stages[stages.length - 1].clues.some((c) => c.kind === 'venue')).toBe(tries > 1);
+      }
+    }
+  });
+
   it('never names the club in a depth-chart ladder', () => {
     for (const team of dataset.teams) {
       const spec = { mode: 'depthChart' as const, puzzle: depthChartPuzzle(index, team, { seed: 's' })!, team };
@@ -466,29 +541,61 @@ describe('the choice-shaped ladders', () => {
     }
   });
 
-  it('narrows a draft class from a decade to two years, consistently', () => {
+  it('narrows a draft class from a decade to two years without ever eliminating one of them', () => {
     for (const spec of specs.filter((s) => s.mode === 'draftClass')) {
       const subject = buildPuzzleSubject(spec)!;
       if (spec.puzzle.type !== 'draftClass') continue;
       const year = spec.puzzle.year;
-      const clues = buildStages('draftClass', subject, 5)[4].clues;
-      const value = (label: string) => clues.find((c) => c.label === label)?.value;
-      expect(value('Era')).toBe(`${Math.floor(year / 10) * 10}s`);
-      const band = value('Somewhere in')!.split('–').map(Number);
-      expect(year).toBeGreaterThanOrEqual(band[0]);
-      expect(year).toBeLessThanOrEqual(band[1]);
-      expect(value('Parity')).toBe(year % 2 === 0 ? 'Even year' : 'Odd year');
-      // parity plus the two-year window pins the answer exactly
-      const pair = value('Down to two')!.split(' or ').map(Number);
-      expect(pair).toContain(year);
-      expect(pair.filter((y) => y % 2 === year % 2)).toEqual([year]);
+      for (const tries of [2, 3, 4, 5, 6]) {
+        const clues = buildStages('draftClass', subject, tries)[tries - 1].clues;
+        const value = (label: string) => clues.find((c) => c.label === label)?.value;
+        expect(value('Era')).toBe(`${Math.floor(year / 10) * 10}s`);
+        const band = value('Somewhere in')!.split('–').map(Number);
+        const pair = value('Down to two')!.split(' or ').map(Number);
+        expect(pair).toContain(year);
+
+        // THE FIX: every year the last rung offers has to survive every other clue on the board.
+        // 'Parity: Odd year' next to 'Down to two: 2022 or 2023' struck 2022 off and handed 2023
+        // over with certainty, every single round. Both candidates must still be standing.
+        const survives = (candidate: number): boolean =>
+          clues.every((c) => {
+            if (c.label === 'Era') return `${Math.floor(candidate / 10) * 10}s` === c.value;
+            if (c.label === 'Somewhere in') return candidate >= band[0] && candidate <= band[1];
+            if (c.label === 'No earlier than') return candidate >= Number(c.value);
+            if (c.label === 'No later than') return candidate <= Number(c.value);
+            if (c.label === 'Down to two') return pair.includes(candidate);
+            // Any clue this test does not know how to apply is a clue that could be eliminating a
+            // candidate silently — the ladder must not grow one without this test being told.
+            throw new Error(`unhandled draftClass clue: ${c.label}`);
+          });
+        for (const candidate of pair) expect(survives(candidate), `${tries} tries, ${candidate}`).toBe(true);
+        // The rungs also have to nest: nothing narrower may fall outside anything wider.
+        expect(pair[0] + 1).toBe(pair[1]);
+        expect(pair.every((y) => y >= band[0] && y <= band[1])).toBe(true);
+      }
       // and the answer itself is the year, not the anchor's name
       expect(subject.name).toBe(String(year));
       expect(subject.player).toBeUndefined();
     }
   });
 
-  it('prices a higherLower round in information: the gap, then one of the two numbers', () => {
+  it('never restates what the draft-class cards already print', () => {
+    for (const spec of specs.filter((s) => s.mode === 'draftClass')) {
+      if (spec.puzzle.type !== 'draftClass') continue;
+      const subject = buildPuzzleSubject(spec)!;
+      // The cards render 'Rd 3, pk 84' under every face, so a clue about the slots on the board is
+      // a rung that buys the player nothing they cannot already read.
+      const text = buildStages('draftClass', subject, 6)
+        .flatMap((st) => st.clues)
+        .map((c) => `${c.label} ${c.value}`)
+        .join(' | ');
+      expect(text).not.toMatch(/round/i);
+      expect(text).not.toMatch(/pick/i);
+      expect(text).not.toMatch(/slot/i);
+    }
+  });
+
+  it('prices a higherLower round in information, and its last rung always decides the round', () => {
     const subject = SUBJECTS.get('higherLower')!;
     const puzzle = subject.puzzle!;
     if (puzzle.type !== 'higherLower') throw new Error('expected a higherLower payload');
@@ -497,11 +604,31 @@ describe('the choice-shaped ladders', () => {
     expect(clues.some((c) => c.value === String(puzzle.season))).toBe(true);
     const gap = Math.abs(puzzle.numbers[0] - puzzle.numbers[1]);
     expect(clues.some((c) => c.label === 'The gap' && c.value.replace(/,/g, '') === String(Math.round(gap * 10) / 10))).toBe(true);
-    const last = clues[clues.length - 1];
-    expect(last.label).toBe(`${puzzle.statLabel} · ${puzzle.cards[0].name}`);
-    expect(last.value).toBe(puzzle.values[0]);
     // rung 0 gives nothing away
     expect(buildStages('higherLower', subject, 4)[0].clues).toEqual([]);
+  });
+
+  it('says which way the number it reveals goes — a bare number settled nothing', () => {
+    // The old last rung printed the LEFT card's value whatever it was. With no values on the cards
+    // and only 'The gap' beside it, the other man sat on `v + gap` or `v - gap`: still a coin flip.
+    for (const spec of specs.filter((s) => s.mode === 'higherLower')) {
+      if (spec.puzzle.type !== 'higherLower') continue;
+      const puzzle = spec.puzzle;
+      const subject = buildPuzzleSubject(spec)!;
+      const leftLeads = puzzle.numbers[0] > puzzle.numbers[1];
+      for (const tries of [2, 3, 4, 5, 6]) {
+        const clues = buildStages('higherLower', subject, tries)[tries - 1].clues;
+        const last = clues[clues.length - 1];
+        expect(last.value).toBe(puzzle.values[0]);
+        expect(last.label.startsWith(leftLeads ? 'More' : 'Fewer'), `${tries} tries`).toBe(true);
+        // `puzzleReads#revealedValueIndex` needs the stat label verbatim to put the number on a card
+        expect(last.label).toContain(puzzle.statLabel);
+        expect(last.label).toContain(puzzle.cards[0].name);
+        // …and 'More' has to mean the left card is the answer, 'Fewer' that it is not
+        const namesTheAnswer = last.label.startsWith('More');
+        expect(namesTheAnswer).toBe(puzzle.cards[0].playerId === puzzle.answerPlayerId);
+      }
+    }
   });
 
   it('keeps the documented visual bounds for every choice-shaped mode', () => {

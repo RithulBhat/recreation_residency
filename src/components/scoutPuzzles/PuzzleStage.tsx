@@ -52,6 +52,12 @@ export interface ScoutPuzzleStageProps {
   disabled?: boolean;
   /** Bind the number keys on the two tap-only modes. Default on. */
   hotkeys?: boolean;
+  /**
+   * The reveal-time shape: the board keeps its marks (the answer ringed, the rest stepped back) at a
+   * third of the height, so it can share the hero column with the reveal card instead of being
+   * unmounted the instant the round ends.
+   */
+  dense?: boolean;
   /** Fires once the board is on screen — the round clock waits for it, as with `SubjectStage`. */
   onReady?: () => void;
   className?: string;
@@ -66,6 +72,7 @@ export function ScoutPuzzleStage({
   pickedPlayerIds,
   disabled,
   hotkeys,
+  dense,
   onReady,
   className,
 }: ScoutPuzzleStageProps) {
@@ -89,6 +96,7 @@ export function ScoutPuzzleStage({
           revealed={revealed}
           answerName={subject.name}
           answerImage={subject.image}
+          dense={dense}
           className={className}
         />
       );
@@ -100,11 +108,14 @@ export function ScoutPuzzleStage({
           revealed={revealed}
           answerName={subject.name}
           answerImage={subject.image}
+          dense={dense}
           className={className}
         />
       );
     case 'draftClass':
-      return <DraftClassStage puzzle={puzzle} visual={stage.visual} revealed={revealed} className={className} />;
+      return (
+        <DraftClassStage puzzle={puzzle} visual={stage.visual} revealed={revealed} dense={dense} className={className} />
+      );
     case 'higherLower':
       return (
         <HigherLowerStage
@@ -115,6 +126,7 @@ export function ScoutPuzzleStage({
           pickedPlayerIds={pickedPlayerIds}
           disabled={disabled}
           hotkeys={hotkeys}
+          dense={dense}
           className={className}
         />
       );
@@ -129,6 +141,7 @@ export function ScoutPuzzleStage({
           pickedPlayerIds={pickedPlayerIds}
           disabled={disabled}
           hotkeys={hotkeys}
+          dense={dense}
           className={className}
         />
       );
@@ -139,6 +152,7 @@ export function ScoutPuzzleStage({
           revealed={revealed}
           answerName={subject.name}
           answerImage={subject.image}
+          dense={dense}
           className={className}
         />
       );

@@ -203,7 +203,7 @@ export interface ScoutModeStanding {
   accuracy: number;
 }
 
-/** All seven modes in display order; zero-sample modes stay so the chart's axis never moves. */
+/** Every puzzle type in display order; zero-sample modes stay so the chart's axis never moves. */
 export function scoutModeStandings(totals: ScoutTotals): ScoutModeStanding[] {
   return SCOUT_MODES.map((m) => {
     const v = totals.byMode[m.id] ?? { rounds: 0, correct: 0, score: 0, bestRound: 0 };

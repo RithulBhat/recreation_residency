@@ -7,10 +7,12 @@ export interface DraftClassStageProps {
   /** `stages[tryIndex].visual`. */
   visual: number;
   revealed?: boolean;
+  /** Reveal-time shape: the board stays beside the reveal card. */
+  dense?: boolean;
   className?: string;
 }
 
-export function DraftClassStage({ puzzle, visual, revealed, className }: DraftClassStageProps) {
+export function DraftClassStage({ puzzle, visual, revealed, dense, className }: DraftClassStageProps) {
   return (
     <CardSetStage
       puzzle={puzzle}
@@ -26,6 +28,7 @@ export function DraftClassStage({ puzzle, visual, revealed, className }: DraftCl
       answerName={`${puzzle.year} draft class`}
       tint="accent"
       testId="scout-stage-draft-class"
+      dense={dense}
       className={className}
     />
   );

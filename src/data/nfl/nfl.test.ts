@@ -447,6 +447,57 @@ describe('statlines.json satisfies StatLine', () => {
       }
     }
   });
+
+  /**
+   * Never the season being played. `meta.season` is ESPN's CURRENT season, whose numbers move every
+   * Sunday: three two-game 2026 lines once shipped beside 296 finished ones under the same "Season:
+   * 2026" label, the first Stat Sheet round drawn being Deshaun Watson's 443 passing yards — read as a
+   * full season, and therefore unguessable. `StatLine` has no games-played field and no partial flag,
+   * so the round cannot caveat itself; exclusion is the only honest option.
+   */
+  it('never ships a season that is still being played', () => {
+    const live = statlines.filter((s) => s.season >= metaJson.season);
+    expect(live.map((s) => `${s.playerId} season ${s.season}`)).toEqual([]);
+  });
+
+  /**
+   * And no fragment of a finished season either. The same harm can come from a completed year, so
+   * `sync-nfl.mjs` requires `general.gamesPlayed >= 8` of a 17-game season — what a player sizes the
+   * production up against. Before that gate, 27 of the 2025 lines came from two to seven games:
+   * Anthony Richardson's read "Pass yds 9", Drew Lock's "Pass yds 15", Zach Wilson's "Pass yds 32",
+   * and Jayden Daniels (fame 92) showed 1,262 passing yards.
+   *
+   * `StatLine` carries no games-played field, so the gate itself cannot be re-checked here. What CAN
+   * be checked is its signature on the quarterbacks, the position whose season is a single big number:
+   * a fragment shows a three-figure passing total, a season does not. (No floor is asserted on the
+   * other groups — a blocking tight end really can catch one ball across a full season.)
+   */
+  it('never ships a quarterback fragment', () => {
+    const groupOf = new Map(players.map((p) => [p.id, p.group]));
+    const light = statlines
+      .filter((s) => groupOf.get(s.playerId) === 'QB')
+      .map((s) => ({ s, yards: Number((s.stats.find(([l]) => l === 'Pass yds')?.[1] ?? '0').replace(/,/g, '')) }))
+      .filter(({ yards }) => yards > 0 && yards < 150)
+      .map(({ s, yards }) => `${s.playerId} season ${s.season}: ${yards} passing yards`);
+    expect(light).toEqual([]);
+  });
+
+  /**
+   * StatLine has to be playable at every difficulty the lobby offers a pool for. `STATLINE_TOP` slices
+   * the roster by fame, and at 300 it stopped at fame 62 — inside the `starter` band — so ROTATION
+   * (fame 30-54) had no Stat Sheet subject at all. `deepCut` is knowingly empty; see `sync-nfl.mjs`.
+   */
+  it('covers the star, starter and rotation tiers', () => {
+    const fameOf = new Map(players.map((p) => [p.id, p.fame]));
+    const inTier = (lo: number, hi: number): number =>
+      statlines.filter((s) => {
+        const fame = fameOf.get(s.playerId) ?? 0;
+        return fame >= lo && fame <= hi;
+      }).length;
+    expect(inTier(80, 100), 'star').toBeGreaterThanOrEqual(ROUNDS_PER_GAME);
+    expect(inTier(55, 79), 'starter').toBeGreaterThanOrEqual(ROUNDS_PER_GAME);
+    expect(inTier(30, 54), 'rotation').toBeGreaterThanOrEqual(ROUNDS_PER_GAME);
+  });
 });
 
 describe('loader', () => {

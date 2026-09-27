@@ -42,7 +42,7 @@ interface NavItem {
  * One nav per game — the shell reads the active game off the pathname, so the tabs always belong to
  * the game you are inside and the hub shows none at all.
  */
-const GAME_NAV: Record<GameKey, readonly NavItem[]> = {
+export const GAME_NAV: Record<GameKey, readonly NavItem[]> = {
   // "Lobby", not "Play": the tab opens the setup screen, while "Play now" CTAs start a game.
   songooner: [
     { to: R.songooner.setup, label: 'Lobby', icon: <Gamepad2 /> },
@@ -57,10 +57,36 @@ const GAME_NAV: Record<GameKey, readonly NavItem[]> = {
   ],
 };
 
-/** Tailwind needs the column count as a literal class, so the two shapes are spelled out. */
-const MOBILE_COLS: Record<number, string> = { 4: 'grid-cols-4', 5: 'grid-cols-5' };
+/**
+ * Tailwind needs the column count as a literal class, so every shape is spelled out rather than
+ * interpolated. This used to hold only 4 and 5 behind a silent `?? 'grid-cols-5'`, which meant a
+ * nav of any other length laid out wrongly with no type error and no failing test — a trap for
+ * anyone adding a tab to an existing game, or adding a game at all. `mobileCols` is total over the
+ * range the bar can physically hold, and `residencyWiring.test.ts` pins that every game resolves.
+ */
+const MOBILE_COLS: Record<number, string> = {
+  2: 'grid-cols-2',
+  3: 'grid-cols-3',
+  4: 'grid-cols-4',
+  5: 'grid-cols-5',
+  6: 'grid-cols-6',
+};
 
-const widths = { narrow: 'max-w-3xl', wide: 'max-w-6xl', full: 'max-w-none' } as const;
+/** The bottom bar cannot stay legible past six tabs, so clamp rather than silently mis-lay-out. */
+export function mobileCols(count: number): string {
+  const clamped = Math.min(6, Math.max(2, count));
+  return MOBILE_COLS[clamped] ?? 'grid-cols-5';
+}
+
+/**
+ * The content cap.
+ *
+ * `wide` takes a step up at `2xl` (≥ 1536 px): 1152 px left 40% of a 1920 screen as background —
+ * measured at 57% content span on setup, results, daily and duel — while 1344 px fills it without
+ * letting a paragraph run past a comfortable measure (the screens keep their own `max-w-*` on
+ * prose). 1440 x 900, the screen this is played on, is below the breakpoint and is untouched.
+ */
+const widths = { narrow: 'max-w-3xl', wide: 'max-w-6xl 2xl:max-w-[84rem]', full: 'max-w-none' } as const;
 
 /** Below 360 px the wordmark plus two icon buttons no longer fit on one row. */
 const useCompactHeader = () => useMediaQuery('(max-width: 359px)');
@@ -229,7 +255,7 @@ export function AppShell({
       {!immersive && mobileNav && (
         <nav className="fixed inset-x-0 bottom-0 z-40 md:hidden" aria-label="Primary mobile">
           <div className="glass-strong border-x-0 border-b-0 bg-bg/97 pb-safe">
-            <ul className={cn('grid h-[4.5rem] px-1', MOBILE_COLS[mobileNav.length] ?? 'grid-cols-5')}>
+            <ul className={cn('grid h-[4.5rem] px-1', mobileCols(mobileNav.length))}>
               {mobileNav.map((n, i) => (
                 <li key={n.to} className="min-w-0">
                   <NavLink

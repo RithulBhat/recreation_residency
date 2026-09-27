@@ -2,10 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { matchSubject } from '@/scout/names';
 import { buildPlayerSubject, buildTeamSubject } from '@/scout/subjects';
 import { findFixturePlayer, findFixtureTeam, makePlayer } from '@/scout/fixtures';
-import type { ScoutRound, ScoutState, ScoutSubject } from '@/scout/types';
+import type { ScoutMode, ScoutRound, ScoutState, ScoutSubject } from '@/scout/types';
+import { SCOUT_MODES } from '@/scout/packs';
 import { buildStages } from '@/scout/stages';
 import { closeCopy, verdictLine } from './Feedback';
-import { rungStatuses } from './TryLadder';
+import { rungStatuses, rungLabel } from './TryLadder';
+import { rungValue } from './format';
 import { splitRedacted } from './RedactedPlay';
 
 const kc = findFixtureTeam('KC');
@@ -152,6 +154,35 @@ describe('rungStatuses', () => {
   it('spends every rung on a lost round', () => {
     const lost: ScoutRound = { ...base, status: 'lost', tryIndex: 4 };
     expect(rungStatuses(lost, 5)).toEqual(['used', 'used', 'used', 'used', 'upcoming']);
+  });
+});
+
+describe('rungLabel', () => {
+  const ladder = (mode: ScoutMode, tries = 5): string[] =>
+    Array.from({ length: tries }, (_, i) => rungLabel(rungValue(mode, i)));
+
+  it('rounds every puzzle type the same way — no k, no hidden precision', () => {
+    // The defect: Silhouette (modeWeight 1.15) printed `1.2k 920 747 575 460` while Locker Room
+    // (weight 1) printed `1k 800 650 500 400` — two rules in one row, and `1.2k` for a rung that
+    // pays 1,150.
+    expect(ladder('silhouette')).toEqual(['1150', '920', '747', '575', '460']);
+    expect(ladder('teammates')).toEqual(['1000', '800', '650', '500', '400']);
+    expect(ladder('higherLower')).toEqual(['600', '480', '390', '300', '240']);
+  });
+
+  it('prints the figure the scorer will actually pay, for every mode and rung', () => {
+    for (const mode of SCOUT_MODES) {
+      for (let i = 0; i < 6; i += 1) {
+        const pts = rungValue(mode.id, i);
+        expect(rungLabel(pts), `${mode.id} rung ${i}`).toBe(String(pts));
+        // Four characters at most, so it is never wider than the `1.2k` it replaced.
+        expect(rungLabel(pts).length, `${mode.id} rung ${i}`).toBeLessThanOrEqual(4);
+      }
+    }
+  });
+
+  it('survives a non-finite score', () => {
+    expect(rungLabel(Number.NaN)).toBe('0');
   });
 });
 

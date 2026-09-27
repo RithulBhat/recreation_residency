@@ -48,6 +48,12 @@ interface DzAlbumRef {
   cover_big?: string;
   cover_xl?: string;
   md5_image?: string;
+  /**
+   * Present ONLY on the album object nested in a `/track/{id}` payload, and — measured — the
+   * ORIGINAL album date there, where `/album/{id}` returns the digital re-delivery date. See
+   * {@link originalReleaseYear}.
+   */
+  release_date?: string;
 }
 
 interface DzTrack {
@@ -63,6 +69,8 @@ interface DzTrack {
   artist?: DzArtistRef;
   album?: DzAlbumRef;
   release_date?: string;
+  /** `CCXXXYYNNNNN` — the `YY` pair is the recording's registration year. */
+  isrc?: string;
   bpm?: number;
 }
 
@@ -375,7 +383,80 @@ function coverFromMd5(md5: string | undefined, size: number): string {
 function yearOf(releaseDate: string | undefined): number | undefined {
   if (!releaseDate) return undefined;
   const year = Number.parseInt(releaseDate.slice(0, 4), 10);
-  return Number.isFinite(year) && year > 1900 ? year : undefined;
+  return plausibleYear(year);
+}
+
+/** A year that could be a record's: after the first commercial discs, never in the future. */
+function plausibleYear(year: number): number | undefined {
+  if (!Number.isFinite(year) || year <= 1900) return undefined;
+  return year <= new Date().getFullYear() + 1 ? year : undefined;
+}
+
+/**
+ * The registration year encoded in an ISRC: `GB-A07-77-00130` → 1977.
+ *
+ * `CC XXX YY NNNNN` — country, registrant, two-digit year of reference, designation. Labels backdate
+ * the year to the original recording when they register a legacy master, which is what makes this the
+ * strongest single signal for old catalogue; a master re-registered for a reissue carries the later
+ * year instead. Two digits are disambiguated against the current year, so `77` is 1977 and `05` is
+ * 2005; a recording backdated past the turn of the century would therefore read a hundred years late,
+ * and {@link originalReleaseYear} — which takes the EARLIEST candidate — would fall back to one of the
+ * other two rather than print it.
+ */
+export function isrcYear(isrc: string | undefined): number | undefined {
+  if (typeof isrc !== 'string') return undefined;
+  const clean = isrc.replace(/[^a-z0-9]/gi, '').toUpperCase();
+  if (!/^[A-Z]{2}[A-Z0-9]{3}\d{7}$/.test(clean)) return undefined;
+  const yy = Number.parseInt(clean.slice(5, 7), 10);
+  if (!Number.isFinite(yy)) return undefined;
+  const century = yy <= new Date().getFullYear() % 100 ? 2000 : 1900;
+  return plausibleYear(century + yy);
+}
+
+/**
+ * The year the song came out — as close as Deezer's data can get.
+ *
+ * WHY THIS IS NOT `track.release_date`: that field is the date the file was DELIVERED to Deezer, not
+ * the date the record came out. Bee Gees "Stayin' Alive" reports `2017-09-14`. Across 180 tracks
+ * pulled from this app's own decade packs (The 60s … The 2010s, where the pack name is the ground
+ * truth) `release_date` landed in the right decade 53% of the time, and 84 of those tracks were
+ * reported LATER than the decade they belong to.
+ *
+ * Deezer exposes exactly three date-ish signals, and all three arrive in the single `/track/{id}`
+ * response we already fetch, so this costs no extra request:
+ *
+ *   - `release_date`            the delivery date — 53% in-decade
+ *   - `album.release_date`      nested in the TRACK payload, this is the original album date (the
+ *                               standalone `/album/{id}` returns the re-delivery date instead:
+ *                               verified on album 48140842, nested `1977-12-13` vs endpoint
+ *                               `2017-09-14`) — 53% in-decade on its own
+ *   - `isrc`                    the recording's registration year — 64% in-decade
+ *
+ * Every one of them is a delivery or registration date, so each is an UPPER BOUND on the real
+ * release: they can be too late and essentially never too early. Taking the EARLIEST therefore lands
+ * closest — 77% in-decade over the same 180 tracks (60s 47%, 70s 70%, 80s 67%, 90s 87%, 2000s 90%,
+ * 2010s 100%), and 2 of 180 too early, both of them tracks the playlist itself files under the wrong
+ * decade. On a separate hand-checked set of 26 famous songs the exact year goes from 6/26 to 18/26.
+ *
+ * Rejected alternatives:
+ *   - the standalone `/album/{id}` date: it is the re-delivery date, strictly worse than the nested
+ *     one, and costs a second request.
+ *   - the earliest release among the artist's versions of the track: Deezer's `artist:"…" track:"…"`
+ *     advanced-search filter returns 0 results, so the version list has to come from a fuzzy
+ *     text search full of covers, karaoke and tribute acts. Measured, it costs up to 9 requests per
+ *     hint and is not reliably better — it dates "Hotel California" to a 1980 LIVE album and "Purple
+ *     Rain" to a 1993 festival recording, and it gives up the never-too-early property.
+ *
+ * What it still cannot do: pre-1990 catalogue that was re-delivered wholesale with fresh ISRCs has no
+ * surviving original date at all, so roughly half of 1960s tracks still read late. There is no
+ * confidence signal that separates those from genuinely new records — for a 60s track the delivery
+ * date and the ISRC year agree with each other (and are both wrong) 5 times out of 5.
+ */
+export function originalReleaseYear(raw: Pick<DzTrack, 'release_date' | 'album' | 'isrc'>): number | undefined {
+  const candidates = [yearOf(raw.release_date), yearOf(raw.album?.release_date), isrcYear(raw.isrc)].filter(
+    (y): y is number => y !== undefined,
+  );
+  return candidates.length > 0 ? Math.min(...candidates) : undefined;
 }
 
 /**
@@ -384,6 +465,12 @@ function yearOf(releaseDate: string | undefined): number | undefined {
  *
  * `fallback` fills in artist/album for endpoints that omit them — `/album/{id}/tracks`
  * returns no `album` object, for instance.
+ *
+ * `releaseYear` is set only when the payload carries `release_date`, which is to say only from
+ * `/track/{id}`. The list endpoints do carry an `isrc`, so a year COULD be squeezed out of them — but
+ * `hasTrackDetail()` reads "we have a release year" as "the `/track/{id}` lookup has already run", so
+ * filling it from a playlist page would skip that lookup and lose both the bpm and the two better
+ * year signals that only the detail payload has.
  */
 export function mapTrack(
   raw: DzTrack,
@@ -397,7 +484,7 @@ export function mapTrack(
   const album = raw.album ?? fallback?.album;
   const md5 = album?.md5_image ?? raw.md5_image;
   const title = raw.title_short ?? raw.title ?? '';
-  const releaseYear = yearOf(raw.release_date);
+  const releaseYear = raw.release_date === undefined ? undefined : originalReleaseYear(raw);
   const bpm = typeof raw.bpm === 'number' && raw.bpm > 0 ? raw.bpm : undefined;
 
   return {
@@ -602,8 +689,9 @@ export async function searchPlaylists(q: string, limit = 10): Promise<PlaylistSu
 }
 
 /**
- * Track detail lookup — the only endpoint that returns `release_date` and `bpm`,
- * and always a freshly signed preview url.
+ * Track detail lookup — the only endpoint that returns `release_date`, the nested album date and
+ * `bpm`, and always a freshly signed preview url. It is therefore also the only call that can derive
+ * a release year; see {@link originalReleaseYear}.
  */
 export async function getTrack(id: number, opts?: { fresh?: boolean }): Promise<Track> {
   const key = `track:${id}`;

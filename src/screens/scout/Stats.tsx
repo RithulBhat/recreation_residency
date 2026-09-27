@@ -199,6 +199,10 @@ export default function ScoutStats() {
               }
               className="mb-4"
             />
+            {/* The six cuts are dealt into the two columns BY HEIGHT, not by category: thirteen
+                puzzle types next to three position groups left a 640 x 350 px hole under the left
+                column at 1920. Position groups + divisions + fame tiers is the same stack of rows
+                as puzzle types + formats + conference, so the two columns land together. */}
             <div className="grid gap-3 sm:gap-4 lg:grid-cols-2">
               <div className="flex flex-col gap-3 sm:gap-4">
                 <ScoutCutBars
@@ -207,23 +211,29 @@ export default function ScoutStats() {
                   cuts={report.byGroup}
                   testId="scout-cut-groups"
                 />
-                {hasRuns && (
+                {hasRuns ? (
                   <>
                     <ScoutCutBars
-                      title="Conference"
-                      hint="Do you watch one half of the league and not the other?"
-                      cuts={report.byConference}
-                      long
-                      testId="scout-cut-conference"
+                      title="Divisions"
+                      hint="Eight divisions, four rosters each."
+                      cuts={report.byDivision}
+                      testId="scout-cut-divisions"
                     />
                     <ScoutCutBars
-                      title="Session formats"
-                      hint="Gauntlet and Survival ask harder questions than Standard."
-                      cuts={report.byFormat}
+                      title="Fame tiers"
+                      hint="Superstars down to deep cuts. This is the curve that separates a fan from a scout."
+                      cuts={report.byTier}
                       long
-                      testId="scout-cut-formats"
+                      testId="scout-cut-tiers"
                     />
                   </>
+                ) : (
+                  // With only two charts to show, the note that explains the other four rides in the
+                  // shorter column rather than under the whole grid.
+                  <p className="text-sm text-muted">
+                    Four more axes — fame tier, conference, division and session format — appear here once you
+                    have played a run.
+                  </p>
                 )}
               </div>
               <div className="flex flex-col gap-3 sm:gap-4">
@@ -237,28 +247,23 @@ export default function ScoutStats() {
                 {hasRuns && (
                   <>
                     <ScoutCutBars
-                      title="Fame tiers"
-                      hint="Superstars down to deep cuts. This is the curve that separates a fan from a scout."
-                      cuts={report.byTier}
+                      title="Session formats"
+                      hint="Gauntlet and Survival ask harder questions than Standard."
+                      cuts={report.byFormat}
                       long
-                      testId="scout-cut-tiers"
+                      testId="scout-cut-formats"
                     />
                     <ScoutCutBars
-                      title="Divisions"
-                      hint="Eight divisions, four rosters each."
-                      cuts={report.byDivision}
-                      testId="scout-cut-divisions"
+                      title="Conference"
+                      hint="Do you watch one half of the league and not the other?"
+                      cuts={report.byConference}
+                      long
+                      testId="scout-cut-conference"
                     />
                   </>
                 )}
               </div>
             </div>
-            {!hasRuns && (
-              <p className="mt-3 text-sm text-muted">
-                Four more axes — fame tier, conference, division and session format — appear here once you have
-                played a run.
-              </p>
-            )}
           </section>
 
           <section aria-labelledby="scout-map-title">

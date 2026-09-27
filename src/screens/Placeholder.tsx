@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Kbd } from '@/components/ui/Kbd';
+import type { GameKey } from '@/routes';
 import { R, activeGame } from '@/routes';
 
 interface RouteMeta {
@@ -20,6 +21,14 @@ const SCOUT_SOON: RouteMeta = {
     'Silhouettes, extreme face zooms, redacted play-by-play and team trivia — the NFL guessing game is being wired to real rosters right now. It lands here shortly.',
   icon: <ScanFace />,
 };
+
+/**
+ * One entry per game, so adding a game cannot silently land its routes on the 404 screen.
+ * This used to be a hardcoded `game === 'scout'` check, which meant a third game fell through to
+ * an undefined lookup and rendered the not-found treatment on every one of its routes.
+ * A game with nothing to say here simply maps to `undefined` and falls through to `ROUTES`.
+ */
+const GAME_SOON: Partial<Record<GameKey, RouteMeta>> = { scout: SCOUT_SOON };
 
 const ROUTES: Record<string, RouteMeta> = {
   [R.songooner.packs]: { title: 'Pack browser', blurb: 'Browse 150+ curated packs, search, filter by category and mix them into one pool.', icon: <Library /> },
@@ -46,7 +55,11 @@ export default function Placeholder({ name, blurb, icon }: PlaceholderProps) {
   const { pathname } = useLocation();
   const params = useParams();
   const game = activeGame(pathname);
-  const meta = game === 'scout' ? SCOUT_SOON : ROUTES[pathname.startsWith('/songooner/c/') ? '/songooner/c' : pathname];
+  // Per-game fallback copy. This used to hardcode `game === 'scout'`, so a third game fell through
+  // to an undefined lookup and rendered the 404 treatment on every one of its routes — silently.
+  const gameFallback = game ? GAME_SOON[game] : undefined;
+  const meta =
+    gameFallback ?? ROUTES[pathname.startsWith('/songooner/c/') ? '/songooner/c' : pathname];
   const known = meta !== undefined;
   const title = name ?? meta?.title ?? 'Lost track';
   const text = blurb ?? meta?.blurb ?? "There's nothing at this address — it may have moved, or the link got cut off. The games are this way.";

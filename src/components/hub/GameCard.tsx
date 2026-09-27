@@ -75,7 +75,9 @@ export function GameCard({
       className="group glass relative flex h-full min-w-0 flex-col overflow-hidden rounded-4xl transition-[transform,box-shadow,border-color] duration-300 ease-out hover:-translate-y-1 hover:border-border-strong hover:shadow-glow-lg focus-within:border-border-strong"
     >
       {/* Art */}
-      <div className="relative aspect-[16/10] w-full shrink-0 overflow-hidden border-b border-border sm:aspect-[16/9]">
+      {/* The art is a band, not a billboard: from `lg` up it gives back the height that was pushing
+          "Play now" under the fold of a 900 px laptop. */}
+      <div className="relative aspect-[16/10] w-full shrink-0 overflow-hidden border-b border-border sm:aspect-[16/9] lg:aspect-[16/8] 2xl:aspect-[16/9]">
         {art}
         <div className="hub-sweep pointer-events-none absolute inset-0" aria-hidden />
         <div className="hub-card-sheen pointer-events-none absolute inset-x-0 top-0 h-px opacity-60" aria-hidden />
@@ -97,8 +99,8 @@ export function GameCard({
       </div>
 
       {/* Body */}
-      <div className="flex min-w-0 flex-1 flex-col gap-2.5 p-5 sm:p-7">
-        <h2 className="min-w-0 font-display text-[clamp(1.5rem,7vw,2rem)] font-black leading-none tracking-tight text-fg sm:text-4xl">
+      <div className="flex min-w-0 flex-1 flex-col gap-2.5 p-5 sm:p-7 lg:gap-2 lg:p-5 2xl:p-7">
+        <h2 className="min-w-0 font-display text-[clamp(1.5rem,7vw,2rem)] font-black leading-none tracking-tight text-fg sm:text-4xl lg:text-3xl 2xl:text-4xl">
           <Link
             to={to}
             aria-describedby={`${slug}-tagline`}
@@ -125,7 +127,7 @@ export function GameCard({
         </ul>
 
         {/* Actions sit after the stretched link in the DOM, so they take their own clicks. */}
-        <div className="relative z-10 mt-auto flex flex-wrap items-center justify-between gap-3 pt-4">
+        <div className="relative z-10 mt-auto flex flex-wrap items-center justify-between gap-3 pt-4 lg:pt-3">
           {/* Decoration: the card's stretched link already goes here, so this passes clicks through. */}
           <span className="pointer-events-none inline-flex items-center gap-1.5 text-sm font-bold text-fg" aria-hidden>
             Open {name}

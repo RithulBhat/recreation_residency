@@ -156,6 +156,33 @@ describe('the card-set boards', () => {
     }
   });
 
+  it('never SHOWS the club either: a live depth chart prints masked photographs', () => {
+    // The five men wear the answer. A full-colour bust — Kansas City red, the arrowhead on the
+    // collar — hands the round over before a clue is spent, so every live card is masked, and the
+    // photographs only come back at the reveal.
+    const spec = SPECS.find((s) => s.mode === 'depthChart')!;
+    const subject = buildPuzzleSubject(spec)!;
+    const stages = buildStages('depthChart', subject, 5);
+    for (const stage of stages) {
+      const view = render(<ScoutPuzzleStage mode="depthChart" subject={subject} stage={stage} />);
+      const plates = view.container.querySelectorAll('[data-testid="scout-puzzle-card"] [data-photo]');
+      expect(plates.length).toBeGreaterThan(0);
+      for (const plate of plates) expect(plate).toHaveAttribute('data-photo', 'masked');
+      view.unmount();
+    }
+    const revealed = render(<ScoutPuzzleStage mode="depthChart" subject={subject} stage={stages[0]} revealed />);
+    for (const plate of revealed.container.querySelectorAll('[data-testid="scout-puzzle-card"] [data-photo]')) {
+      expect(plate).toHaveAttribute('data-photo', 'plain');
+    }
+    revealed.unmount();
+
+    // Everywhere else the uniform is not the answer, so the photograph is the photograph.
+    const room = mount('teammates', { rung: 2 });
+    for (const plate of room.container.querySelectorAll('[data-testid="scout-puzzle-card"] [data-photo]')) {
+      expect(plate).toHaveAttribute('data-photo', 'plain');
+    }
+  });
+
   it('never prints the year a draft class is asking about, until the reveal', () => {
     const spec = SPECS.find((s) => s.mode === 'draftClass')!;
     if (spec.puzzle.type !== 'draftClass') throw new Error('expected a draftClass payload');
@@ -234,9 +261,9 @@ describe('HigherLowerStage', () => {
     expect(board).toHaveTextContent(puzzle.values[1]);
     const answer = cards().find((el) => el.getAttribute('data-player') === puzzle.answerPlayerId);
     expect(answer).toHaveAttribute('data-state', 'answer');
-    // the card nobody picked is not a mistake anyone made
+    // the card nobody picked steps back out of the light — dimmed, never marked as a miss nobody made
     const loser = cards().find((el) => el.getAttribute('data-player') !== puzzle.answerPlayerId);
-    expect(loser).toHaveAttribute('data-state', 'idle');
+    expect(loser).toHaveAttribute('data-state', 'dimmed');
   });
 
   it('puts one number on a card once the ladder has paid it out', () => {
@@ -342,6 +369,10 @@ describe('OddOneOutStage', () => {
     expect(document.querySelectorAll('[data-state="ruledOut"]')).toHaveLength(0);
     const answer = cards().find((c) => c.getAttribute('data-player') === puzzle.answerPlayerId);
     expect(answer).toHaveAttribute('data-state', 'answer');
+    // …and the three who belong together are dimmed rather than left looking pickable
+    for (const c of cards().filter((el) => el.getAttribute('data-player') !== puzzle.answerPlayerId)) {
+      expect(c).toHaveAttribute('data-state', 'dimmed');
+    }
   });
 });
 

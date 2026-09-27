@@ -1,6 +1,6 @@
 import { cn } from '@/components/ui';
 import type { ScoutRound } from '@/scout/types';
-import { points, rungValue, shortPoints } from './format';
+import { points, rungValue } from './format';
 
 export interface TryLadderProps {
   round: ScoutRound;
@@ -10,6 +10,21 @@ export interface TryLadderProps {
 }
 
 type RungStatus = 'used' | 'current' | 'won' | 'upcoming';
+
+/**
+ * A rung's price, exactly as the scorer will pay it.
+ *
+ * ONE rule for every puzzle type. Abbreviating four figures used to put `1.2k 920 747 575 460` on a
+ * Silhouette ladder next to `1k 800 650 500 400` on a Locker Room one — two rounding rules in one
+ * row, and `1.2k` for a rung that actually pays 1,150. Every rung in the game is between 180 and
+ * 1,200 points (`BASE_POINTS` 1000 × `tryFactor` 1→0.3 × `modeWeight` 0.6→1.2), so the exact figure
+ * is at most four characters — never wider than the `1.2k` it replaces — and the pills can be read
+ * against each other. `points()` (with its thousands separator) still labels the running total, where
+ * five and six figures do turn up.
+ */
+export function rungLabel(n: number): string {
+  return String(Math.round(Number.isFinite(n) ? n : 0));
+}
 
 /** Who owns each rung once the dust settles. Pure, so the unit test can pin it. */
 export function rungStatuses(round: ScoutRound, tries: number): RungStatus[] {
@@ -54,7 +69,7 @@ export function TryLadder({ round, tries, className }: TryLadderProps) {
               )}
               data-status={s}
             >
-              {shortPoints(pts)}
+              {rungLabel(pts)}
             </li>
           );
         })}

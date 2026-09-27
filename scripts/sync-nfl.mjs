@@ -12,6 +12,7 @@
  *   NFL_MAX_GAMES=80 npm run nfl:sync  # quick smoke run
  *   NFL_FAME_ONLY=1 npm run nfl:sync   # rescore fame over the committed players.json and stop
  *   NFL_FACTS_ONLY=1 npm run nfl:sync  # re-merge facts.json into the committed teams.json and stop
+ *   NFL_STATLINES_ONLY=1 npm run nfl:sync  # rebuild statlines.json (+ its meta count) and stop
  *
  * NFL_FAME_ONLY exists because fame is the one field that gets retuned: it reads the committed
  * players.json (rosters, drafts, colleges are all already in there) plus the committed
@@ -54,6 +55,8 @@ const MAX_GAMES = Number(process.env.NFL_MAX_GAMES || 0) || Infinity;
 const FAME_ONLY = process.env.NFL_FAME_ONLY === '1';
 /** Re-merge facts.json into the committed teams.json and stop — no network, no other file. */
 const FACTS_ONLY = process.env.NFL_FACTS_ONLY === '1';
+/** Rebuild statlines.json over the committed players.json and stop. */
+const STATLINES_ONLY = process.env.NFL_STATLINES_ONLY === '1';
 
 const SITE = 'https://site.api.espn.com/apis/site/v2/sports/football/nfl';
 const CORE = 'https://sports.core.api.espn.com/v2/sports/football/leagues/nfl';
@@ -69,8 +72,21 @@ const HL_MAX_PER_PLAYER = 3;
 const HL_MAX_PER_TEAM = 70;
 const HL_MAX_KIND_SHARE = 0.34;
 
-/** How many players get a statline. */
-const STATLINE_TOP = 300;
+/**
+ * How many players get a statline, most famous first.
+ *
+ * 300 stopped at fame 62, which is inside the `starter` band (55-79) — so StatLine had NO subject at
+ * all at the ROTATION difficulty (fame 30-54) the lobby offers, and the fame retune that
+ * `NFL_FAME_ONLY` performs independently of this stage kept moving the boundary under the committed
+ * file's feet (90 of its 299 lines were for players the current fame order puts outside the top 300).
+ * 700 reaches fame 45, and the measured effect is that every pack × difficulty StatLine pool grows —
+ * rotation from 33 subjects to 189, and a single club at rotation from 0-3 to 4-10.
+ *
+ * `deepCut` (fame < 30) is deliberately still empty: the slice would have to run past a thousand
+ * players to reach it, and a season of numbers from someone nobody can name is not a hard round, it is
+ * an unanswerable one.
+ */
+const STATLINE_TOP = 700;
 
 /** How deep to read each statistical-leader category (the API default is 25, the cap is 250). */
 const LEADER_DEPTH = 250;
@@ -1971,9 +1987,41 @@ function readStats(doc, plan) {
   return out;
 }
 
+/** `general.gamesPlayed` for a season — how far into it these numbers are. */
+function gamesPlayed(doc) {
+  const stat = (doc?.splits?.categories ?? [])
+    .find((c) => c.name === 'general')
+    ?.stats?.find((s) => s.name === 'gamesPlayed');
+  const n = Number(stat?.value ?? stat?.displayValue);
+  return Number.isFinite(n) ? n : 0;
+}
+
+/**
+ * Fewest games a season may show and still read as a season.
+ *
+ * StatLine asks "a season in numbers — whose numbers?", and the player answers by sizing the
+ * production up against a 17-game year. A line built from two or three games is not a hard round, it
+ * is an unanswerable one: the first Stat Sheet round the desktop review drew was Deshaun Watson with
+ * 443 passing yards under "Season: 2026" — his first two games of a season still being played.
+ */
+const MIN_STATLINE_GAMES = 8;
+
+/**
+ * Season stat lines for the most famous players.
+ *
+ * Only COMPLETED seasons: `season` is ESPN's current one, whose numbers move every Sunday, so the walk
+ * starts at `season - 1`. It used to fall through to `season` to fill the gaps left by players with no
+ * line yet (rookies, and anyone who missed the previous year) — which is exactly how three two-game
+ * 2026 lines came to ship beside 296 finished ones, labelled identically. A player with no completed
+ * season simply has no stat line, and `@/scout/subjects` drops StatLine from his playable modes.
+ *
+ * `StatLine` (`src/scout/types.ts`) carries no games-played field and no "partial" flag, so the round
+ * cannot caveat itself on screen — which makes exclusion the only honest option, not a preference.
+ */
 async function fetchStatLines(players, season) {
   const top = [...players].sort((a, b) => b.fame - a.fame).slice(0, STATLINE_TOP);
   const best = new Map();
+  let short = 0;
 
   const gather = async (label, candidates, year) => {
     const docs = await pool(label, candidates, (p) =>
@@ -1982,17 +2030,33 @@ async function fetchStatLines(players, season) {
     docs.forEach((doc, i) => {
       const p = candidates[i];
       const stats = readStats(doc, STAT_PLAN[p.group] ?? STAT_PLAN.WR);
-      if (stats.length >= 3) best.set(p.id, { playerId: p.id, season: year, stats });
+      if (stats.length < 3) return;
+      // Second gate, independent of which season we walked: a line has to cover enough of the year to
+      // be read as one. Catches a season that turns out to be in progress however `season` was
+      // resolved, and the handful of players who appeared in two or three games.
+      if (gamesPlayed(doc) < MIN_STATLINE_GAMES) {
+        short += 1;
+        return;
+      }
+      best.set(p.id, { playerId: p.id, season: year, stats });
     });
   };
 
-  // The most recent COMPLETED season is the good line; the live one only fills gaps (rookies).
-  await gather(`statlines ${season - 1}`, top, season - 1);
-  const missing = top.filter((p) => !best.has(p.id));
-  if (missing.length) await gather(`statlines ${season}`, missing, season);
+  // Walk COMPLETED seasons only, most recent first. Never `season` itself — it is still being played.
+  for (const year of [season - 1, season - 2]) {
+    const candidates = top.filter((p) => !best.has(p.id));
+    if (candidates.length === 0) break;
+    await gather(`statlines ${year}`, candidates, year);
+  }
 
   const lines = [...best.values()];
-  log(`statlines: ${lines.length}/${top.length} of the most famous players have a usable line`);
+  for (const line of lines) {
+    if (line.season >= season) throw new Error(`statlines: ${line.playerId} carries in-progress season ${line.season}`);
+  }
+  log(
+    `statlines: ${lines.length}/${top.length} of the most famous players have a usable line` +
+      ` (${short} dropped under ${MIN_STATLINE_GAMES} games; in-progress ${season} never walked)`,
+  );
   return lines;
 }
 
@@ -2053,9 +2117,48 @@ async function fameOnly() {
   log(`done in ${secs()} — run \`node scripts/verify-nfl.mjs\` next`);
 }
 
+/**
+ * NFL_STATLINES_ONLY=1 — rebuild statlines.json over the committed players.json and meta.json.
+ *
+ * The stat-line stage is the one that depends on WHEN it runs: a season's numbers move every Sunday
+ * until it ends, so the rule for which seasons are usable has to be re-appliable on its own. This
+ * reads the committed roster (fame order and all) and refetches only the ~300-600 small per-athlete
+ * statistics documents — not the ~4,500 a full sync makes — then rewrites statlines.json and the one
+ * count in meta.json that describes it. `fetchStatLines` is the same function the full run calls.
+ */
+async function statlinesOnly() {
+  await mkdir(CACHE_DIR, { recursive: true });
+  log(`cache: ${CACHE_DIR}${FRESH ? ' (ignoring, NFL_FRESH=1)' : ''}`);
+  const [players, meta] = await Promise.all([
+    readFile(join(OUT_DIR, 'players.json'), 'utf8').then(JSON.parse),
+    readFile(join(OUT_DIR, 'meta.json'), 'utf8').then(JSON.parse),
+  ]);
+  const season = Number(meta.season);
+  if (!Number.isFinite(season)) throw new Error('meta.json has no usable season');
+  log(`NFL_STATLINES_ONLY: ESPN current season = ${season}, so completed seasons are ${season - 1} and back`);
+
+  const before = meta.counts?.statlines ?? 0;
+  const statlines = await fetchStatLines(players, season);
+  const bySeason = new Map();
+  for (const line of statlines) bySeason.set(line.season, (bySeason.get(line.season) ?? 0) + 1);
+
+  meta.counts = { ...meta.counts, statlines: statlines.length };
+  const written = [await writeJson('statlines.json', statlines), await writeJson('meta.json', meta)];
+  table([
+    { metric: 'stat lines', value: `${statlines.length} (was ${before})` },
+    ...[...bySeason.entries()].sort((a, b) => b[0] - a[0]).map(([yr, n]) => ({ metric: `season ${yr}`, value: n })),
+    { metric: 'cache hits', value: hits },
+    { metric: 'network fetches', value: misses },
+    { metric: 'failed fetches', value: failures },
+  ]);
+  table(written.map(({ file, kb }) => ({ file, size: kb })));
+  log(`done in ${secs()} — run \`npx vitest run src/data/nfl\` next`);
+}
+
 async function main() {
   if (FAME_ONLY) return fameOnly();
   if (FACTS_ONLY) return factsOnly();
+  if (STATLINES_ONLY) return statlinesOnly();
   await mkdir(OUT_DIR, { recursive: true });
   await mkdir(CACHE_DIR, { recursive: true });
   log(`cache: ${CACHE_DIR}${FRESH ? ' (ignoring, NFL_FRESH=1)' : ''}`);

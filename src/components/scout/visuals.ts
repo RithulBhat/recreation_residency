@@ -15,8 +15,8 @@
  * (silhouette 0→0.85, faceZoom 0.06→0.95, logoZoom 0.1→0.95). {@link specPosition} normalizes those
  * onto a 0 → 1 ladder position. The zoom modes stop SHORT of 1 while a round is live (1.0 is the
  * clean frame, the payoff, reached only with `revealed: true`); the silhouette spans its whole live
- * range and keeps the reveal out of reach by a different mechanism — the curtain never opens past
- * 82% while the round is live (see {@link silhouetteCurtain}).
+ * range and keeps the reveal out of reach by a different mechanism — the curtain's solid edge never
+ * climbs past 77% of the frame while the round is live (see {@link silhouetteCurtain}).
  *
  * ## Silhouette is a CURTAIN, not a filter ramp
  * The first shipped version escalated by CSS filter alone, and `scratchpad/scout1/SILHOUETTE-LADDER.md`
@@ -68,7 +68,7 @@ function round(n: number, places = 3): number {
  */
 export const VISUAL_RANGE: Readonly<Record<VisualMode, { min: number; max: number; ceiling: number }>> = {
   // The silhouette spans its whole ladder: the curtain, not the ceiling, is what holds the photo
-  // back — its easiest LIVE rung still keeps the top 18% of the frame blacked out.
+  // back — its easiest LIVE rung still keeps the top 23% of the frame solid black.
   silhouette: { min: 0, max: SILHOUETTE_MAX, ceiling: 1 },
   faceZoom: { min: FACE_ZOOM_MIN, max: FACE_ZOOM_MAX, ceiling: 0.8 },
   logoZoom: { min: LOGO_ZOOM_MIN, max: LOGO_ZOOM_MAX, ceiling: 0.8 },
@@ -116,43 +116,58 @@ function sample<T extends Record<string, number>>(stops: ReadonlyArray<Stop<T>>,
 }
 
 /**
- * The CURTAIN, in one number: `cut` is the % of the frame height, measured from the BOTTOM, that
- * shows the real photo. The blacked-out layer above it is masked away below that line, so the chin
- * arrives first and the hair last. 100 = the reveal.
+ * How much of the frame height the curtain's edge is soft over, in %. Without it the mask ends in a
+ * hard horizontal line across the face; 7% reads as a lifting shadow.
+ */
+export const CURTAIN_FEATHER = 7;
+
+/**
+ * The CURTAIN, in one number: `cut` is where the curtain's SOLID black edge sits, as a % of the
+ * frame height measured from the BOTTOM. Below that line the mask feathers off over
+ * {@link CURTAIN_FEATHER}% into the clear photo, so the chin arrives first and the hair last.
+ *
+ * The feather hangs BELOW the edge, not above it, and that is the whole point: with the feather
+ * above, `cut: 0` still left a 7%-tall band of half-masked photo sitting inside the bottom of the
+ * frame, and that band is exactly where the mouth and jaw are at this crop. Measured on three
+ * seeds, rung 0 handed over Geno Smith's teeth, beard and skin tone and Stefon Diggs's tattooed
+ * chin — the flagship puzzle type, leaking on its hardest rung. Hanging the feather below the edge
+ * makes `cut: 0` put the solid edge on the frame's bottom edge with the whole soft band off-frame:
+ * a TRUE shadow, nothing but the rim-lit outline.
  *
  * `scratchpad/scout1/SILHOUETTE-LADDER.md` gives the rungs by what the player GAINS — shadow →
  * chin and mouth → nose → eyes and brows → nearly everything, softened — and a first cut at the
- * numbers (28/40/50/62/82) taken against a looser crop. Re-measured against the crop this game
- * actually ships (`scale(1.8)` anchored at the top of the frame, which fills the square with the
- * head), the landmarks sit at roughly: chin 90%, mouth 78%, nose 70%, eyes 53%, brows 48%,
- * hairline 40% down the frame — and a cut of C puts the curtain's solid edge at (94 - C)% from the
- * top. Evidence: `scratchpad/scoutfix2/ladder/calib/sheet.png` (a linear 2 -> 92 sweep over three
- * players) and `.../sil-v2/sheet.png` (the shipped ladder over six). Hence:
+ * numbers taken against a looser crop. Re-measured against the crop this game actually ships
+ * (`scale(1.8)` anchored at the top of the frame, which fills the square with the head), the
+ * landmarks sit at roughly: chin 90%, mouth 78%, nose 70%, eyes 53%, brows 48%, hairline 40% down
+ * the frame — and a cut of C puts the solid edge at (100 - C)% from the top, clear photo from
+ * (100 - C + {@link CURTAIN_FEATHER})% down. Evidence:
+ * `scratchpad/scoutfix2/ladder/calib/sheet.png` (a linear sweep over three players) and
+ * `.../sil-v2/sheet.png` (the shipped ladder over six). Hence:
  *
- *   0  -> a true shadow: the head outline and hair mass, nothing of the face
- *   20 -> the chin and the line of the mouth
- *   34 -> the mouth and nose
- *   50 -> the eyes and brows, hair still solid black
- *   70 -> nearly everything, softened by a small blur on the colour layer
+ *   0  -> a true shadow: the head outline and hair mass, nothing of the face at all
+ *   27 -> the chin and the line of the mouth
+ *   41 -> the mouth and nose
+ *   57 -> the eyes and brows, hair still solid black
+ *   77 -> nearly everything, softened by a small blur on the colour layer
+ *
+ * (Those are the old 0/20/34/50/70 plus the feather: every rung but the first paints the SAME
+ * pixels it did before, and the first one finally paints nothing.)
  *
  * Intermediate positions interpolate, so a 2-6 try ladder spaces evenly through the same features.
  */
 export const SILHOUETTE_CUT_STOPS: ReadonlyArray<Stop<{ cut: number; blur: number }>> = [
   { at: 0, value: { cut: 0, blur: 0 } },
-  { at: 0.25, value: { cut: 20, blur: 0 } },
-  { at: 0.5, value: { cut: 34, blur: 0 } },
-  { at: 0.75, value: { cut: 50, blur: 0 } },
-  { at: 1, value: { cut: 70, blur: 3 } },
+  { at: 0.25, value: { cut: 20 + CURTAIN_FEATHER, blur: 0 } },
+  { at: 0.5, value: { cut: 34 + CURTAIN_FEATHER, blur: 0 } },
+  { at: 0.75, value: { cut: 50 + CURTAIN_FEATHER, blur: 0 } },
+  { at: 1, value: { cut: 70 + CURTAIN_FEATHER, blur: 3 } },
 ];
 
-/** The cut of the hardest rung, the easiest LIVE rung, and the reveal. */
-export const SILHOUETTE_CUT = { min: 0, max: 70, reveal: 100 } as const;
-
 /**
- * How much of the frame height the curtain's edge is soft over, in %. Without it the mask ends in a
- * hard horizontal line across the face; 7% reads as a lifting shadow.
+ * The cut of the hardest rung, the easiest LIVE rung, and the reveal. The reveal has to clear the
+ * feather as well as the frame, or the top {@link CURTAIN_FEATHER}% of the answer stays shaded.
  */
-export const CURTAIN_FEATHER = 7;
+export const SILHOUETTE_CUT = { min: 0, max: 70 + CURTAIN_FEATHER, reveal: 100 + CURTAIN_FEATHER } as const;
 
 /**
  * The head crop, MEASURED (`scratchpad/scout2/core/calib-crop.png`): an alpha scan of 24 star
@@ -165,7 +180,7 @@ export const SILHOUETTE_OBJECT_POSITION = '50% 12%';
 
 /** Everything the two stacked layers need to paint one rung of the curtain. */
 export interface SilhouetteCurtain {
-  /** % of the frame height showing the photo, from the bottom. 100 = the reveal. */
+  /** Where the curtain's solid edge sits, % of the frame height from the bottom. 0 = a true shadow. */
   cut: number;
   /** True once the curtain is fully open — the shade layer is not painted at all. */
   open: boolean;
@@ -183,17 +198,23 @@ export interface SilhouetteCurtain {
 /**
  * Why `mask-position` and not the gradient's own stops: `mask-image` between two gradients does not
  * interpolate reliably, so the curtain would snap. Instead the gradient is FIXED (transparent over
- * the bottom half of a mask box twice the frame's height, opaque over the top half) and the mask box
+ * the bottom of a mask box twice the frame's height, opaque over the top half) and the mask box
  * slides. `mask-position-y: cut%` resolves against (frame height − mask height) = −frame height, so
- * it puts the box's top at −cut% of the frame: its midpoint — the curtain edge — lands exactly
- * `cut%` up from the bottom. A percentage animates, so the reveal glides.
+ * it puts the box's top at −cut% of the frame: the gradient's 50% line — the curtain's solid edge —
+ * lands exactly `cut%` up from the bottom. A percentage animates, so the reveal glides.
+ *
+ * The feather is spent BELOW that 50% line (`transparent 0 → (50 − half)`, opaque from 50), so the
+ * soft band lies inside the part of the frame the rung already gives away rather than eating into
+ * the part it is meant to hide. At `cut: 0` the solid edge is the frame's own bottom edge and the
+ * entire soft band is off-frame — the mask is opaque everywhere, which is what makes rung 0 a true
+ * shadow instead of a shadow with a lit chin under it.
  */
 export function curtainMask(cut: number): Pick<SilhouetteCurtain, 'maskImage' | 'maskSize' | 'maskPosition'> {
-  const c = clamp01(cut / 100) * 100;
+  const c = Math.min(Math.max(cut, 0), SILHOUETTE_CUT.reveal);
   // The feather is half as wide inside a mask box of twice the height.
   const half = round(CURTAIN_FEATHER / 2, 2);
   return {
-    maskImage: `linear-gradient(to top, transparent 0 50%, #000 ${50 + half}%)`,
+    maskImage: `linear-gradient(to top, transparent 0 ${50 - half}%, #000 50%)`,
     maskSize: '100% 200%',
     maskPosition: `50% ${round(c, 2)}%`,
   };
@@ -388,10 +409,13 @@ export function visualDescription(mode: VisualMode, visual: number, revealed = f
   const u = specPosition(mode, visual, revealed);
   if (mode === 'silhouette') {
     const { cut } = silhouetteCurtain(visual, revealed);
-    if (cut < 10) return 'A blacked-out, rim-lit silhouette of the player — the outline and the hair, nothing else.';
-    if (cut < 28) return 'The silhouette, with the chin and the line of the mouth showing.';
-    if (cut < 42) return 'The silhouette, with the mouth and nose showing.';
-    if (cut < 60) return 'The silhouette, with the eyes and brows showing; the hair is still blacked out.';
+    // What a rung actually SHOWS is the clear band below the feather, so the thresholds are the
+    // measured landmarks plus the feather — the same offset the cut stops carry.
+    const f = CURTAIN_FEATHER;
+    if (cut < 10 + f) return 'A blacked-out, rim-lit silhouette of the player — the outline and the hair, nothing else.';
+    if (cut < 28 + f) return 'The silhouette, with the chin and the line of the mouth showing.';
+    if (cut < 42 + f) return 'The silhouette, with the mouth and nose showing.';
+    if (cut < 60 + f) return 'The silhouette, with the eyes and brows showing; the hair is still blacked out.';
     return 'Almost the whole face, softened; only the hair is still blacked out.';
   }
   if (mode === 'faceZoom') {

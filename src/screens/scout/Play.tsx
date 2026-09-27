@@ -332,12 +332,12 @@ export default function ScoutPlay() {
 
   const visual = isVisualMode(round.mode);
   const board = isScoutPuzzleMode(round.mode);
-  // An image stage stays square and is sized by the height it is given. A text stage fills the slot
-  // outright. A BOARD sizes to its cards and is centred in what is left — stretched to full height it
-  // was mostly empty glass, and the cards are the thing to look at.
+  // An image stage stays square and is sized by the height it is given. Everything else FILLS the
+  // slot: a board sized to its cards left 180 px of empty stage on a laptop and 350 px on a big
+  // screen, so the boards take the height they are given and spend it on their photographs.
   const stageClass = cn(
     'w-full min-h-[280px]',
-    visual ? 'mx-auto lg:w-[var(--scout-hero)] lg:min-h-[380px]' : board ? 'lg:min-h-[26rem]' : 'flex-1 lg:h-full lg:min-h-[380px]',
+    visual ? 'mx-auto lg:w-[var(--scout-hero)] lg:min-h-[380px]' : board ? 'flex-1 lg:h-full lg:min-h-[26rem]' : 'flex-1 lg:h-full lg:min-h-[380px]',
   );
   const subjectStage = board ? (
     <ScoutPuzzleStage
@@ -363,6 +363,26 @@ export default function ScoutPlay() {
       className={stageClass}
     />
   );
+  // The board a round was ASKED on stays on screen at the payoff, above the reveal card: the answer
+  // ringed, the men who were not it stepped back, both Higher or Lower numbers out. Handing the
+  // whole hero slot to the seven-mode reveal card unmounted the board at the one moment it had
+  // something to say, and all six choice rounds ended looking like the same round.
+  //
+  // Two columns only: on a phone the hero slot is the whole screen, and the one promise the reveal
+  // makes there is that the answer and the way onward are both above the fold.
+  const revealBoard = board && twoColumn ? (
+    <ScoutPuzzleStage
+      mode={round.mode}
+      subject={round.subject}
+      stage={stage}
+      revealed
+      pickedPlayerIds={picked}
+      disabled
+      hotkeys={false}
+      dense
+      className="w-full shrink-0"
+    />
+  ) : null;
   const reveal = (
     <RevealCard
       state={state}
@@ -370,7 +390,7 @@ export default function ScoutPlay() {
       onNext={advance}
       nextLabel={hand ? `Pass to ${hand.to.name}` : undefined}
       tapeSignal={tapeSignal}
-      className="lg:h-full"
+      className={revealBoard !== null ? 'min-h-0 flex-1' : 'lg:h-full'}
     />
   );
   const guessBox = (
@@ -407,7 +427,7 @@ export default function ScoutPlay() {
     <div
       // `--scout-hero` is the side of the square stage: every pixel the hero column has left once
       // the bar, the price ladder, the verdict line and the guess box have taken theirs.
-      className="mx-auto w-full max-w-6xl [--scout-hero:clamp(17.5rem,calc(100dvh-25.5rem),42rem)] lg:flex lg:h-[calc(100dvh-6.5rem)] lg:items-stretch lg:gap-6"
+      className="mx-auto w-full max-w-6xl [--scout-hero:clamp(17.5rem,calc(100dvh-25.5rem),42rem)] lg:flex lg:h-[calc(100dvh-6.5rem)] lg:items-stretch lg:gap-6 2xl:max-w-[84rem]"
     >
       <div
         className={cn(
@@ -431,8 +451,15 @@ export default function ScoutPlay() {
         )}
         {/* The hero slot. A finished round hands it to the reveal card — on a phone that is what
             keeps the answer and Next above the fold, and on a laptop it is what gives the tape room. */}
-        <div className="flex min-h-0 flex-col justify-center max-lg:flex-1 lg:flex-1">
-          {roundOver ? reveal : subjectStage}
+        <div className="flex min-h-0 flex-col justify-center gap-3 max-lg:flex-1 lg:flex-1">
+          {roundOver ? (
+            <>
+              {revealBoard}
+              {reveal}
+            </>
+          ) : (
+            subjectStage
+          )}
         </div>
         {!twoColumn && !roundOver && <ClueRail clues={rail} newCount={newRail} total={railTotal} layout="row" />}
         {!roundOver && (
@@ -460,20 +487,25 @@ export default function ScoutPlay() {
           from the first frame and nothing under it jumps as they unlock. */}
       {twoColumn && (
         <aside className="flex w-[21rem] shrink-0 flex-col gap-4 xl:w-[23rem]">
+          {/* The rail is as tall as its ladder and no taller (its own list scrolls if a mode ever
+              pays out more clues than half the column), so the panel below it is the member that
+              takes the slack — and it now has a run ledger to spend that slack on instead of being
+              a 210 px stack of numbers stretched over 440–610 px of empty glass. */}
           <ClueRail
             clues={rail}
             newCount={newRail}
             total={railTotal}
             layout="column"
-            className="glass min-h-0 rounded-4xl p-4"
+            className="glass min-h-0 max-h-[58%] shrink-0 rounded-4xl p-4"
           />
           {/* The gauntlet's board takes the panel's place: "round 12 of 32" says nothing about WHICH
-              clubs are left, and that is the only question this format asks. Everywhere else the rail
-              is as tall as its ladder and the session panel takes whatever is left, so the aside is a
-              full column of panels rather than two cards floating over dead background. */}
+              clubs are left, and that is the only question this format asks. */}
           {gauntlet ? (
             <FranchiseBoard state={state} className="glass min-h-0 flex-1 overflow-y-auto rounded-4xl p-4" />
           ) : (
+            // `teamTrivia` and `careerPath` route every clue into their own stage, so those two
+            // rounds have no rail at all and the panel is the whole column — which is exactly the
+            // case the ledger was built for.
             <SessionPanel state={state} className="min-h-0 flex-1" />
           )}
         </aside>

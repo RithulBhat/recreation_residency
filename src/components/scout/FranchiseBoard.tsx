@@ -5,7 +5,13 @@ import { SCOUT_TEAM_META } from '@/scout/packs';
 import { franchiseBoard, franchisesCleared, franchisesTotal } from '@/scout/selectors';
 import type { Conference, DivisionName, ScoutState } from '@/scout/types';
 
-export type FranchiseState = 'cleared' | 'missed' | 'current' | 'upcoming';
+/**
+ * A tile's standing. There is deliberately no `current`: singling out the live franchise while the
+ * round is unsolved PRINTS THE ANSWER — in a Gauntlet + Logo Zoom run the one ringed tile read
+ * "🐂 HOU" while the puzzle was the Houston Texans. Which club was up is revealed by
+ * {@link revealedFranchiseId}, and only once the round is over.
+ */
+export type FranchiseState = 'cleared' | 'missed' | 'upcoming';
 
 export interface FranchiseBoardProps {
   state: ScoutState;
@@ -28,40 +34,63 @@ const GROUPS = CONFERENCES.flatMap((conf) =>
 
 const META_BY_ID = new Map(SCOUT_TEAM_META.map((t) => [t.id, t]));
 
-/** Every franchise's standing on the board, keyed by ESPN team id. */
+/**
+ * Every franchise's standing on the board, keyed by ESPN team id.
+ *
+ * Cleared vs remaining, and NOTHING else: the club the live round is about is indistinguishable
+ * from every other club still to come, because naming it would be naming the answer.
+ */
 export function franchiseStates(state: ScoutState): Map<string, FranchiseState> {
   const out = new Map<string, FranchiseState>();
-  const live = state.rounds[state.currentRound];
-  const liveId = live && live.status === 'playing' ? franchiseIdOf(live.subject) : undefined;
   for (const row of franchiseBoard(state)) {
     out.set(row.teamId, row.cleared ? 'cleared' : row.played ? 'missed' : 'upcoming');
   }
-  if (liveId !== undefined) out.set(liveId, 'current');
   return out;
+}
+
+/**
+ * The franchise the round that JUST ENDED was about, or undefined.
+ *
+ * This is the payoff the ring used to spend before the guess: the moment the round is over
+ * (`status === 'round-over'`, i.e. the reveal card is up) its tile is marked so the board says
+ * "that one, just now" — on top of the cleared / missed tone it already earned. Once the run is
+ * finished nothing is marked: the results board is a summary, not a pointer.
+ */
+export function revealedFranchiseId(state: ScoutState): string | undefined {
+  if (state.status !== 'round-over') return undefined;
+  const live = state.rounds[state.currentRound];
+  if (!live || live.status === 'playing') return undefined;
+  return franchiseIdOf(live.subject);
 }
 
 const TILE: Record<FranchiseState, string> = {
   cleared: 'border-success/60 text-fg',
   missed: 'border-danger/45 text-muted line-through opacity-70',
-  current: 'border-transparent ring-2 ring-accent text-fg shadow-glow',
   upcoming: 'border-border text-fg/80',
 };
 
+/** Added to whichever tile {@link revealedFranchiseId} names — never to a live round's. */
+const JUST_PLAYED = 'ring-2 ring-accent ring-offset-1 ring-offset-surface shadow-glow';
+
 function tileStyle(accent: string, tone: FranchiseState): { background: string } | undefined {
   if (tone === 'missed') return undefined;
-  const pct = tone === 'upcoming' ? 10 : tone === 'cleared' ? 30 : 38;
+  const pct = tone === 'upcoming' ? 10 : 30;
   return { background: `color-mix(in oklab, ${accent} ${pct}%, var(--sg-surface))` };
 }
 
 /**
- * The gauntlet's board: all 32 franchises, which ones are cleared, which one is up right now.
+ * The gauntlet's board: all 32 franchises, which ones are cleared, which ones are still out there.
  *
  * In this format the board IS the progress bar — "round 12 of 32" says nothing about which clubs are
  * left — so it is on screen for the whole run (a column in the aside on a laptop, one compact strip
  * on a phone) and again on the results screen.
+ *
+ * It must never say which club the LIVE round is about: with 32 tiles on screen, marking one is
+ * handing over the answer. The mark arrives at the reveal instead (see {@link revealedFranchiseId}).
  */
 export function FranchiseBoard({ state, variant = 'board', className }: FranchiseBoardProps) {
   const states = franchiseStates(state);
+  const justPlayed = revealedFranchiseId(state);
   const cleared = franchisesCleared(state).length;
   const total = franchisesTotal(state) || GAUNTLET_SIZE;
   // Franchises this run never put on the board at all (a small pool) are not "upcoming".
@@ -85,10 +114,12 @@ export function FranchiseBoard({ state, variant = 'board', className }: Franchis
                 data-testid="scout-franchise"
                 data-club={meta?.abbr ?? row.teamId}
                 data-state={tone}
+                data-just-played={row.teamId === justPlayed ? 'true' : undefined}
                 title={meta ? `${meta.city} ${meta.name}` : row.teamId}
                 className={cn(
                   'grid h-6 min-w-8 place-items-center rounded-md border px-1 font-mono text-[9px] font-bold uppercase tracking-wider',
                   TILE[tone],
+                  row.teamId === justPlayed && JUST_PLAYED,
                 )}
                 style={tileStyle(meta?.accent ?? '#a855f7', tone)}
               >
@@ -129,10 +160,12 @@ export function FranchiseBoard({ state, variant = 'board', className }: Franchis
                     data-testid="scout-franchise"
                     data-club={t.abbr}
                     data-state={off ? 'off' : tone}
+                    data-just-played={t.id === justPlayed ? 'true' : undefined}
                     className={cn(
                       'relative flex min-w-0 items-center justify-center gap-1 rounded-lg border px-1 py-1',
                       TILE[tone],
                       off && 'border-dashed border-border opacity-35',
+                      t.id === justPlayed && JUST_PLAYED,
                     )}
                     style={off ? undefined : tileStyle(t.accent, tone)}
                   >

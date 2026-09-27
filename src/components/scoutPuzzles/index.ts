@@ -21,6 +21,7 @@ export {
   MysteryCard,
   type PuzzleCardProps,
   type PuzzleCardDetail,
+  type PuzzleCardPhoto,
   type PuzzleCardState,
   type MysteryCardProps,
 } from './PuzzleCard';

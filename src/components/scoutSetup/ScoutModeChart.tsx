@@ -1,6 +1,7 @@
 import { Crosshair } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { cn } from '@/components/ui/cn';
+import { SCOUT_MODES } from '@/scout/packs';
 import { pct } from './summary';
 import { scoutModeStandings, sharpestScoutMode, type ScoutTotals } from './scoutAggregate';
 
@@ -42,7 +43,7 @@ export function ScoutModeChart({ totals, className }: ScoutModeChartProps) {
           <p className="mt-1 text-sm text-muted">
             {anyPlayed
               ? 'Share of rounds you named the subject, by the mode the round was played in.'
-              : 'Play a run and all seven modes fill in here.'}
+              : `Play a run and all ${SCOUT_MODES.length} puzzle types fill in here.`}
           </p>
         </div>
         {sharpest && (

@@ -1,6 +1,6 @@
 import { useRef, type KeyboardEvent } from 'react';
 import { Shuffle } from 'lucide-react';
-import { SCOUT_MODES } from '@/scout/packs';
+import { SCOUT_MODES, type ScoutModeInfo } from '@/scout/packs';
 import { useScoutSettingsStore } from '@/store/scoutStore';
 import type { ScoutMode } from '@/scout/types';
 import { Switch } from '@/components/ui/Switch';
@@ -36,6 +36,29 @@ const MODE_PALETTE: readonly string[] = [
   '#f59e0b',
 ];
 
+/**
+ * What the card's badge promises — what the player actually hands over to win the round.
+ *
+ * Read off `ScoutModeInfo.answer` / `.input`, never inferred from `.guesses`: `.guesses` is the POOL
+ * a mode draws from, which is a different question. Draft Class draws from players and is answered
+ * with a YEAR; Higher or Lower and Odd One Out draw from players and are answered by tapping a card,
+ * with no guess box on screen at all. Badging those three "player" promised a text answer the round
+ * never asks for.
+ */
+export function scoutModeAnswerLabel(mode: Pick<ScoutModeInfo, 'answer' | 'input'>): string {
+  if (mode.input === 'choice') return 'pick a card';
+  switch (mode.answer) {
+    case 'team':
+      return 'franchise';
+    case 'year':
+      return 'year';
+    case 'option':
+      return 'pick a card';
+    default:
+      return 'player';
+  }
+}
+
 /** The accent for a puzzle type — its own, or one from the palette by position. */
 export function scoutModeAccent(mode: ScoutMode): string {
   const own = SCOUT_MODE_ACCENT[mode];
@@ -47,7 +70,7 @@ export function scoutModeAccent(mode: ScoutMode): string {
 /**
  * The PUZZLE TYPES as a keyboard-navigable radiogroup, plus the Mixed bag switch.
  *
- * Rendered from `SCOUT_MODES` at build time, never a hardcoded list of seven — a puzzle type added
+ * Rendered from `SCOUT_MODES` at build time, never a hardcoded list — a puzzle type added
  * to `@/scout/packs` appears here (and in the presets, summaries and stats) with no change needed.
  */
 export function ScoutModePicker() {
@@ -117,8 +140,11 @@ export function ScoutModePicker() {
                 >
                   {m.emoji}
                 </span>
-                <span className="font-mono text-[9px] uppercase tracking-[0.12em] text-fg/60">
-                  {m.guesses === 'team' ? 'franchise' : 'player'}
+                <span
+                  className="shrink-0 font-mono text-[9px] uppercase tracking-[0.12em] text-fg/60"
+                  data-answer={m.input === 'choice' ? 'choice' : m.answer}
+                >
+                  {scoutModeAnswerLabel(m)}
                 </span>
               </span>
               <span className="relative mt-auto pt-2">

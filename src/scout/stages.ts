@@ -16,20 +16,25 @@
  * giveaway so short ladders still gain information every rung):
  *   silhouette / faceZoom  position group → conference → experience → jersey → first initial
  *   highlight              redacted play text (rung 0) → team → situation → position → first initial
- *   teamTrivia             obscure facts (rung 0 first) → conference+division → venue →
- *                          Super Bowls → a legend → team colours last
+ *   teamTrivia             obscure facts (rung 0 first) → conference+division → Super Bowls →
+ *                          a legend → team colours → HOME VENUE last
  *   statLine               stat pairs one at a time (rung 0 shows one) → position → team
  *   careerPath             draft year (rung 0) → round/pick → college → team → jersey
- *   logoZoom               conference → division → venue (+ founded / Super Bowls / legend filler)
+ *   logoZoom               conference → division (+ founded / Super Bowls / legend filler) →
+ *                          HOME VENUE last
  *   teammates              position → experience → jersey → first initial (never the club: the
  *                          roster is on screen) and one more teammate card per rung
- *   depthChart             conference → division → Super Bowls → venue → a legend (never the club's
- *                          own name) and one more roster card per rung
- *   draftClass             decade → five-year window → odd/even → earliest slot → two-year window
- *   higherLower            position both play → season → the gap → one of the two numbers
- *   oddOneOut              the category (rung 0) → the shared value → the odd man's position, plus
- *                          one wrong card struck out per rung (never all three)
+ *   depthChart             conference → division → Super Bowls → a legend → HOME VENUE last
+ *                          (never the club's own name) and one more roster card per rung
+ *   draftClass             decade → five-year band → a moved bound → two-year window
+ *   higherLower            position both play → season → the gap → the man with FEWER
+ *   oddOneOut              the category (rung 0) → the shared value → one hint about the odd man
+ *                          per dimension, his value on the ASKED dimension last, plus one wrong
+ *                          card struck out per rung (never all three)
  *   jersey                 conference → experience → draft → college → first initial
+ *
+ * Home venue is the last rung of all three team ladders on purpose: Allegiant Stadium means the
+ * Raiders and nothing else, so it is the answer wearing a different label, not a clue.
  *
  * `cropFocus` gives faceZoom and logoZoom a deterministic spot to zoom into: the same seed always
  * zooms the same feature. It is pure, so a screen can recompute it from `settings.seed` without
@@ -430,32 +435,51 @@ function careerLadder(player: NflPlayer, team: NflTeam | undefined, tries: numbe
   return out;
 }
 
+/**
+ * HOME VENUE IS THE ANSWER WITH A DIFFERENT NAME, so it is the last rung of every team ladder.
+ *
+ * Allegiant Stadium means the Raiders and nothing else; Arrowhead means the Chiefs; Lambeau Field
+ * means the Packers. Naming the building names the franchise — there is no second candidate to
+ * weigh. It used to arrive third of five in {@link logoLadder}, AHEAD of 'Founded: 1960' and a
+ * Super Bowl count, so the ladder got easier and then harder again; {@link triviaLadder} and
+ * {@link depthChartLadder} sat it mid-ladder too. {@link venueClue} is now only ever pushed onto
+ * the tail, and `stages.test.ts` pins that it never surfaces before the final rung.
+ */
+function venueClue(team: NflTeam): ScoutClue {
+  return clue('venue', 'Home venue', team.venue);
+}
+
 function triviaLadder(team: NflTeam, tries: number, rng?: Rng): ScoutClue[] {
   const out: ScoutClue[] = [];
   const facts = team.facts.slice(0, Math.max(1, tries - 1));
   for (const f of facts) out.push(clue('fact', 'Deep cut', f));
   if (out.length === 0) out.push(clue('founded', 'Founded', String(team.founded)));
   out.push(clue('division', 'Division', `${team.conference} ${team.division}`));
-  out.push(clue('venue', 'Home venue', team.venue));
   out.push(clue('superBowls', 'Super Bowls', superBowlValue(team)));
   const legend = team.legends.length > 0 ? (rng ? rng.pick(team.legends) : team.legends[0]) : undefined;
   if (legend) out.push(clue('legend', 'Franchise legend', legend));
   out.push(clue('colors', 'Team colours', [team.color, team.altColor].filter(Boolean).join(' / ')));
-  return out;
+  // The colours are two hex values and still take knowing the club; the venue just says the name.
+  return [...out, venueClue(team)];
 }
 
 function logoLadder(team: NflTeam, tries: number): ScoutClue[] {
-  const out: ScoutClue[] = [
+  const core: ScoutClue[] = [
     clue('conference', 'Conference', team.conference),
     clue('division', 'Division', `${team.conference} ${team.division}`),
-    clue('venue', 'Home venue', team.venue),
   ];
-  if (out.length + 1 < tries) out.push(clue('founded', 'Founded', String(team.founded)));
-  if (out.length + 1 < tries) out.push(clue('superBowls', 'Super Bowls', superBowlValue(team)));
-  if (out.length + 1 < tries && team.legends.length > 0) {
-    out.push(clue('legend', 'Franchise legend', team.legends[0]));
+  const tail = [venueClue(team)];
+  const filler: ScoutClue[] = [
+    clue('founded', 'Founded', String(team.founded)),
+    clue('superBowls', 'Super Bowls', superBowlValue(team)),
+  ];
+  if (team.legends.length > 0) filler.push(clue('legend', 'Franchise legend', team.legends[0]));
+  // The weak facts fill the middle of the ladder — exactly the rungs the venue used to steal.
+  while (core.length + tail.length < tries - 1 && filler.length > 0) {
+    const next = filler.shift();
+    if (next) core.push(next);
   }
-  return out;
+  return [...core, ...tail];
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -492,7 +516,8 @@ function teammatesLadder(player: NflPlayer, tries: number): ScoutClue[] {
 
 /**
  * `depthChart`: name the franchise off five of its players. NOTHING here may name the club — not the
- * nickname, not the city — so the ladder walks conference → division → trophies → venue → a legend.
+ * nickname, not the city — so the ladder walks conference → division → trophies → a legend, and only
+ * then the venue, which is the closest thing to the club's own name that is not the club's own name.
  */
 function depthChartLadder(team: NflTeam, tries: number): ScoutClue[] {
   const out: ScoutClue[] = [
@@ -501,70 +526,168 @@ function depthChartLadder(team: NflTeam, tries: number): ScoutClue[] {
     clue('superBowls', 'Super Bowls', superBowlValue(team)),
   ];
   if (out.length + 1 < tries) out.push(clue('founded', 'Founded', String(team.founded)));
-  out.push(clue('venue', 'Home venue', team.venue));
   if (team.legends.length > 0) out.push(clue('legend', 'Franchise legend', team.legends[0]));
-  return out;
+  return [...out, venueClue(team)];
 }
 
 /**
- * `draftClass`: the answer is a year, so every rung narrows the BAND it can be in —
- * decade → five-year window → odd/even → the earliest slot on the board → a two-year window.
- * Parity plus the two-year window pin the year exactly, which is what makes the last rung fair.
+ * The width-`width` window inside a five-year band that still holds `year`.
+ *
+ * It shrinks one year at a time from whichever end the year sits FARTHER from, so the windows NEST:
+ * the two-year window is inside the three-year one is inside the four-year one is inside the band.
+ * That nesting is the whole guarantee — every rung is a subset of the rung before it, so no two
+ * clues on the board can ever eliminate each other.
+ */
+function draftWindow(year: number, bandStart: number, width: number): { lo: number; hi: number } {
+  let lo = bandStart;
+  let hi = bandStart + 4;
+  while (hi - lo + 1 > width) {
+    if (year - lo >= hi - year) lo += 1;
+    else hi -= 1;
+  }
+  return { lo, hi };
+}
+
+/**
+ * `draftClass`: the answer is a year, so every rung narrows the WINDOW it can be in —
+ * decade → five-year band → a moved bound or two → the last two years standing.
+ *
+ * PARITY IS GONE, and that is the fix. 'Parity: Odd year' plus 'Down to two: 2022 or 2023' is not a
+ * narrowing, it is the answer: the two candidates were always `year - 1` and `year`, which differ in
+ * parity BY CONSTRUCTION, so the parity clue struck one of them off the board every single round and
+ * the last rung handed 2023 over with certainty. One half of that pair had to go, and parity is the
+ * half worth less — a nested window is the same information with none of the arithmetic.
+ *
+ * 'Earliest slot shown' is gone too: the cards already print 'Rd 3, pk 84' under every face, so a
+ * clue announcing their minimum spent a whole rung on something the player could already read. The
+ * intermediate windows say something the cards cannot.
  */
 function draftClassLadder(puzzle: ScoutDraftClassPuzzle, tries: number): ScoutClue[] {
   const year = puzzle.year;
   const decade = Math.floor(year / 10) * 10;
   const bandStart = Math.floor(year / 5) * 5;
-  const out: ScoutClue[] = [
+  const core: ScoutClue[] = [
     clue('draft', 'Era', `${decade}s`),
     clue('draft', 'Somewhere in', `${bandStart}–${bandStart + 4}`),
-    clue('draft', 'Parity', year % 2 === 0 ? 'Even year' : 'Odd year'),
   ];
-  if (out.length + 1 < tries && puzzle.earliest) {
-    out.push(clue('draft', 'Earliest slot shown', `Round ${puzzle.earliest.round}, pick ${puzzle.earliest.pick}`));
+  const pair = draftWindow(year, bandStart, 2);
+  const tail = [clue('draft', 'Down to two', `${pair.lo} or ${pair.hi}`)];
+  // The in-between windows, widest first, each stated as the bound that just moved: 'No earlier
+  // than 2021' reads as a step, where a second '2021–2024' range reads as the same clue twice.
+  const filler: ScoutClue[] = [];
+  let outer = { lo: bandStart, hi: bandStart + 4 };
+  for (const width of [4, 3]) {
+    const w = draftWindow(year, bandStart, width);
+    filler.push(
+      w.lo > outer.lo ? clue('draft', 'No earlier than', String(w.lo)) : clue('draft', 'No later than', String(w.hi)),
+    );
+    outer = w;
   }
-  out.push(clue('draft', 'Down to two', `${year - 1} or ${year}`));
-  return out;
+  while (core.length + tail.length < tries - 1 && filler.length > 0) {
+    const next = filler.shift();
+    if (next) core.push(next);
+  }
+  return [...core, ...tail];
 }
+
 
 /**
  * `higherLower`: a coin flip is not a ladder, so the rungs pay INFORMATION instead of more picture —
- * the position both men play, the season, the size of the gap, and finally one of the two numbers.
- * Gap + one number is the whole answer, which is the right price for burning most of your tries on
- * a two-way question.
+ * the position both men play, the season, the size of the gap, and finally the man who is BEHIND.
+ *
+ * The last rung used to print the left card's number and nothing else. A bare number decides
+ * nothing here — the cards show no values at all until the reveal — and even next to 'The gap' it
+ * left the other man on `v + gap` or `v - gap`, still a coin flip; the round only actually settled
+ * when the left card happened to be the higher one, about half the time. Saying whether that number
+ * is the BIGGER or the smaller of the two ends every round, and 'The gap' then hands over the other
+ * man's total as the payoff.
  */
 function higherLowerLadder(puzzle: ScoutHigherLowerPuzzle, tries: number): ScoutClue[] {
   const gap = Math.abs(puzzle.numbers[0] - puzzle.numbers[1]);
-  const out: ScoutClue[] = [
+  const leads = puzzle.numbers[0] > puzzle.numbers[1];
+  const core: ScoutClue[] = [
     clue('position', 'Both play', GROUP_LABELS[puzzle.group]),
     clue('stat', 'Season', String(puzzle.season)),
+    clue('stat', 'The gap', groupDigits(Math.round(gap * 10) / 10)),
   ];
-  if (out.length + 1 < tries) out.push(clue('stat', 'The gap', groupDigits(Math.round(gap * 10) / 10)));
-  out.push(clue('stat', `${puzzle.statLabel} · ${puzzle.cards[0].name}`, puzzle.values[0]));
-  return out;
+  // One word — 'More' or 'Fewer' — is the whole fix: the same number that decided nothing now says
+  // which way the round goes, and with 'The gap' beside it the other man's total falls out too.
+  // The label still carries `statLabel` verbatim and the value is still the display string
+  // verbatim, because `puzzleReads#revealedValueIndex` reads exactly that pair to put the number
+  // on its card.
+  const tail = [
+    clue('stat', `${leads ? 'More' : 'Fewer'} ${puzzle.statLabel} · ${puzzle.cards[0].name}`, puzzle.values[0]),
+  ];
+  // Gap + total is both numbers without saying whose is whose: a real rung for a 6-try ladder.
+  const filler: ScoutClue[] = [
+    clue('stat', 'Both together', groupDigits(Math.round((puzzle.numbers[0] + puzzle.numbers[1]) * 10) / 10)),
+  ];
+  while (core.length + tail.length < tries - 1 && filler.length > 0) {
+    const next = filler.shift();
+    if (next) core.push(next);
+  }
+  return [...core, ...tail];
 }
 
-/** 'The odd man out' clue: the first dimension that is not the one being asked about. */
-function oddOutHint(puzzle: ScoutOddOneOutPuzzle): ScoutClue | undefined {
-  const card = puzzle.cards.find((c) => c.playerId === puzzle.answerPlayerId);
-  if (!card) return undefined;
-  if (puzzle.trait !== 'positionGroup') return clue('position', 'The odd man out plays', GROUP_LABELS[card.group]);
-  if (card.college) return clue('college', 'The odd man out went to', card.college);
-  return clue('draft', 'The odd man out went', card.draftRound ? `in round ${card.draftRound}` : 'undrafted');
+
+/** The outlier's own card. */
+function oddCard(puzzle: ScoutOddOneOutPuzzle): ScoutPersonCard | undefined {
+  return puzzle.cards.find((c) => c.playerId === puzzle.answerPlayerId);
+}
+
+/**
+ * Everything the ladder can say about the odd man out: one clue per dimension, ordered by how many
+ * values that dimension HAS — draft round (seven-ish) narrows least, then position group (nine),
+ * then club (32), then college (hundreds) — and his value on the very dimension in question moved
+ * to the end, because 'the three went to Alabama, he went to Georgia' is the sharpest thing there
+ * is to say about him.
+ *
+ * Four dimensions, one clue each, is what turns a three-clue stub into a ladder. With only 'the
+ * category', 'the shared value' and a single hint, a five-try round spent rungs 1 and 2 on
+ * identical boards and rungs 3 and 4 on identical boards, because the eliminations can only move
+ * twice (three wrong cards, and one of them always survives to keep the last rung a choice).
+ */
+function oddHints(puzzle: ScoutOddOneOutPuzzle): ScoutClue[] {
+  const card = oddCard(puzzle);
+  if (!card) return [];
+  const club = card.teamId === undefined ? undefined : teamNameById(card.teamId);
+  const byDimension: Readonly<Record<'college' | 'team' | 'draftRound' | 'positionGroup', ScoutClue | undefined>> = {
+    draftRound: clue('draft', 'The odd man out went', card.draftRound === undefined ? 'undrafted' : `in round ${card.draftRound}`),
+    positionGroup: clue('position', 'The odd man out plays', GROUP_LABELS[card.group]),
+    team: club === undefined ? undefined : clue('team', 'The odd man out is on', club),
+    college: card.college === undefined || card.college === '' ? undefined : clue('college', 'The odd man out went to', card.college),
+  };
+  const order = ['draftRound', 'positionGroup', 'team', 'college'] as const;
+  const hints = [...order.filter((d) => d !== puzzle.trait), puzzle.trait].map((d) => byDimension[d]);
+  // A hint that repeats the shared value would be a contradiction, not a clue — he is the outlier.
+  return hints.filter((c): c is ScoutClue => c !== undefined && c.value !== puzzle.sharedValue);
 }
 
 /**
  * `oddOneOut`: rung 0 names the CATEGORY (without it the question is unanswerable), the next rung
- * pays out the value the three share, and the rest of the narrowing is the eliminations `visual`
- * carries. Tuned for three or four tries — two clues and two strike-outs is exactly four rungs.
+ * pays out the value the three share, and the rest of the ladder alternates {@link oddHints} with
+ * the eliminations `visual` carries — never all three, so the last rung is a two-way choice and not
+ * the answer handed over.
+ *
+ * It takes `tries` for the same reason every other ladder does: the eliminations can only pay out
+ * twice, so at four, five or six tries the CLUES have to carry the rungs in between.
  */
-function oddOneOutLadder(puzzle: ScoutOddOneOutPuzzle): ScoutClue[] {
-  const out: ScoutClue[] = [clue('fact', 'Three of these share', ODD_PROMPTS[puzzle.trait])];
-  out.push(clue(ODD_CLUE_KINDS[puzzle.trait], `The shared ${puzzle.traitLabel.toLowerCase()}`, puzzle.sharedValue));
-  const hint = oddOutHint(puzzle);
-  if (hint) out.push(hint);
-  return out;
+function oddOneOutLadder(puzzle: ScoutOddOneOutPuzzle, tries: number): ScoutClue[] {
+  const core: ScoutClue[] = [
+    clue('fact', 'Three of these share', ODD_PROMPTS[puzzle.trait]),
+    clue(ODD_CLUE_KINDS[puzzle.trait], `The shared ${puzzle.traitLabel.toLowerCase()}`, puzzle.sharedValue),
+  ];
+  const hints = oddHints(puzzle);
+  const tail = hints.slice(-1);
+  const filler = hints.slice(0, -1);
+  // Rung 0 already spends one clue (`base: 1`), so a ladder of `tries` rungs wants `tries` clues.
+  while (core.length + tail.length < tries && filler.length > 0) {
+    const next = filler.shift();
+    if (next) core.push(next);
+  }
+  return [...core, ...tail];
 }
+
 
 /**
  * `jersey`: the number, the position and the colours are all on screen from rung 0, so the ladder
@@ -658,7 +781,7 @@ export function clueOrderFor(mode: ScoutMode, subject: ScoutSubject, tries: numb
       };
     case 'oddOneOut':
       return {
-        clues: puzzle?.type === 'oddOneOut' ? oddOneOutLadder(puzzle) : [],
+        clues: puzzle?.type === 'oddOneOut' ? oddOneOutLadder(puzzle, tries) : [],
         base: 1,
         visual: { min: 0, max: ODD_ONE_OUT_VISUAL_MAX },
       };

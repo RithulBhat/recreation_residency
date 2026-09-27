@@ -11,10 +11,12 @@ export interface TeammatesStageProps {
   answerName?: string;
   /** The answer's headshot, for the reveal tile. */
   answerImage?: string;
+  /** Reveal-time shape: the board stays beside the reveal card. */
+  dense?: boolean;
   className?: string;
 }
 
-export function TeammatesStage({ puzzle, visual, revealed, answerName, answerImage, className }: TeammatesStageProps) {
+export function TeammatesStage({ puzzle, visual, revealed, answerName, answerImage, dense, className }: TeammatesStageProps) {
   return (
     <CardSetStage
       puzzle={puzzle}
@@ -30,6 +32,7 @@ export function TeammatesStage({ puzzle, visual, revealed, answerName, answerIma
       answerImage={answerImage}
       tint="accent-2"
       testId="scout-stage-teammates"
+      dense={dense}
       className={className}
     />
   );

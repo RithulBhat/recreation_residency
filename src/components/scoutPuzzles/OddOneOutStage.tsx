@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { cn } from '@/components/ui';
 import { ODD_TRAIT_PROMPTS } from '@/scout/puzzles';
 import { ruledOutCardIds } from '@/scout/stages';
 import type { ScoutClue, ScoutOddOneOutPuzzle, ScoutOddTrait, ScoutPersonCard } from '@/scout/types';
@@ -39,6 +40,8 @@ export interface OddOneOutStageProps {
   disabled?: boolean;
   /** Bind `1`–`4`. On by default — this mode has no text input to clash with. */
   hotkeys?: boolean;
+  /** Reveal-time shape: the board stays beside the reveal card. */
+  dense?: boolean;
   className?: string;
 }
 
@@ -51,6 +54,7 @@ export function OddOneOutStage({
   pickedPlayerIds = [],
   disabled = false,
   hotkeys = true,
+  dense = false,
   className,
 }: OddOneOutStageProps) {
   const ruledOut = revealed ? [] : ruledOutCardIds(puzzle, visual);
@@ -74,7 +78,9 @@ export function OddOneOutStage({
 
   const shared = sharedValueRevealed(puzzle, clues);
   const stateOf = (card: ScoutPersonCard): PuzzleCardState => {
-    if (revealed) return card.playerId === puzzle.answerPlayerId ? 'answer' : 'idle';
+    // On the reveal the outlier is ringed and the three who belong together step back, so the answer
+    // reads off the board itself rather than only off the card beside it.
+    if (revealed) return card.playerId === puzzle.answerPlayerId ? 'answer' : 'dimmed';
     if (pickedPlayerIds.includes(card.playerId)) return 'missed';
     return ruledOut.includes(card.playerId) ? 'ruledOut' : 'idle';
   };
@@ -87,17 +93,18 @@ export function OddOneOutStage({
       hint={revealed ? undefined : 'Tap the outlier — or press 1 to 4. Misses strike out a wrong card.'}
       tint="accent"
       testId="scout-stage-odd-one-out"
+      dense={dense}
       className={className}
     >
       {shared && (
-        <p className="mb-3 flex flex-wrap items-baseline gap-2">
+        <p className={cn('flex shrink-0 flex-wrap items-baseline gap-2', dense ? 'mb-2' : 'mb-3')}>
           <span className="eyebrow-readable">The three share</span>
           <span className="rounded-xl border border-accent/40 bg-accent/10 px-2.5 py-1 font-semibold text-fg">
             {puzzle.sharedValue}
           </span>
         </p>
       )}
-      <CardGrid min="9rem">
+      <CardGrid cols={dense ? 4 : 2} fill={!dense}>
         {puzzle.cards.map((card, i) => (
           <PuzzleCard
             key={card.playerId}
@@ -106,11 +113,13 @@ export function OddOneOutStage({
             state={stateOf(card)}
             onPick={live ? onChoose : undefined}
             hotkey={i + 1}
+            size={dense ? 'sm' : 'md'}
+            grow={!dense}
           />
         ))}
       </CardGrid>
-      {ruledOut.length > 0 && (
-        <p className="mt-3 font-mono text-[11px] uppercase tracking-[0.14em] text-muted">
+      {ruledOut.length > 0 && !dense && (
+        <p className="mt-3 shrink-0 font-mono text-[11px] uppercase tracking-[0.14em] text-muted">
           {ruledOut.length} struck out · {puzzle.cards.length - ruledOut.length} still in
         </p>
       )}

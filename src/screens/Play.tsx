@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { PlayerState } from '@/types';
+import type { GameState, GuessTarget, PlayerState, Round } from '@/types';
 import { HostBubble, useVoiceGuess } from '@/voice';
 import {
   CoachMarks,
@@ -31,6 +31,9 @@ import {
   useSuggestions,
   type HintMenuHandle,
 } from '@/components/play';
+// The module, not the `@/components/setup` barrel: this is one text map, and the barrel would drag
+// every lobby component into the play chunk.
+import { MODE_LABEL } from '@/components/setup/summary';
 import { coverBlur } from '@/game/hints';
 import { isBuzzerDuel, isMultiplayer } from '@/game/presets';
 import { currentClipLength, currentRound } from '@/game/selectors';
@@ -45,6 +48,25 @@ import '@/components/play/play.css';
 export const LANDSCAPE_PHONE = '(orientation: landscape) and (max-height: 520px)';
 /** Tailwind's `lg`: the two-column layout with the rail. */
 const TWO_COLUMN = '(min-width: 64rem)';
+
+/** What the guess box is asking for, spelled out for the heading. */
+const TARGET_NOUN: Record<GuessTarget, string> = {
+  title: 'name the song',
+  artist: 'name the artist',
+  both: 'name the artist and the song',
+};
+
+/**
+ * The screen's accessible name. Every route has exactly one `h1`, and on Play it is the ROUND:
+ * `Fixed clip — round 2 of 3, name the song`. Rendered `sr-only` because the top bar, the stage strip
+ * and the guess box already say all of this on screen, and a visible heading here would only push the
+ * record down the page. Mirrors Scout's play screen, which builds its heading the same way.
+ */
+export function playTitle(state: GameState, round: Round): string {
+  const { settings } = state;
+  const rounds = settings.mode === 'blitz' ? '' : settings.rounds > 0 ? ` of ${settings.rounds}` : '';
+  return `${MODE_LABEL[settings.mode]} — round ${round.index + 1}${rounds}, ${TARGET_NOUN[settings.guessTarget]}`;
+}
 
 /** Play screen — the record, the guess box and everything that reacts to the engine. */
 export default function Play() {
@@ -161,9 +183,12 @@ export default function Play() {
     </>
   );
 
+  const title = playTitle(state, round);
+
   if (landscape) {
     return (
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-2" data-layout="landscape">
+        <h1 className="sr-only">{title}</h1>
         <TopBar state={state} now={now} onQuit={() => setQuitOpen(true)} onHelp={() => setHelpOpen(true)} />
         {multiplayer && <PlayersBar state={state} onBuzz={actions.buzz} />}
         {duelActive && <OpponentPanel duel={duel} state={state} />}
@@ -184,6 +209,8 @@ export default function Play() {
   return (
     // Desktop: a flex row (not grid) so `min-h` + `items-center` really centres the pair vertically.
     <div className="mx-auto w-full max-w-6xl lg:flex lg:min-h-[calc(100dvh-6.5rem)] lg:items-center lg:justify-center lg:gap-6">
+      {/* The screen's title is the round itself; on screen the top bar already says all of this. */}
+      <h1 className="sr-only">{title}</h1>
       <div className="flex min-h-[calc(100dvh-6.5rem)] flex-col gap-3 sm:gap-4 lg:min-h-0 lg:w-full lg:max-w-[720px] lg:shrink">
         <TopBar state={state} now={now} onQuit={() => setQuitOpen(true)} onHelp={() => setHelpOpen(true)} />
         {multiplayer && <PlayersBar state={state} onBuzz={actions.buzz} />}

@@ -52,11 +52,16 @@ function WelcomeBack() {
 
 /**
  * The marquee. Two lamps, the name, one line about what this is — and the page's only `<h1>`.
+ *
+ * It is deliberately SHORTER from `lg` up than it is on a phone's scroll: on a 1440 x 900 laptop —
+ * the screen this is played on — a marquee sized for a big monitor pushed both "Play now" buttons
+ * 97 px below the fold and cut the game cards mid-sentence, so the front door asked for a scroll
+ * before it offered a game.
  */
 export function HubHero() {
   const [lead, last] = splitName(RESIDENCY_NAME);
   return (
-    <section className="relative isolate flex flex-col items-center gap-3.5 overflow-x-clip pt-1 text-center sm:gap-5 sm:pt-6">
+    <section className="relative isolate flex flex-col items-center gap-3.5 overflow-x-clip pt-1 text-center sm:gap-5 sm:pt-6 lg:gap-3.5 lg:pt-1">
       {/* Light spilling out from under the marquee. */}
       <div
         className="pointer-events-none absolute -top-24 left-1/2 -z-10 h-56 w-[min(44rem,100%)] -translate-x-1/2 rounded-[50%] bg-gradient-accent opacity-[0.22] blur-[70px]"
@@ -71,12 +76,12 @@ export function HubHero() {
         <span className="hub-lamp hub-lamp-b size-1.5 rounded-full" aria-hidden />
       </div>
 
-      <h1 className="relative max-w-full font-display text-[clamp(1.75rem,8.6vw,2.6rem)] font-black leading-[0.98] tracking-tight text-fg sm:text-6xl lg:text-[4.2rem]">
+      <h1 className="relative max-w-full font-display text-[clamp(1.75rem,8.6vw,2.6rem)] font-black leading-[0.98] tracking-tight text-fg sm:text-6xl lg:text-[3.35rem] 2xl:text-[4.2rem]">
         {lead && <span>{lead} </span>}
         <span className="text-gradient">{last}</span>
       </h1>
 
-      <p className="relative max-w-2xl text-balance text-sm text-muted sm:text-lg">
+      <p className="relative max-w-2xl text-balance text-sm text-muted sm:text-lg lg:text-base 2xl:text-lg">
         Name a song from a heartbeat of audio, or the NFL player behind a silhouette. Free, no
         sign-up, nothing to install.
       </p>

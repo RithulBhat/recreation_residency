@@ -10,8 +10,10 @@ import {
   getPlaylistTracks,
   getTrack,
   isPreviewFresh,
+  isrcYear,
   jsonp,
   mapTrack,
+  originalReleaseYear,
   previewExpiry,
   refreshPreview,
   refreshPreviews,
@@ -187,6 +189,38 @@ describe('jsonp', () => {
 
 /* ------------------------------------------------------------------ mapping */
 
+describe('isrcYear', () => {
+  it('reads the two-digit year of reference out of a well-formed ISRC', () => {
+    expect(isrcYear('GBA077700130')).toBe(1977); // Bee Gees, verified live
+    expect(isrcYear('USRH10721057')).toBe(2007);
+    expect(isrcYear('USUG11700215')).toBe(2017);
+  });
+
+  it('accepts the hyphenated and lower-case spellings', () => {
+    expect(isrcYear('gb-a07-77-00130')).toBe(1977);
+  });
+
+  it('refuses anything that is not an ISRC', () => {
+    expect(isrcYear(undefined)).toBeUndefined();
+    expect(isrcYear('')).toBeUndefined();
+    expect(isrcYear('NOT-AN-ISRC')).toBeUndefined();
+    expect(isrcYear('GBA07770013')).toBeUndefined(); // one digit short
+  });
+});
+
+describe('originalReleaseYear', () => {
+  it('is the earliest of the three signals, because each one is an upper bound', () => {
+    expect(originalReleaseYear({ release_date: '2017-09-14', album: { release_date: '1977-12-13' }, isrc: 'GBA077700130' })).toBe(1977);
+    expect(originalReleaseYear({ release_date: '1975-11-21', album: { release_date: '2005-01-01' }, isrc: 'GBUM71029604' })).toBe(1975);
+  });
+
+  it('is undefined when no signal survives, and never a year in the future', () => {
+    expect(originalReleaseYear({})).toBeUndefined();
+    expect(originalReleaseYear({ release_date: '0000-00-00' })).toBeUndefined();
+    expect(originalReleaseYear({ release_date: `${new Date().getFullYear() + 5}-01-01` })).toBeUndefined();
+  });
+});
+
 describe('mapTrack', () => {
   it('maps a real Deezer track payload onto Track', () => {
     const track = mapTrack(RAW_TRACK);
@@ -231,6 +265,44 @@ describe('mapTrack', () => {
     expect(mapTrack({ ...RAW_TRACK, release_date: '2025-10-03', bpm: 0 })?.bpm).toBeUndefined();
     expect(mapTrack({ ...RAW_TRACK, bpm: 128 })?.bpm).toBe(128);
     expect(mapTrack({ ...RAW_TRACK, release_date: '0000-00-00' })?.releaseYear).toBeUndefined();
+  });
+
+  it('takes the ORIGINAL year, not the re-delivery date Deezer reports', () => {
+    // Live Bee Gees "Stayin' Alive" (track 406815322): delivered 2017, original album 1977,
+    // ISRC registered 1977. The hint used to read "Released in 2017".
+    const staying = mapTrack({
+      ...RAW_TRACK,
+      release_date: '2017-09-14',
+      isrc: 'GBA077700130',
+      album: { ...RAW_TRACK.album, release_date: '1977-12-13' },
+    });
+    expect(staying?.releaseYear).toBe(1977);
+  });
+
+  it('uses whichever signal is earliest when only one of them predates the delivery', () => {
+    // "Dancing Queen": delivered 2008, filed under a 2005 compilation, ISRC says 1976.
+    expect(
+      mapTrack({
+        ...RAW_TRACK,
+        release_date: '2008-01-01',
+        isrc: 'SEABC7600101',
+        album: { ...RAW_TRACK.album, release_date: '2005-03-01' },
+      })?.releaseYear,
+    ).toBe(1976);
+    // "Sweet Child O' Mine": no usable ISRC, but the nested album date is the real one.
+    expect(
+      mapTrack({
+        ...RAW_TRACK,
+        release_date: '2018-06-29',
+        album: { ...RAW_TRACK.album, release_date: '1987-07-21' },
+      })?.releaseYear,
+    ).toBe(1987);
+  });
+
+  it('leaves the year alone for the list endpoints, which carry an isrc but no release_date', () => {
+    // A playlist page has an isrc; filling releaseYear from it would make hasTrackDetail() true and
+    // skip the /track/{id} lookup that has the bpm and the two better year signals.
+    expect(mapTrack({ ...RAW_TRACK, isrc: 'GBA077700130' })?.releaseYear).toBeUndefined();
   });
 
   it('uses fallback artist/album for endpoints that omit them (album tracks)', () => {

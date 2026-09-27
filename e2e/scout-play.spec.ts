@@ -850,11 +850,16 @@ test('scout play · the gauntlet board is the progress bar', async ({ page }) =>
   await expect(board.first()).toBeVisible();
   await expect(page.getByTestId('scout-round-counter')).toContainText('0/32');
   await expect(page.getByTestId('scout-franchise')).toHaveCount(32);
-  await expect(page.locator('[data-testid="scout-franchise"][data-state="current"]')).toHaveCount(1);
+  // The live franchise must be indistinguishable from every other club still to come — marking it
+  // put the answer on the board before the guess, which broke Gauntlet for all three team modes.
+  await expect(page.locator('[data-testid="scout-franchise"][data-state="current"]')).toHaveCount(0);
+  await expect(page.locator('[data-testid="scout-franchise"][data-just-played="true"]')).toHaveCount(0);
 
   const answer = await getAnswer(page);
   await guess(page, answer!.accepted[0]);
   await expect(page.getByTestId('scout-reveal')).toBeVisible();
+  // Only once the round is over may the board name which club it was.
+  await expect(page.locator('[data-testid="scout-franchise"][data-just-played="true"]')).toHaveCount(1);
   await page.getByTestId('scout-next').click();
   await expect(page.locator('[data-testid="scout-franchise"][data-state="cleared"]')).toHaveCount(1);
   await expect(page.getByTestId('scout-round-counter')).toContainText('1/32');

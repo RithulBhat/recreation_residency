@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { FACE_ZOOM_MAX, FACE_ZOOM_MIN, LOGO_ZOOM_MAX, LOGO_ZOOM_MIN, SILHOUETTE_MAX, visualLadder } from '@/scout/stages';
+import type { SilhouetteCurtain } from './visuals';
 import {
   CURTAIN_FEATHER,
   FACE_JITTER,
@@ -66,12 +67,76 @@ describe('specPosition', () => {
   });
 });
 
+/**
+ * The mask's alpha at `yFraction` down the frame (0 = the top edge, 1 = the bottom edge).
+ *
+ * This is the CSS painted out by hand, so a test can assert what a player actually sees rather than
+ * what the numbers were meant to mean. `mask-size: 100% 200%` makes the mask box twice the frame,
+ * `mask-position-y: P%` resolves against (frame − mask) = −frame and so puts the box top at −P% of
+ * the frame, and `linear-gradient(to top, transparent 0 A%, #000 B%)` measures A and B from the
+ * BOTTOM of that box. Alpha 1 = the blacked-out layer is painted at full strength there, which is
+ * the only state in which none of the photo underneath can be seen.
+ */
+function maskAlphaAt(curtain: SilhouetteCurtain, yFraction: number): number {
+  const stops = curtain.maskImage.match(/transparent 0 ([\d.]+)%, #000 ([\d.]+)%/);
+  if (!stops) throw new Error(`unreadable mask: ${curtain.maskImage}`);
+  const clear = Number(stops[1]) / 100;
+  const solid = Number(stops[2]) / 100;
+  const boxHeight = Number(curtain.maskSize.split(' ')[1].replace('%', '')) / 100; // in frame heights
+  const position = Number(curtain.maskPosition.split(' ')[1].replace('%', '')) / 100;
+  const boxTop = position * (1 - boxHeight);
+  const boxBottom = boxTop + boxHeight;
+  // `to top` measures from the bottom of the mask box upward.
+  const f = (boxBottom - yFraction) / boxHeight;
+  if (f <= clear) return 0;
+  if (f >= solid) return 1;
+  return (f - clear) / (solid - clear);
+}
+
+/** 101 samples down the frame — a 7%-tall leak cannot hide between them. */
+function maskAlphaProfile(curtain: SilhouetteCurtain): number[] {
+  return Array.from({ length: 101 }, (_, i) => maskAlphaAt(curtain, i / 100));
+}
+
 describe('the silhouette curtain', () => {
   const rungs = visualLadder(5, 0, SILHOUETTE_MAX);
   const cuts = rungs.map((v) => silhouetteCurtain(v).cut);
 
   it('hits the five tested cuts at five tries', () => {
-    expect(cuts).toEqual([0, 20, 34, 50, 70]);
+    // The five measured landmarks, each carrying the feather that now hangs BELOW the solid edge.
+    expect(cuts).toEqual([0, 20, 34, 50, 70].map((c, i) => (i === 0 ? 0 : c + CURTAIN_FEATHER)));
+    expect(cuts).toEqual([0, 27, 41, 57, 77]);
+  });
+
+  it('rung 0 leaves NO visible photo — not one pixel row of the frame', () => {
+    // The bug this pins: the feather used to hang above the cut line, so at cut 0 the bottom 7% of
+    // the frame was only partly blacked out. On a 380 px stage that band is ~27 px of lit chin —
+    // measured on three seeds it handed over teeth, a beard, a tattoo and skin tone, on the
+    // HARDEST rung of the flagship mode.
+    const rung0 = silhouetteCurtain(rungs[0]);
+    expect(rung0.cut).toBe(SILHOUETTE_CUT.min);
+    for (const alpha of maskAlphaProfile(rung0)) expect(alpha).toBe(1);
+    // …and the shade layer really is painted (open would drop it from the DOM entirely).
+    expect(rung0.open).toBe(false);
+    expect(rung0.shadeFilter).toContain('brightness(0)');
+  });
+
+  it('every ladder, at every try count, starts on a fully opaque frame', () => {
+    for (const tries of [1, 2, 3, 4, 5, 6]) {
+      const first = silhouetteCurtain(visualLadder(tries, 0, SILHOUETTE_MAX)[0]);
+      expect(Math.min(...maskAlphaProfile(first)), `tries ${tries}`).toBe(1);
+    }
+  });
+
+  it('opens from the bottom up: later rungs clear a strictly taller band of the frame', () => {
+    const clear = rungs.map((v) => maskAlphaProfile(silhouetteCurtain(v)).filter((a) => a < 1).length);
+    expect(clear[0]).toBe(0);
+    for (let i = 1; i < clear.length; i++) expect(clear[i]).toBeGreaterThan(clear[i - 1]);
+    // and what it clears is always the BOTTOM of the frame, never a band in the middle
+    for (const v of rungs) {
+      const profile = maskAlphaProfile(silhouetteCurtain(v));
+      for (let i = 1; i < profile.length; i++) expect(profile[i]).toBeLessThanOrEqual(profile[i - 1]);
+    }
   });
 
   it('gives every rung a visibly different cut — the shipped filter ladder repeated itself', () => {
@@ -116,12 +181,14 @@ describe('the silhouette curtain', () => {
 
   it('masks from the bottom up, on a box twice the frame so the edge can animate', () => {
     const m = curtainMask(34);
-    expect(m.maskImage).toBe(`linear-gradient(to top, transparent 0 50%, #000 ${50 + CURTAIN_FEATHER / 2}%)`);
+    // The feather is spent BELOW the 50% line (the solid edge), never above it — that is what keeps
+    // cut 0 fully opaque instead of leaking a soft band across the bottom of the frame.
+    expect(m.maskImage).toBe(`linear-gradient(to top, transparent 0 ${50 - CURTAIN_FEATHER / 2}%, #000 50%)`);
     expect(m.maskSize).toBe('100% 200%');
     // mask-position-y resolves against (frame − mask) = −frame, so cut% puts the edge cut% up.
     expect(m.maskPosition).toBe('50% 34%');
     expect(curtainMask(0).maskPosition).toBe('50% 0%');
-    expect(curtainMask(140).maskPosition).toBe('50% 100%');
+    expect(curtainMask(140).maskPosition).toBe(`50% ${SILHOUETTE_CUT.reveal}%`);
   });
 
   it('keeps the head crop anchored at the top of the frame, then pulls back on the reveal', () => {
