@@ -7,6 +7,7 @@ import { PageTransition } from '@/components/PageTransition';
 import { BrandedLoader } from '@/components/BrandedLoader';
 import { useTheme } from '@/hooks/useTheme';
 import { R, isPlayPath } from '@/routes';
+import { PRICE } from '@/price/routes';
 
 const Residency = lazy(() => import('@/screens/Residency'));
 const Home = lazy(() => import('@/screens/Home'));
@@ -28,6 +29,11 @@ const Daily = lazy(() => import('@/screens/Daily'));
 const Stats = lazy(() => import('@/screens/Stats'));
 const Duel = lazy(() => import('@/screens/Duel'));
 const Challenge = lazy(() => import('@/screens/Challenge'));
+// Price Guess is routed against its own local constants while it is built. The wiring that adds
+// it to `GameKey` and the four exhaustive Records lands as one reviewed commit with the hub tile.
+const PriceSetup = lazy(() => import('@/screens/price/Setup'));
+const PricePlay = lazy(() => import('@/screens/price/Play'));
+const PriceResults = lazy(() => import('@/screens/price/Results'));
 
 const VOLUME_KEY = 'sg:volume';
 const MUTED_KEY = 'sg:muted';
@@ -105,6 +111,10 @@ export default function App() {
               <Route path={R.scout.daily} element={<ScoutDaily />} />
               <Route path={R.scout.stats} element={<ScoutStats />} />
               <Route path={R.scout.challenge} element={<ScoutChallenge />} />
+
+              <Route path={PRICE.setup} element={<PriceSetup />} />
+              <Route path={PRICE.play} element={<PricePlay />} />
+              <Route path={PRICE.results} element={<PriceResults />} />
 
               {Gallery && <Route path={R.gallery} element={<Gallery />} />}
               <Route path="*" element={<Placeholder />} />
