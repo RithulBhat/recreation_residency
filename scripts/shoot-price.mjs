@@ -63,6 +63,18 @@ for (const [name, w, h] of [['mobile', 375, 812], ['desktop', 1440, 900]]) {
     await page.screenshot({ path: `${out}/hilo-reveal-${name}.png`, fullPage: true });
   }
 
+  // Party lobbies (pre-connection view; the room itself needs two browsers)
+  for (const g of ['price', 'hilo']) {
+    await page.goto(`http://localhost:5487/#/${g}/party`, { waitUntil: 'networkidle' });
+    await page.waitForTimeout(700);
+    await page.screenshot({ path: `${out}/${g}-party-${name}.png`, fullPage: true });
+  }
+  for (const g of ['price', 'hilo']) {
+    await page.goto(`http://localhost:5487/#/${g}/daily`, { waitUntil: 'networkidle' });
+    await page.waitForTimeout(700);
+    await page.screenshot({ path: `${out}/${g}-daily-${name}.png`, fullPage: true });
+  }
+
   await page.close();
 }
 await b.close();
