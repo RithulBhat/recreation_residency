@@ -6,8 +6,34 @@ import { buildPool, buildPlayerSubject } from './subjects';
 import { fixtureBundle, findFixturePlayer, findFixtureTeam } from './fixtures';
 import {
   accuracy,
+  activePlayer,
   allGuesses,
+  awaitingBuzz,
+  blitzTimeLeftMs,
+  buzzKeyFor,
   canGuess,
+  canPlayerBuzz,
+  canPlayerGuess,
+  currentFormat,
+  currentFormatInfo,
+  formatProgress,
+  franchiseBoard,
+  franchisesCleared,
+  franchisesTotal,
+  handover,
+  isLockedOut,
+  isMultiplayerRun,
+  isTie,
+  leader,
+  livesLeft,
+  lockedOutPlayerIds,
+  nextPlayer,
+  playerById,
+  roundRungs,
+  runPlayers,
+  standings,
+  survivalTier,
+  whoseTurn,
   completedRounds,
   currentRound,
   currentStage,
@@ -146,5 +172,95 @@ describe('progress and totals', () => {
     const st = reduce(start({ roundTimer: 30 }), { type: 'quit', now: T0 + 1 });
     expect(timeLeftMs(st, T0 + 2)).toBeNull();
     expect(isFinished(st)).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// Session-format selectors
+// ---------------------------------------------------------------------------------------------
+
+describe('format selectors on an idle state', () => {
+  const idle = createInitialScoutState();
+
+  it('read as standard, empty and safe', () => {
+    expect(currentFormat(idle)).toBe('standard');
+    expect(currentFormatInfo(idle)?.id).toBe('standard');
+    expect(isMultiplayerRun(idle)).toBe(false);
+    expect(runPlayers(idle)).toEqual([]);
+    expect(playerById(idle, 'you')).toBeUndefined();
+    expect(activePlayer(idle)).toBeUndefined();
+    expect(whoseTurn(idle)).toBeUndefined();
+    expect(nextPlayer(idle)).toBeUndefined();
+    expect(handover(idle)).toBeNull();
+    expect(standings(idle)).toEqual([]);
+    expect(leader(idle)).toBeUndefined();
+    expect(isTie(idle)).toBe(false);
+    expect(lockedOutPlayerIds(idle)).toEqual([]);
+    expect(isLockedOut(idle, 'p1')).toBe(false);
+    expect(awaitingBuzz(idle)).toBe(false);
+    expect(canPlayerBuzz(idle, 'p1')).toBe(false);
+    expect(canPlayerGuess(idle, 'p1')).toBe(false);
+    expect(buzzKeyFor(idle, 'p1')).toBeUndefined();
+    expect(livesLeft(idle)).toBeNull();
+    expect(survivalTier(idle)).toBeNull();
+    expect(franchisesCleared(idle)).toEqual([]);
+    expect(franchisesTotal(idle)).toBe(0);
+    expect(franchiseBoard(idle)).toEqual([]);
+    expect(blitzTimeLeftMs(idle, 1)).toBeNull();
+  });
+
+  it('formatProgress is renderable before anything has started', () => {
+    const p = formatProgress(idle, 0);
+    expect(p).toMatchObject({
+      format: 'standard',
+      round: 0,
+      correct: 0,
+      livesLeft: null,
+      timeLeftMs: null,
+      franchisesCleared: 0,
+      franchisesTotal: 0,
+      awaitingBuzz: false,
+    });
+    expect(p.activePlayerId).toBeUndefined();
+    expect(p.label.length).toBeGreaterThan(0);
+  });
+
+  it('tolerates a state that predates formats entirely', () => {
+    // no `players`, no `activePlayerIndex`, no `format` — exactly a v1 persisted run
+    const legacy = { ...createInitialScoutState(), status: 'playing' as const };
+    delete (legacy as { players?: unknown }).players;
+    delete (legacy as { activePlayerIndex?: unknown }).activePlayerIndex;
+    delete (legacy.settings as { format?: unknown }).format;
+    expect(currentFormat(legacy)).toBe('standard');
+    expect(runPlayers(legacy)).toEqual([]);
+    expect(activePlayer(legacy)).toBeUndefined();
+    expect(livesLeft(legacy)).toBeNull();
+    expect(() => formatProgress(legacy, 0)).not.toThrow();
+  });
+});
+
+describe('roundRungs and buzz keys', () => {
+  it('reads the ladder off the round, not off settings.tries', () => {
+    const st = start({ tries: 4 });
+    const r = currentRound(st)!;
+    expect(roundRungs(r)).toBe(4);
+    expect(roundRungs({ ...r, stages: [] })).toBe(1);
+  });
+
+  it('maps the first two seats to A and L', () => {
+    const settings = normalizeScoutSettings({
+      format: 'duel',
+      players: [
+        { id: 'a1', name: 'One', emoji: '1️⃣', color: '#a855f7' },
+        { id: 'b2', name: 'Two', emoji: '2️⃣', color: '#22d3ee' },
+      ],
+    });
+    const subjects = buildPool(fixtureBundle(), settings, createRng('pool'));
+    const st = reduce(createInitialScoutState(), { type: 'start', settings, subjects, now: T0 }, createRng('run'));
+    expect(buzzKeyFor(st, 'a1')).toBe('a');
+    expect(buzzKeyFor(st, 'b2')).toBe('l');
+    expect(buzzKeyFor(st, 'nobody')).toBeUndefined();
+    expect(playerById(st, 'a1')?.name).toBe('One');
+    expect(isMultiplayerRun(st)).toBe(true);
   });
 });

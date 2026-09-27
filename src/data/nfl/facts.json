@@ -153,7 +153,7 @@
   "DEN": {
     "founded": 1960,
     "superBowls": [1997, 1998, 2015],
-    "aliases": ["broncos", "denver", "denver broncos", "den", "mile high"],
+    "aliases": ["broncos", "denver", "denver broncos", "den"],
     "rivals": ["KC", "LV", "LAC"],
     "legends": ["John Elway", "Terrell Davis", "Shannon Sharpe", "Von Miller", "Peyton Manning", "Champ Bailey", "Floyd Little", "Randy Gradishar"],
     "facts": [
@@ -191,7 +191,7 @@
     "rivals": ["CHI", "MIN", "DET"],
     "legends": ["Bart Starr", "Brett Favre", "Aaron Rodgers", "Reggie White", "Ray Nitschke", "Don Hutson", "Forrest Gregg", "Jim Taylor"],
     "facts": [
-      "It is named for the meat-packing company that paid for its first jerseys in 1919.",
+      "From 1953 through 1994 it played two or three home games a season in a larger city elsewhere in the state, and consolidated into a single stadium only in 1995.",
       "It is the only community-owned, non-profit franchise in the NFL, with hundreds of thousands of shareholders.",
       "It won three consecutive league championships twice, in 1929-31 and again in 1965-67.",
       "The 1967 championship game it hosted, played at 13 below zero, is known as the Ice Bowl.",
@@ -478,7 +478,7 @@
     "rivals": ["SEA", "LAR", "DAL"],
     "legends": ["Joe Montana", "Jerry Rice", "Ronnie Lott", "Steve Young", "Charles Haley", "Patrick Willis", "Frank Gore", "Bryant Young"],
     "facts": [
-      "It is named for the prospectors of an 1849 gold rush.",
+      "It went 12-2 in 1948 in the league where it began, lost both of those games to the same unbeaten team, and still missed the championship game.",
       "It was one of three teams taken into the NFL for 1950 when a rival league folded.",
       "Its 1950s backfield was called the Million Dollar Backfield, and all four members reached the Hall of Fame.",
       "A late touchdown pass in the 1981 conference championship game is remembered simply as The Catch.",

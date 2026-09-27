@@ -5,7 +5,11 @@
 export {
   VISUAL_MODES,
   VISUAL_RANGE,
-  SILHOUETTE_STOPS,
+  SILHOUETTE_CUT,
+  SILHOUETTE_CUT_STOPS,
+  SILHOUETTE_OBJECT_POSITION,
+  SILHOUETTE_SCALE,
+  CURTAIN_FEATHER,
   FACE_ZOOM_STOPS,
   LOGO_ZOOM_STOPS,
   MIN_STAGE_PX,
@@ -14,16 +18,18 @@ export {
   FACE_JITTER,
   LOGO_FOCUS_RANGE,
   clamp01,
+  curtainMask,
   faceOriginX,
   isVisualMode,
   lerp,
   logoOrigin,
+  silhouetteCurtain,
   silhouetteFilter,
   specPosition,
   visualDescription,
   visualStyle,
 } from './visuals';
-export type { VisualMode, VisualStyle, VisualStyleInput } from './visuals';
+export type { SilhouetteCurtain, SilhouetteFilter, VisualMode, VisualStyle, VisualStyleInput } from './visuals';
 
 export {
   VERDICT_LABEL,

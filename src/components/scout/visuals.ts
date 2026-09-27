@@ -12,11 +12,19 @@
  *
  * ## The ladder
  * The engine hands a screen `stage.visual` (0 → 1) whose per-mode bounds live in `@/scout/stages`
- * (silhouette 0→0.85, faceZoom 0.06→0.95, logoZoom 0.1→0.95). Those bounds are mapped onto the
- * spec's five stops via {@link specPosition}, which deliberately stops SHORT of the last stop while
- * a round is live: stop 1.0 is the clean photo, and that is the payoff frame — it is only reached
- * with `revealed: true`. So the hardest rung is the spec's stop 0, the easiest LIVE rung is stop
- * 0.75 (silhouette: `blur(7px)`, full colour, still unreadable as a face), and the reveal is clean.
+ * (silhouette 0→0.85, faceZoom 0.06→0.95, logoZoom 0.1→0.95). {@link specPosition} normalizes those
+ * onto a 0 → 1 ladder position. The zoom modes stop SHORT of 1 while a round is live (1.0 is the
+ * clean frame, the payoff, reached only with `revealed: true`); the silhouette spans its whole live
+ * range and keeps the reveal out of reach by a different mechanism — the curtain never opens past
+ * 82% while the round is live (see {@link silhouetteCurtain}).
+ *
+ * ## Silhouette is a CURTAIN, not a filter ramp
+ * The first shipped version escalated by CSS filter alone, and `scratchpad/scout1/SILHOUETTE-LADDER.md`
+ * measured the result: rungs 0–2 were the SAME black shape with a slightly different rim, because
+ * these headshots are lit against transparency and there is no natural filter step between "pure
+ * black" and "blurred colour". The fix is two stacked copies of the same photo — a colour layer, and
+ * a blacked-out layer above it masked away from the bottom up, so the face emerges while the hair
+ * (the strongest clue) stays black longest.
  *
  * Everything here is pure and framework-free so the ladder can be unit tested and a screenshot
  * script can render it without React.
@@ -59,7 +67,9 @@ function round(n: number, places = 3): number {
  * `ceiling` and 1 is the reveal — the clean photo is never shown before the answer.
  */
 export const VISUAL_RANGE: Readonly<Record<VisualMode, { min: number; max: number; ceiling: number }>> = {
-  silhouette: { min: 0, max: SILHOUETTE_MAX, ceiling: 0.75 },
+  // The silhouette spans its whole ladder: the curtain, not the ceiling, is what holds the photo
+  // back — its easiest LIVE rung still keeps the top 18% of the frame blacked out.
+  silhouette: { min: 0, max: SILHOUETTE_MAX, ceiling: 1 },
   faceZoom: { min: FACE_ZOOM_MIN, max: FACE_ZOOM_MAX, ceiling: 0.8 },
   logoZoom: { min: LOGO_ZOOM_MIN, max: LOGO_ZOOM_MAX, ceiling: 0.8 },
 };
@@ -105,52 +115,128 @@ function sample<T extends Record<string, number>>(stops: ReadonlyArray<Stop<T>>,
   return last.value;
 }
 
-interface SilhouetteParams extends Record<string, number> {
-  /** 0 = pure black shape, 1 = untouched photo. */
-  brightness: number;
-  contrast: number;
-  /** px. Never above 12 (the spec's `blur(26px)` was pure mush). */
-  blur: number;
-  /** Rim-light radius in px — the glow that traces the hairline. */
-  rim: number;
-  /** Second, wider rim pass for a fuller outline. */
-  rim2: number;
-  /** Head-crop zoom; eases back to the full bust on the reveal. */
-  scale: number;
-  /**
-   * MEASURED, not copied. The spec's `scale(2.1)` from `50% 16%` clipped the crown off every head at
-   * the real stage size, and at 2.1 even from the top the head fills the frame edge to edge — a blob
-   * again (`scratchpad/scout2/core/calib-crop.png`). An alpha scan of 24 star headshots put the crown
-   * between 0.5% and 16.7% down the frame (median 9.4%), so anchoring at the very top and easing the
-   * zoom to 1.8 keeps every crown, both ears and the jaw inside the square, with margin to spare.
-   */
-  originY: number;
+/**
+ * The CURTAIN, in one number: `cut` is the % of the frame height, measured from the BOTTOM, that
+ * shows the real photo. The blacked-out layer above it is masked away below that line, so the chin
+ * arrives first and the hair last. 100 = the reveal.
+ *
+ * `scratchpad/scout1/SILHOUETTE-LADDER.md` gives the rungs by what the player GAINS — shadow →
+ * chin and mouth → nose → eyes and brows → nearly everything, softened — and a first cut at the
+ * numbers (28/40/50/62/82) taken against a looser crop. Re-measured against the crop this game
+ * actually ships (`scale(1.8)` anchored at the top of the frame, which fills the square with the
+ * head), the landmarks sit at roughly: chin 90%, mouth 78%, nose 70%, eyes 53%, brows 48%,
+ * hairline 40% down the frame — and a cut of C puts the curtain's solid edge at (94 - C)% from the
+ * top. Evidence: `scratchpad/scoutfix2/ladder/calib/sheet.png` (a linear 2 -> 92 sweep over three
+ * players) and `.../sil-v2/sheet.png` (the shipped ladder over six). Hence:
+ *
+ *   0  -> a true shadow: the head outline and hair mass, nothing of the face
+ *   20 -> the chin and the line of the mouth
+ *   34 -> the mouth and nose
+ *   50 -> the eyes and brows, hair still solid black
+ *   70 -> nearly everything, softened by a small blur on the colour layer
+ *
+ * Intermediate positions interpolate, so a 2-6 try ladder spaces evenly through the same features.
+ */
+export const SILHOUETTE_CUT_STOPS: ReadonlyArray<Stop<{ cut: number; blur: number }>> = [
+  { at: 0, value: { cut: 0, blur: 0 } },
+  { at: 0.25, value: { cut: 20, blur: 0 } },
+  { at: 0.5, value: { cut: 34, blur: 0 } },
+  { at: 0.75, value: { cut: 50, blur: 0 } },
+  { at: 1, value: { cut: 70, blur: 3 } },
+];
+
+/** The cut of the hardest rung, the easiest LIVE rung, and the reveal. */
+export const SILHOUETTE_CUT = { min: 0, max: 70, reveal: 100 } as const;
+
+/**
+ * How much of the frame height the curtain's edge is soft over, in %. Without it the mask ends in a
+ * hard horizontal line across the face; 7% reads as a lifting shadow.
+ */
+export const CURTAIN_FEATHER = 7;
+
+/**
+ * The head crop, MEASURED (`scratchpad/scout2/core/calib-crop.png`): an alpha scan of 24 star
+ * headshots put the crown between 0.5% and 16.7% down the frame, so anchoring the zoom at the very
+ * top of the frame at 1.8× keeps every crown, both ears and the jaw inside the square. The spec's
+ * `scale(2.1)` from `50% 16%` clipped the crown off every head. The reveal relaxes to 1×.
+ */
+export const SILHOUETTE_SCALE = 1.8;
+export const SILHOUETTE_OBJECT_POSITION = '50% 12%';
+
+/** Everything the two stacked layers need to paint one rung of the curtain. */
+export interface SilhouetteCurtain {
+  /** % of the frame height showing the photo, from the bottom. 100 = the reveal. */
+  cut: number;
+  /** True once the curtain is fully open — the shade layer is not painted at all. */
+  open: boolean;
+  /** `mask-image` for the blacked-out layer (also set on `-webkit-mask-image`: Safari needs it). */
+  maskImage: string;
+  /** Companion `mask-size` / `mask-position`, which is what actually animates. */
+  maskSize: string;
+  maskPosition: string;
+  /** Filter for the blacked-out layer: a flat black shape with an accent rim tracing the hairline. */
+  shadeFilter: string;
+  /** Filter for the colour layer underneath — `none` until the last live rung softens it. */
+  baseFilter: string;
 }
 
 /**
- * Spec ladder: pure black + rim → fuller rim → shape with a hint of tone → full colour, blurred →
- * clean. `scale`/`originY` hold the tested head crop (2.1 from `50% 16%`) and only relax at the
- * reveal, so the payoff frame is the whole photo.
+ * Why `mask-position` and not the gradient's own stops: `mask-image` between two gradients does not
+ * interpolate reliably, so the curtain would snap. Instead the gradient is FIXED (transparent over
+ * the bottom half of a mask box twice the frame's height, opaque over the top half) and the mask box
+ * slides. `mask-position-y: cut%` resolves against (frame height − mask height) = −frame height, so
+ * it puts the box's top at −cut% of the frame: its midpoint — the curtain edge — lands exactly
+ * `cut%` up from the bottom. A percentage animates, so the reveal glides.
  */
-export const SILHOUETTE_STOPS: ReadonlyArray<Stop<SilhouetteParams>> = [
-  { at: 0, value: { brightness: 0, contrast: 1, blur: 0, rim: 3, rim2: 0, scale: 1.8, originY: 0 } },
-  { at: 0.25, value: { brightness: 0, contrast: 1, blur: 0, rim: 4, rim2: 3, scale: 1.8, originY: 0 } },
-  { at: 0.5, value: { brightness: 0.22, contrast: 1.4, blur: 6, rim: 2, rim2: 0, scale: 1.8, originY: 0 } },
-  { at: 0.75, value: { brightness: 1, contrast: 1, blur: 7, rim: 0, rim2: 0, scale: 1.78, originY: 0 } },
-  { at: 1, value: { brightness: 1, contrast: 1, blur: 0, rim: 0, rim2: 0, scale: 1, originY: 0 } },
-];
+export function curtainMask(cut: number): Pick<SilhouetteCurtain, 'maskImage' | 'maskSize' | 'maskPosition'> {
+  const c = clamp01(cut / 100) * 100;
+  // The feather is half as wide inside a mask box of twice the height.
+  const half = round(CURTAIN_FEATHER / 2, 2);
+  return {
+    maskImage: `linear-gradient(to top, transparent 0 50%, #000 ${50 + half}%)`,
+    maskSize: '100% 200%',
+    maskPosition: `50% ${round(c, 2)}%`,
+  };
+}
+
+/** The rung of the curtain for an engine `visual`. `revealed` opens it all the way. */
+export function silhouetteCurtain(visual: number, revealed = false): SilhouetteCurtain {
+  const u = specPosition('silhouette', visual, revealed);
+  const open = revealed;
+  const { cut, blur } = open ? { cut: SILHOUETTE_CUT.reveal, blur: 0 } : sample(SILHOUETTE_CUT_STOPS, u);
+  // Whole percentage points: a 0.03% difference in the curtain edge is not a rung, and an integer
+  // keeps `data-cut` and the CSS readable.
+  const edge = Math.round(cut);
+  return {
+    cut: edge,
+    open,
+    ...curtainMask(edge),
+    shadeFilter: silhouetteFilter({ brightness: 0, contrast: 1, blur: 0, rim: 3 }),
+    baseFilter: blur > 0.05 ? `blur(${round(blur, 2)}px)` : 'none',
+  };
+}
 
 interface ZoomParams extends Record<string, number> {
   scale: number;
   originY: number;
 }
 
-/** Eye-level zoom, easing out to the full head. NEVER anchored on the forehead (spec: REJECT). */
+/**
+ * Eye-level zoom, easing out to the full head. NEVER anchored on the forehead (spec: REJECT).
+ *
+ * MEASURED and re-cut (`scratchpad/scoutfix2/ladder/face-v2|v3/sheet.png`): the spec's `scale(3.6)`
+ * hardest rung showed both eyes, the nose, the moustache and half the beard — a portrait, not a
+ * puzzle. 6.2× at an origin {@link faceOriginX} keeps deliberately OFF the centre line lands on one
+ * eye and its brow, which is a genuine single-feature crop. The stops below it are spaced
+ * geometrically (~1.3× per rung) so the ladder escalates evenly instead of stalling early and
+ * jumping at the end. Live rungs stop at the mode's 0.8 ceiling (~2.0×), so the full head is still
+ * the reveal.
+ */
 export const FACE_ZOOM_STOPS: ReadonlyArray<Stop<ZoomParams>> = [
-  { at: 0, value: { scale: 3.6, originY: 34 } },
-  { at: 0.25, value: { scale: 2.8, originY: 30 } },
-  { at: 0.5, value: { scale: 2.2, originY: 24 } },
-  { at: 0.75, value: { scale: 1.6, originY: 18 } },
+  { at: 0, value: { scale: 6.2, originY: 36 } },
+  { at: 0.25, value: { scale: 4.4, originY: 32 } },
+  { at: 0.5, value: { scale: 3.15, originY: 27 } },
+  { at: 0.75, value: { scale: 2.25, originY: 21 } },
   { at: 1, value: { scale: 1, originY: 12 } },
 ];
 
@@ -182,9 +268,18 @@ function remap(value: number, fromMin: number, fromMax: number, toMin: number, t
  * These squeeze it into the tested window while staying a pure function of the same seed, so the
  * framing is reproducible for a daily / challenge run.
  */
+/**
+ * Deliberately BIMODAL, not a smooth jitter across the centre: at 6.2× a crop centred on 50% frames
+ * the bridge of the nose and catches BOTH eyes, which is two features. The seed picks a side and
+ * then a spot within that side's band, so the hardest rung always lands on one eye while repeated
+ * subjects still do not frame identically. Both bands stay inside the spec's ±6%.
+ */
 export function faceOriginX(focus: ScoutFocus | undefined): number {
   const x = focus?.x ?? 0.5;
-  return remap(x, 0.36, 0.64, 0.5 - FACE_JITTER, 0.5 + FACE_JITTER) * 100;
+  const inner = FACE_JITTER * 0.4; // the closest either band comes to the centre line
+  return x < 0.5
+    ? remap(x, 0.36, 0.5, 0.5 - FACE_JITTER, 0.5 - inner) * 100
+    : remap(x, 0.5, 0.64, 0.5 + inner, 0.5 + FACE_JITTER) * 100;
 }
 
 export function logoOrigin(focus: ScoutFocus | undefined): { x: number; y: number } {
@@ -212,7 +307,18 @@ export interface VisualStyle {
 /** The accent used for the rim light. A token, so all four themes rim in their own colour. */
 export const RIM_COLOR = 'var(--sg-accent-2-vivid)';
 
-export function silhouetteFilter(p: Pick<SilhouetteParams, 'brightness' | 'contrast' | 'blur' | 'rim' | 'rim2'>): string {
+export interface SilhouetteFilter {
+  /** 0 = pure black shape, 1 = untouched photo. */
+  brightness: number;
+  contrast: number;
+  /** px. Never above 12 (the spec's `blur(26px)` was pure mush). */
+  blur: number;
+  /** Rim-light radius in px — the glow that traces the hairline. CONSTANT across the ladder: the
+   *  spec measured that escalating the rim reads as no change at all. */
+  rim: number;
+}
+
+export function silhouetteFilter(p: SilhouetteFilter): string {
   const parts: string[] = [];
   // brightness(0) is what makes a silhouette out of a transparent-background PNG.
   parts.push(`brightness(${round(p.brightness)})`);
@@ -220,7 +326,6 @@ export function silhouetteFilter(p: Pick<SilhouetteParams, 'brightness' | 'contr
   if (p.blur > 0.05) parts.push(`blur(${round(p.blur, 2)}px)`);
   // drop-shadow on an alpha silhouette = a rim light tracing the outline.
   if (p.rim > 0.05) parts.push(`drop-shadow(0 0 ${round(p.rim, 2)}px ${RIM_COLOR})`);
-  if (p.rim2 > 0.05) parts.push(`drop-shadow(0 1px ${round(p.rim2, 2)}px ${RIM_COLOR})`);
   return parts.join(' ');
 }
 
@@ -239,15 +344,16 @@ export function visualStyle({ mode, visual, revealed = false, focus }: VisualSty
   const u = specPosition(mode, visual, revealed);
 
   if (mode === 'silhouette') {
-    const p = sample(SILHOUETTE_STOPS, u);
-    const filter = silhouetteFilter(p);
+    // The COLOUR layer's style. Both layers share it (the crop must line up exactly); the shade
+    // layer overrides `filter` with the curtain's own, and its wrapper carries the mask.
+    const curtain = silhouetteCurtain(visual, revealed);
     return {
-      filter: filter === 'brightness(1)' ? 'none' : filter,
-      transform: `scale(${round(p.scale, 2)})`,
-      transformOrigin: `50% ${round(p.originY, 1)}%`,
+      filter: curtain.baseFilter,
+      transform: `scale(${revealed ? 1 : SILHOUETTE_SCALE})`,
+      transformOrigin: '50% 0%',
       objectFit: 'cover',
-      objectPosition: '50% 12%',
-      opacity: u < 0.25 ? 0.95 : 1,
+      objectPosition: SILHOUETTE_OBJECT_POSITION,
+      opacity: 1,
     };
   }
 
@@ -281,9 +387,12 @@ export function visualDescription(mode: VisualMode, visual: number, revealed = f
   if (revealed) return mode === 'logoZoom' ? 'The full team logo.' : 'The full photo.';
   const u = specPosition(mode, visual, revealed);
   if (mode === 'silhouette') {
-    if (u < 0.35) return 'A blacked-out silhouette of the player, rim-lit.';
-    if (u < 0.6) return 'The silhouette, with a hint of tone coming through.';
-    return 'The photo in colour, heavily blurred.';
+    const { cut } = silhouetteCurtain(visual, revealed);
+    if (cut < 10) return 'A blacked-out, rim-lit silhouette of the player — the outline and the hair, nothing else.';
+    if (cut < 28) return 'The silhouette, with the chin and the line of the mouth showing.';
+    if (cut < 42) return 'The silhouette, with the mouth and nose showing.';
+    if (cut < 60) return 'The silhouette, with the eyes and brows showing; the hair is still blacked out.';
+    return 'Almost the whole face, softened; only the hair is still blacked out.';
   }
   if (mode === 'faceZoom') {
     const p = sample(FACE_ZOOM_STOPS, u);

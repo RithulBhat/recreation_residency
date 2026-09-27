@@ -21,6 +21,7 @@ import {
   ScoutRules,
   ScoutStartBar,
   roundsLabel,
+  scoutDifficultyApplies,
   scoutDifficultyLabel,
   scoutModeName,
   scoutPackCounts,
@@ -109,7 +110,11 @@ export default function ScoutSetup() {
 
   const packNames = scoutPackNames(settings.packIds);
   const modeInfo = SCOUT_MODES.find((m) => m.id === settings.mode);
-  // `null` on a franchise-only run: the tier filters players, so it is not part of these rules.
+  // Does the panel show a Difficulty control at all? False on a franchise-only run, where every
+  // tier deals all 32 clubs (`ScoutRules` swaps the chips for the reason).
+  const tiersApply = scoutDifficultyApplies(settings);
+  // The tier worth NAMING in a summary — null at `any` (nothing to say) and on a franchise-only run
+  // (nothing it does). Not the same question as `tiersApply`: the control is there at `any`.
   const tierLabel = scoutDifficultyLabel(settings);
   const rulesSummary = [tierLabel, roundsLabel(settings.rounds), triesLabel(settings.tries), timerLabel(settings.roundTimer)]
     .filter((part): part is string => part !== null)
@@ -180,11 +185,18 @@ export default function ScoutSetup() {
       <ScoutPresetRow />
 
       {/*
-        Two columns that end near each other. The pack picker is by far the tallest block, so it
+        Two columns that END TOGETHER at 1440. The pack picker is the tallest single block, so it
         carries a column on its own with the short explainer under it; mode + rules share the other.
-        (Mode + Packs together left ~750 px of dead right column at 1440.)
+        (Mode + Packs together left ~750 px of dead right column.)
+
+        Mode + rules still runs 100–190 px longer than packs + explainer, and that is not fixable by
+        reordering — no split of four blocks this size lands closer. So the slack is closed from both
+        ends: the pack grid shows six rows instead of five from `lg` up (COLLAPSED_PACKS_WIDE), and
+        the explainer grows into whatever is left. No `lg:items-start` here, so the right column is
+        as tall as the row and its last card can flex; below `lg` there is one card per row and
+        stretching is a no-op.
       */}
-      <div className="grid gap-4 lg:grid-cols-2 lg:items-start">
+      <div className="grid gap-4 lg:grid-cols-2">
         <div className="flex min-w-0 flex-col gap-4" data-col="left">
           <SetupSection
             id="scout-mode"
@@ -201,7 +213,7 @@ export default function ScoutSetup() {
           <SetupSection
             id="scout-rules"
             icon={<ListChecks />}
-            title={tierLabel !== null ? 'Difficulty & rules' : 'Rules'}
+            title={tiersApply ? 'Difficulty & rules' : 'Rules'}
             summary={rulesSummary}
             defaultOpen={!mobile}
           >
@@ -218,14 +230,14 @@ export default function ScoutSetup() {
             <ScoutPackPicker counts={counts} poolSize={poolSize} loading={loading} />
           </SetupSection>
 
-          <div className="glass rounded-3xl p-4 sm:p-5">
+          <div className="glass flex flex-col rounded-3xl p-4 sm:p-5 lg:flex-1" data-testid="scout-how-a-round">
             <h2 className="font-display text-base font-bold text-fg">How a round plays</h2>
             <p className="mt-1.5 text-sm text-muted">
               {settings.mixModes
                 ? 'Every round picks a mode this subject can actually be played in — a silhouette, a redacted play, a stat sheet, a logo.'
                 : (modeInfo?.how ?? '')}
             </p>
-            <ol className="mt-3 flex flex-col gap-2 text-sm text-fg">
+            <ol className="mt-3 flex flex-col gap-2 text-sm text-fg lg:flex-1 lg:justify-between lg:gap-3">
               <li className="flex gap-2.5">
                 <span className="grid size-5 shrink-0 place-items-center rounded-full bg-gradient-accent font-mono text-[10px] font-bold text-accent-fg">
                   1

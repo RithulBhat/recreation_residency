@@ -5,6 +5,11 @@
  * shape as `gameStore` for Songooner. `dispatch` stamps `now = Date.now()` when omitted and passes
  * the rng memoized at `start`. All rules live in the reducer; read its header for the semantics.
  *
+ * SESSION FORMATS need nothing from the store beyond two extra dispatchers, `guessAs` and `buzz`
+ * (duel / party). Everything else — the blitz clock, lives, the gauntlet board, whose turn it is —
+ * lives in the state the reducer returns and is read through `@/scout/selectors`. The screens drive
+ * every clock the same way they already do, by dispatching `tick`.
+ *
  * `useScoutSettingsStore` persists the Scout setup draft under `sg:scout` (Songooner's
  * `settingsStore` is a different agent's file and is not touched). Everything that comes out of
  * storage goes back through `normalizeScoutSettings`.
@@ -32,6 +37,14 @@ export interface ScoutStore {
   dispatch(action: ScoutInput): void;
   start(settings: ScoutSettings, subjects: readonly ScoutSubject[], now?: number): void;
   guess(text: string, now?: number): void;
+  /**
+   * A guess attributed to one player — duel and party. In a buzzer duel this doubles as the buzz
+   * when nobody has buzzed yet, and is ignored when that player is locked out or it is not their
+   * turn (exactly like Songooner's `guess(text, playerId)`).
+   */
+  guessAs(playerId: string, text: string, now?: number): void;
+  /** Duel buzzer: claim the round. A no-op in every other format. */
+  buzz(playerId: string, now?: number): void;
   skip(now?: number): void;
   giveUp(now?: number): void;
   timeout(now?: number): void;
@@ -66,6 +79,8 @@ export const useScoutStore = create<ScoutStore>()((set, get) => {
     dispatch,
     start: (settings, subjects, now) => dispatch({ type: 'start', settings, subjects: subjects.slice(), now }),
     guess: (text, now) => dispatch({ type: 'guess', text, now }),
+    guessAs: (playerId, text, now) => dispatch({ type: 'guess', text, playerId, now }),
+    buzz: (playerId, now) => dispatch({ type: 'buzz', playerId, now }),
     skip: (now) => dispatch({ type: 'skip', now }),
     giveUp: (now) => dispatch({ type: 'giveUp', now }),
     timeout: (now) => dispatch({ type: 'timeout', now }),

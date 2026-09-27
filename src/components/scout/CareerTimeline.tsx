@@ -1,4 +1,5 @@
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
+import { Lock } from 'lucide-react';
 import { cn } from '@/components/ui';
 import type { ScoutClue } from '@/scout/types';
 
@@ -72,11 +73,15 @@ export function CareerTimeline({ clues, allClues, className }: CareerTimelinePro
             </motion.li>
           ))}
         </AnimatePresence>
+        {/* Locked nodes SAY locked. Two unlabelled grey pills is the universal "still loading"
+            idiom, and at 45% opacity they all but vanished on the daylight theme. */}
         {Array.from({ length: locked }, (_, i) => (
-          <li key={`locked-${i}`} className="relative py-2.5 opacity-45" aria-hidden>
-            <span className="absolute -left-8 top-3.5 size-5 rounded-full border-2 border-dashed border-border" />
-            <span className="block h-2.5 w-20 rounded-full bg-fg/12" />
-            <span className="mt-1.5 block h-3.5 w-32 rounded-md bg-fg/10" />
+          <li key={`locked-${i}`} className="relative py-2.5 text-muted" aria-hidden data-testid="scout-career-locked">
+            <span className="absolute -left-8 top-3 grid size-5 place-items-center rounded-full border-2 border-dashed border-border-strong/70">
+              <Lock className="size-2.5" />
+            </span>
+            <span className="font-mono text-[11px] font-semibold uppercase tracking-[0.16em]">Locked</span>
+            <span className="mt-1 block h-5 w-32 rounded-md border border-dashed border-border-strong/70 bg-fg/[0.04]" />
           </li>
         ))}
       </ol>

@@ -25,8 +25,12 @@ export const SCOUT_TEAM_COUNT = 32;
 /** `src/data/nfl/meta.json` → `counts.highlights` (real scoring plays, names redacted in play). */
 export const SCOUT_PLAY_COUNT = 1700;
 
-/** `src/data/nfl/clips.json`.length — one verified official highlight video per player. */
-export const SCOUT_CLIP_COUNT = 215;
+/**
+ * `src/data/nfl/clips.json`.length — one official highlight video per player, every one
+ * provenance-checked to the league or a team channel. 384 of them are additionally measured to
+ * PLAY in an embed (`PlayerClip.embeddable`); the rest still open on YouTube from the reveal.
+ */
+export const SCOUT_CLIP_COUNT = 510;
 
 /** `sg:stats` — the key `src/store/statsStore.ts` persists under. Asserted in `useLastVisit.test.ts`. */
 export const STATS_KEY = 'sg:stats';

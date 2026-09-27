@@ -78,7 +78,7 @@ export function SessionPanel({ state, className }: SessionPanelProps) {
         </div>
       </dl>
 
-      <div className="flex flex-wrap items-center gap-1.5 border-t border-border pt-3">
+      <div className="mt-auto flex flex-wrap items-center gap-1.5 border-t border-border pt-3">
         <span className="rounded-full border border-border bg-surface px-2 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-wider text-muted">
           {DIFFICULTY_LABEL[settings.difficulty] ?? settings.difficulty}
         </span>

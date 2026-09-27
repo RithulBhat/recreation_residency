@@ -16,7 +16,7 @@ export function scoutHeadline(record: ScoutGameRecord): string {
   if (record.correct === record.played) return record.played >= 5 ? 'Perfect board.' : 'Clean sheet.';
   if (ratio >= 0.8) return 'Elite eye.';
   if (ratio >= 0.6) return 'Solid film session.';
-  if (ratio >= 0.4) return 'You know some guys.';
+  if (ratio >= 0.4) return 'You know the league.';
   if (record.correct > 0) return 'Rough tape.';
   return 'Back to the film room.';
 }

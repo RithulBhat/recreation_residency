@@ -11,6 +11,42 @@ const VIEWPORTS = {
 
 const THEMES = ['midnight', 'vinyl', 'y2k', 'daylight'] as const;
 
+/** Highlight Scout's home hero. Its `<h1>` is the route's outline, so it is asserted by name. */
+const SCOUT_H1 = 'Name the player from a shadow.';
+
+/**
+ * A real `/scout/c/:code` payload, encoded the way `@/scout/challenge` encodes one: compact keys
+ * inside `g` (`m` mode, `p` packs, `r` rounds), the seed in `s`, the sender in `b`, their score in
+ * `c` — then base64url. Built here rather than imported so the e2e suite stays free of app imports;
+ * if that encoding ever changes the challenge screen renders "broken link" and the assertions below
+ * fail loudly instead of quietly testing an empty state.
+ */
+const SCOUT_CHALLENGE_CODE = Buffer.from(
+  JSON.stringify({
+    v: 1,
+    s: 'e2e-visual-challenge',
+    g: { m: 'silhouette', p: ['superstars'], r: 5 },
+    b: 'Maya',
+    c: 6420,
+  }),
+).toString('base64url');
+
+/**
+ * Every Highlight Scout route, so the narrow / single-h1 / duplicate-id sweeps below cover the
+ * whole game and not just its front door. `/scout/results` bounces to the lobby without a finished
+ * run and `/scout/play` renders its "no session" card — both are still one h1 and no overflow.
+ */
+const SCOUT_ROUTES = [
+  '/scout',
+  '/scout/setup',
+  '/scout/play',
+  '/scout/results',
+  '/scout/daily',
+  '/scout/stats',
+  `/scout/c/${SCOUT_CHALLENGE_CODE}`,
+  '/scout/c/not-a-real-code',
+] as const;
+
 async function settle(page: Page) {
   await page.waitForLoadState('networkidle');
   await page.evaluate(() => document.fonts.ready);
@@ -88,7 +124,7 @@ const NARROW_ROUTES = [
   '/songooner/daily',
   '/songooner/stats',
   '/songooner/duel',
-  '/scout',
+  ...SCOUT_ROUTES,
 ] as const;
 const H1_ROUTES = [
   '/',
@@ -98,10 +134,23 @@ const H1_ROUTES = [
   '/songooner/daily',
   '/songooner/stats',
   '/songooner/c/invalid',
-  '/scout',
+  ...SCOUT_ROUTES,
+] as const;
+const DUPLICATE_ID_ROUTES = [
+  '/',
+  '/songooner',
+  '/songooner/stats',
+  '/songooner/stats?demo=1',
+  ...SCOUT_ROUTES,
+  '/scout/stats?demo=1',
 ] as const;
 
-const slug = (route: string) => route.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '') || 'home';
+/** Short, stable names — a challenge route carries a ~100-char code nobody wants in a filename. */
+const slug = (route: string) =>
+  route
+    .replace(SCOUT_CHALLENGE_CODE, 'code')
+    .replace(/[^a-z0-9]+/gi, '-')
+    .replace(/^-|-$/g, '') || 'home';
 
 for (const [name, vp] of Object.entries(VIEWPORTS)) {
   test(`home · ${name}`, async ({ page }) => {
@@ -114,13 +163,14 @@ for (const [name, vp] of Object.entries(VIEWPORTS)) {
     await page.screenshot({ path: `${OUT}/home-${name}-fold.png`, fullPage: false });
   });
 
-  test(`placeholder · ${name}`, async ({ page }) => {
+  test(`scout home · ${name}`, async ({ page }) => {
     await page.setViewportSize(vp);
     await page.goto('/#/scout');
     await settle(page);
-    await expect(page.getByRole('heading', { name: 'Highlight Scout is warming up', level: 1 })).toBeVisible();
+    await expect(page.getByRole('heading', { name: SCOUT_H1, level: 1 })).toBeVisible();
     await expectNoHorizontalOverflow(page);
-    await page.screenshot({ path: `${OUT}/placeholder-${name}.png`, fullPage: false });
+    await expectIconButtonsLabelled(page);
+    await page.screenshot({ path: `${OUT}/scout-home-${name}.png`, fullPage: false });
   });
 
   test(`residency hub · ${name}`, async ({ page }) => {
@@ -161,7 +211,7 @@ for (const [name, vp] of Object.entries(VIEWPORTS)) {
     // The card's accessible name starts with its "New" badge, so match anywhere in it.
     await games.getByRole('link', { name: /Highlight Scout/ }).click();
     await expect.poll(() => page.evaluate(() => location.hash)).toBe('#/scout');
-    await expect(page.getByRole('heading', { name: 'Highlight Scout is warming up', level: 1 })).toBeVisible();
+    await expect(page.getByRole('heading', { name: SCOUT_H1, level: 1 })).toBeVisible();
     await expect(header.getByRole('link', { name: 'Highlight Scout home' })).toBeVisible();
   });
 
@@ -240,7 +290,7 @@ test('reduced motion renders', async ({ page }) => {
 });
 
 for (const route of NARROW_ROUTES) {
-  test(`320 px · ${route}`, async ({ page }) => {
+  test(`320 px · ${slug(route)}`, async ({ page }) => {
     await page.addInitScript(() => localStorage.clear());
     await page.setViewportSize(NARROW);
     await page.goto(`/#${route}`);
@@ -276,7 +326,7 @@ test('320 px · header folds volume + theme into one popover', async ({ page }) 
 });
 
 for (const route of H1_ROUTES) {
-  test(`exactly one h1 · ${route}`, async ({ page }) => {
+  test(`exactly one h1 · ${slug(route)}`, async ({ page }) => {
     await page.addInitScript(() => localStorage.clear());
     await page.setViewportSize(VIEWPORTS.mobile);
     await page.goto(`/#${route}`);
@@ -285,14 +335,15 @@ for (const route of H1_ROUTES) {
   });
 }
 
-for (const route of ['/', '/songooner', '/songooner/stats', '/songooner/stats?demo=1'] as const) {
-  test(`no duplicate ids · ${route}`, async ({ page }) => {
+for (const route of DUPLICATE_ID_ROUTES) {
+  test(`no duplicate ids · ${slug(route)}`, async ({ page }) => {
     await page.addInitScript(() => localStorage.clear());
     await page.setViewportSize(VIEWPORTS.desktop);
     await page.goto(`/#${route}`);
     await settle(page);
-    // the logo renders in the header and the footer, the record in the hero
-    expect(await page.locator('svg linearGradient').count()).toBeGreaterThanOrEqual(2);
+    // Not a vacuous pass: every route paints at least one gradient def (the header brand mark),
+    // and the Songooner pages repeat it in the footer logo and the hero record.
+    expect(await page.locator('svg linearGradient').count()).toBeGreaterThanOrEqual(1);
     await expectNoDuplicateIds(page);
   });
 }

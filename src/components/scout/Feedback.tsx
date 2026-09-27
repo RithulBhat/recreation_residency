@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { CircleCheckBig, CircleX, Flag, TimerOff, TrendingUp } from 'lucide-react';
 import { cn } from '@/components/ui';
-import { isAmbiguousSurname, nameTokens, normalizeName, subjectVariants } from '@/scout/names';
+import { isAmbiguousSurname, nameTokens } from '@/scout/names';
 import { triesLeft } from '@/scout/selectors';
 import type { ScoutGuess, ScoutRound, ScoutState, ScoutSubject } from '@/scout/types';
 import { points } from './format';
@@ -32,21 +32,17 @@ export interface CloseCopy {
  * annoying message a guessing game can show.
  */
 export function closeCopy(guess: string, subject: ScoutSubject, pool: readonly ScoutSubject[]): CloseCopy {
-  const v = subjectVariants(subject);
-  const g = normalizeName(guess);
   const tokens = nameTokens(guess);
 
   if (subject.kind === 'team') {
-    const ambiguous = isAmbiguousSurname(subject, pool);
-    if (g === v.city || g === `the ${v.city}`) {
-      return {
-        title: 'Right city, wrong club.',
-        detail: ambiguous
-          ? 'Two franchises play there. Name the one you mean.'
-          : 'You have the city. Now the nickname.',
-      };
-    }
-    return { title: 'Right city, wrong club.', detail: 'Same town, different franchise. Try the other one.' };
+    // Never "try the other one": only a handful of cities have two clubs, so that line was a lie
+    // most of the time. `isAmbiguousSurname` is what actually knows, so it is what decides.
+    return {
+      title: 'Right city, wrong club.',
+      detail: isAmbiguousSurname(subject, pool)
+        ? 'Two franchises play there. Name the one you mean.'
+        : 'You have the city — now the nickname.',
+    };
   }
 
   if (tokens.length === 1 && isAmbiguousSurname(subject, pool)) {
@@ -83,12 +79,14 @@ interface Line {
 /** The verdict line for the latest guess of a round. Pure; the component just paints it. */
 export function verdictLine(state: ScoutState, round: ScoutRound, guess: ScoutGuess, pool: readonly ScoutSubject[]): Line {
   const left = triesLeft(state);
+  // A franchise is not a "him". Every person-noun on this screen branches on the subject's kind.
+  const team = round.subject.kind === 'team';
   switch (guess.verdict) {
     case 'correct':
       return {
         tone: 'success',
         icon: <CircleCheckBig />,
-        text: `Got him on try ${guess.tryIndex + 1} · +${points(round.score)}`,
+        text: `${team ? 'Got it' : 'Got him'} on try ${guess.tryIndex + 1} · +${points(round.score)}`,
       };
     case 'close': {
       const copy = closeCopy(guess.text, round.subject, pool);
@@ -100,13 +98,15 @@ export function verdictLine(state: ScoutState, round: ScoutRound, guess: ScoutGu
       return round.status === 'playing'
         ? { tone: 'neutral', icon: <Flag />, text: 'Skipped — here is another clue.' }
         : { tone: 'neutral', icon: <Flag />, text: 'Gave up on that one.' };
-    default:
+    default: {
+      const miss = team ? 'Not that club.' : 'Not him.';
       return {
         tone: 'danger',
         icon: <CircleX />,
-        text: round.status === 'playing' ? `Not him. ${left} ${left === 1 ? 'try' : 'tries'} left.` : 'Not him.',
+        text: round.status === 'playing' ? `${miss} ${left} ${left === 1 ? 'try' : 'tries'} left.` : miss,
         echo: guess.text,
       };
+    }
   }
 }
 

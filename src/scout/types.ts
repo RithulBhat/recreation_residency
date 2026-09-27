@@ -5,7 +5,16 @@
  * (ESPN's JSON APIs send no CORS headers, so the browser never calls them). Images are
  * loaded at runtime from `a.espncdn.com`, which does send `Access-Control-Allow-Origin: *`
  * — so headshots and logos can be drawn to a canvas and pixel-manipulated.
+ *
+ * ## Puzzle types vs session formats
+ * {@link ScoutMode} is the PUZZLE TYPE (silhouette, faceZoom, …): what one round shows you.
+ * {@link ScoutFormat} is the SESSION FORMAT (standard, blitz, survival, gauntlet, duel, party):
+ * how the run as a whole is shaped. A session has ONE format and one or more puzzle types.
+ * The format vocabulary deliberately mirrors Songooner's `GameMode`, and `PlayerConfig` /
+ * `DuelStyle` are REUSED from `@/types/game` rather than re-declared, so the two games are siblings.
  */
+
+import type { DuelStyle, PlayerConfig } from '@/types/game';
 
 export type Conference = 'AFC' | 'NFC';
 export type DivisionName = 'North' | 'South' | 'East' | 'West';
@@ -136,6 +145,19 @@ export type ScoutMode =
   | 'careerPath' // draft → college → team history
   | 'logoZoom'; // zoomed team logo
 
+/**
+ * The SESSION FORMAT — the shape of the whole run, orthogonal to {@link ScoutMode}.
+ * Mirrors Songooner's `GameMode` (`classic`/`fixed` collapse into `standard`, since a Scout round's
+ * ladder is the clue ladder rather than a clip length).
+ */
+export type ScoutFormat =
+  | 'standard' // N rounds, T tries each, optional round timer. The default.
+  | 'blitz' // one clock, one fixed rung per subject, a miss costs seconds
+  | 'survival' // lives; the tier escalates and the ladder shortens as you go
+  | 'gauntlet' // one subject from each of the 32 franchises, seeded order
+  | 'duel' // 2 players, one device (buzzer keys A / L, or turns)
+  | 'party'; // 2–8 players, pass-and-play with a handover between rounds
+
 /** What the player is naming. */
 export type SubjectKind = 'player' | 'team';
 
@@ -252,6 +274,37 @@ export interface ScoutSettings {
   seed?: string;
   /** Marks a daily run (YYYY-MM-DD). */
   daily?: string;
+
+  // -------------------------------------------------------------------------------------------
+  // Session format (ADDED). All optional so a settings object persisted before formats existed
+  // still parses; `normalizeScoutSettings` always fills them in, and `@/scout/formats` exports a
+  // total resolver for each (`scoutFormat`, `scoutLives`, …) so engine code never sees undefined.
+  // -------------------------------------------------------------------------------------------
+
+  /** Session format. Absent → `'standard'`. */
+  format?: ScoutFormat;
+  /** blitz: total seconds on the clock (30–300). */
+  blitzDuration?: number;
+  /** survival: starting lives (1–5). */
+  lives?: number;
+  /** duel (exactly 2) / party (2–8) roster. Empty for the solo formats. */
+  players?: PlayerConfig[];
+  /** duel: buzz-in or alternating turns. */
+  duelStyle?: DuelStyle;
+}
+
+/**
+ * One player's running tally (ADDED). Extends the shared {@link PlayerConfig} exactly as
+ * Songooner's `PlayerState` does, so a scoreboard component can render either game.
+ */
+export interface ScoutPlayerState extends PlayerConfig {
+  score: number;
+  streak: number;
+  bestStreak: number;
+  /** Rounds this player won. */
+  correct: number;
+  /** survival only. */
+  lives?: number;
 }
 
 export type ScoutVerdict = 'correct' | 'close' | 'wrong' | 'skipped' | 'timeout';
@@ -261,6 +314,8 @@ export interface ScoutGuess {
   verdict: ScoutVerdict;
   tryIndex: number;
   at: number;
+  /** ADDED — duel / party: who made this guess. Absent in the solo formats. */
+  playerId?: string;
 }
 
 export type ScoutRoundStatus = 'playing' | 'won' | 'lost' | 'skipped';
@@ -276,6 +331,14 @@ export interface ScoutRound {
   score: number;
   startedAt: number;
   endedAt?: number;
+
+  // --- multiplayer (ADDED; absent in the solo formats) ---------------------------------------
+  /** duel / party: whose turn it is, or who has buzzed in. */
+  activePlayerId?: string;
+  /** duel buzzer: players who already buzzed and missed this round. */
+  lockedOutPlayerIds?: string[];
+  /** Who won the round, when anyone did. */
+  winnerPlayerId?: string;
 }
 
 export type ScoutStatus = 'idle' | 'loading' | 'playing' | 'round-over' | 'finished';
@@ -293,18 +356,40 @@ export interface ScoutState {
   totalScore: number;
   streak: number;
   bestStreak: number;
-  endReason?: 'rounds' | 'quit' | 'queue-empty';
+  /**
+   * Why the run ended. WIDENED (no member removed) for the session formats:
+   * 'time' = the blitz clock, 'lives' = survival ran out, 'gauntlet' = all 32 franchises played.
+   */
+  endReason?: 'rounds' | 'time' | 'lives' | 'gauntlet' | 'quit' | 'queue-empty';
+
+  // -------------------------------------------------------------------------------------------
+  // Session-format state (ADDED). Always populated by 'start'; absent only on a state persisted
+  // before formats existed, which every reader tolerates (`@/scout/selectors` defaults them).
+  // -------------------------------------------------------------------------------------------
+
+  /** One entry for the implicit solo player, or one per configured player in duel / party. */
+  players?: ScoutPlayerState[];
+  /** Index into `players` whose turn it is (rotated by 'next' in party / duel-turns). */
+  activePlayerIndex?: number;
+  /** blitz: epoch ms at which the clock expires. Shrinks by the miss penalty. */
+  blitzEndsAt?: number;
+  /** gauntlet: the franchise ids this run will visit, in play order. */
+  gauntletTeamIds?: string[];
+  /** gauntlet: franchise ids already cleared (their round was won). */
+  clearedTeamIds?: string[];
 }
 
 export type ScoutAction =
   | { type: 'start'; settings: ScoutSettings; subjects: ScoutSubject[]; now: number }
-  | { type: 'guess'; text: string; now: number }
+  | { type: 'guess'; text: string; now: number; playerId?: string }
   | { type: 'skip'; now: number }
   | { type: 'giveUp'; now: number }
   | { type: 'timeout'; now: number }
   | { type: 'next'; now: number }
   | { type: 'tick'; now: number }
-  | { type: 'quit'; now: number };
+  | { type: 'quit'; now: number }
+  /** ADDED — duel buzzer: claim the round. Ignored outside a buzzer duel. */
+  | { type: 'buzz'; playerId: string; now: number };
 
 export interface ScoutMatchResult {
   verdict: Extract<ScoutVerdict, 'correct' | 'close' | 'wrong'>;

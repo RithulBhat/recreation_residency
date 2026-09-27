@@ -88,7 +88,12 @@ function TeamChip({ name, color, altColor }: { name: string; color: string; altC
 }
 
 /**
- * The payoff frame: the clean photo, who it was, and what the round paid.
+ * The payoff frame: the clean photo, who it was, the tape, and what the round paid.
+ *
+ * This card OWNS the hero slot when a round ends — the same slot the puzzle stage had — at both
+ * breakpoints. On a phone that is what keeps the answer and "Next round" above the fold (they used
+ * to land under a full-height stage, with nothing scrolling); on a laptop it is what lets the tape
+ * be the size of the reward rather than a 336 px thumbnail in a sidebar.
  *
  * "Watch the tape" mounts a YouTube iframe only after a click, and the clip's own title and channel
  * are credited under it — a clip may live on a former team's channel, so it never captions who the
@@ -112,7 +117,11 @@ export function RevealCard({ state, clips, onNext, tapeSignal, className }: Reve
   return (
     <motion.section
       key={`${state.id}:${round.index}`}
-      className={cn('glass-strong relative overflow-hidden rounded-4xl p-4 sm:p-5', won && 'glow', className)}
+      className={cn(
+        'glass-strong relative flex min-h-0 flex-col rounded-4xl p-4 sm:p-5',
+        won && 'glow',
+        className,
+      )}
       initial={reduce ? { opacity: 0 } : { opacity: 0, y: 18, scale: 0.98 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       transition={{ type: 'spring', stiffness: 320, damping: 30 }}
@@ -120,10 +129,17 @@ export function RevealCard({ state, clips, onNext, tapeSignal, className }: Reve
       data-testid="scout-reveal"
       data-verdict={verdict}
     >
+      {/* Everything above "Next round" scrolls; the button itself never does. A reveal that pushed
+          the answer and the way onward below the fold is exactly what this card is here to fix.
+          On a laptop the identity block and the score breakdown share a row, which is what leaves
+          the tape a full-width band underneath instead of a thumbnail wedged between them. */}
+      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto">
       <div className="flex gap-4">
         <motion.div
           className="shrink-0 overflow-hidden rounded-3xl border border-border bg-bg-elevated"
-          style={{ width: 'clamp(88px, 24vw, 132px)', height: 'clamp(88px, 24vw, 132px)' }}
+          // The reveal card is now the only place the clean photo appears, so it is sized to be
+          // looked at rather than glanced at.
+          style={{ width: 'clamp(104px, 20vw, 136px)', height: 'clamp(104px, 20vw, 136px)' }}
           initial={reduce ? false : { rotateY: 80, opacity: 0.4 }}
           animate={{ rotateY: 0, opacity: 1 }}
           transition={{ type: 'spring', stiffness: 220, damping: 22, delay: 0.05 }}
@@ -140,7 +156,7 @@ export function RevealCard({ state, clips, onNext, tapeSignal, className }: Reve
           <Badge tone={VERDICT_TONE[verdict]} size="sm">
             {VERDICT_LABEL[verdict]}
           </Badge>
-          <h2 className="mt-1.5 font-display text-lg font-bold leading-tight text-fg sm:text-xl" data-testid="scout-reveal-name">
+          <h2 className="mt-1.5 font-display text-xl font-bold leading-tight text-fg sm:text-2xl" data-testid="scout-reveal-name">
             {subject.name}
           </h2>
           {player && <p className="truncate text-sm font-semibold text-fg/80">{playerLine(player)}</p>}
@@ -166,16 +182,20 @@ export function RevealCard({ state, clips, onNext, tapeSignal, className }: Reve
         </div>
       </div>
 
-      <div className="mt-3">
-        <WatchTape
-          clip={clip}
-          fallbackHref={player ? espnPlayerUrl(player.id) : team ? espnTeamUrl(team.abbr) : 'https://www.espn.com/nfl/'}
-          fallbackLabel={subject.kind === 'team' ? 'Open the team on ESPN' : 'Open the player on ESPN'}
-          openSignal={tapeSignal}
-        />
+      <WatchTape
+        clip={clip}
+        fallbackHref={player ? espnPlayerUrl(player.id) : team ? espnTeamUrl(team.abbr) : 'https://www.espn.com/nfl/'}
+        fallbackLabel={subject.kind === 'team' ? 'Open the team on ESPN' : 'Open the player on ESPN'}
+        openSignal={tapeSignal}
+        size="hero"
+      />
+
       </div>
 
-      <div className="mt-3 rounded-2xl border border-border bg-surface p-3">
+      {/* Pinned: the score and the way onward are never what scrolls. Side by side on a laptop, so
+          the tape above them keeps its height. */}
+      <div className="mt-3 flex shrink-0 flex-col gap-3 lg:flex-row lg:items-stretch">
+      <div className="flex-1 rounded-2xl border border-border bg-surface p-3">
         {breakdown && win ? (
           <div className="flex flex-col gap-1">
             <Row
@@ -214,11 +234,12 @@ export function RevealCard({ state, clips, onNext, tapeSignal, className }: Reve
         )}
       </div>
 
+
       <Button
         variant="glow"
         size="lg"
         fullWidth
-        className="mt-4"
+        className="shrink-0 lg:h-auto lg:w-auto lg:self-stretch lg:px-10"
         onClick={onNext}
         trailingIcon={<ArrowRight />}
         data-autofocus
@@ -231,6 +252,7 @@ export function RevealCard({ state, clips, onNext, tapeSignal, className }: Reve
           </Kbd>
         </span>
       </Button>
+      </div>
     </motion.section>
   );
 }

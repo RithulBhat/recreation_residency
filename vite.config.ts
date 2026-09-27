@@ -8,6 +8,13 @@ import { fileURLToPath, URL } from 'node:url';
 // GitHub Pages serves the site from /songooner/ — set VITE_BASE to override.
 const base = process.env.VITE_BASE ?? '/';
 
+/**
+ * The lazy JSON chunks Highlight Scout loads on demand. Vite names a chunk after the module it
+ * came from, so `src/data/nfl/players.json` lands at `assets/players-<hash>.js`. Kept out of the
+ * service worker's precache (see the `workbox` block) — together they are ~1.7 MB.
+ */
+const DATA_CHUNKS = ['players', 'highlights', 'statlines', 'teams', 'clips'] as const;
+
 export default defineConfig({
   base,
   plugins: [
@@ -33,7 +40,30 @@ export default defineConfig({
       workbox: {
         // Never cache Deezer/iTunes responses — preview URLs expire.
         navigateFallbackDenylist: [/^\/api/],
-        runtimeCaching: [],
+        /**
+         * The NFL payloads are ~1.7 MB of JSON (players 805 kB, highlights 804 kB, plus statlines,
+         * teams and clips) and they are already correctly code-split: the entry chunk does not
+         * import them, so nothing but Highlight Scout ever pulls them. Precaching them anyway made
+         * every first-time visitor — including someone who only ever opens Songooner — download all
+         * 1.7 MB before the service worker would install.
+         *
+         * They are excluded from the precache manifest and picked up by the runtime rule below
+         * instead, so the first Scout round still fills the cache and offline play keeps working
+         * from the second visit on. Safe because the filenames are content-hashed: a rebuilt
+         * payload is a new URL, so `CacheFirst` can never serve stale data.
+         */
+        globIgnores: [DATA_CHUNKS.map((name) => `assets/${name}-*.js`)].flat(),
+        runtimeCaching: [
+          {
+            urlPattern: new RegExp(`/assets/(?:${DATA_CHUNKS.join('|')})-[\\w-]+\\.js$`),
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'nfl-data',
+              expiration: { maxEntries: 24, maxAgeSeconds: 60 * 60 * 24 * 60 },
+              cacheableResponse: { statuses: [200] },
+            },
+          },
+        ],
       },
     }),
   ],

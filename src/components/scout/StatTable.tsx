@@ -1,4 +1,5 @@
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
+import { Lock } from 'lucide-react';
 import { cn } from '@/components/ui';
 import type { ScoutClue } from '@/scout/types';
 
@@ -14,7 +15,10 @@ export interface StatTableProps {
  * The `statLine` mode's visual: a season stat sheet that fills in.
  *
  * Locked rows are drawn, but blank — a label like "Pass yds" is itself a huge clue, so a locked row
- * shows the SHAPE of the sheet (how much is still to come) and nothing else.
+ * shows the SHAPE of the sheet (how much is still to come) and nothing else. They say LOCKED, in
+ * the same dashed-and-padlocked idiom the franchise dossier and the clue rail use: an unlabelled
+ * pair of grey pills is the universal "still loading" idiom, and at 40% opacity it was close to
+ * invisible on the daylight theme.
  */
 export function StatTable({ clues, allClues, className }: StatTableProps) {
   const reduce = useReducedMotion();
@@ -56,9 +60,17 @@ export function StatTable({ clues, allClues, className }: StatTableProps) {
           ))}
         </AnimatePresence>
         {Array.from({ length: locked }, (_, i) => (
-          <div key={`locked-${i}`} className="flex items-center justify-between gap-4 py-2.5 opacity-40" aria-hidden>
-            <span className="h-3 w-24 rounded-full bg-fg/15" />
-            <span className="h-5 w-14 rounded-md bg-fg/10" />
+          <div
+            key={`locked-${i}`}
+            className="flex items-center justify-between gap-4 py-2.5 text-muted"
+            aria-hidden
+            data-testid="scout-stat-locked"
+          >
+            <span className="inline-flex items-center gap-2">
+              <Lock className="size-3.5 shrink-0" />
+              <span className="text-xs font-semibold uppercase tracking-[0.16em]">Locked</span>
+            </span>
+            <span className="h-6 w-16 rounded-md border border-dashed border-border-strong/70 bg-fg/[0.04]" />
           </div>
         ))}
       </dl>

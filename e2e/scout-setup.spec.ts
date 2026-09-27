@@ -14,6 +14,27 @@ const NARROW = { width: 320, height: 640 } as const;
 
 const SCOUT_ROUTES = ['/#/scout/setup', '/#/scout/daily', '/#/scout/stats'] as const;
 
+/**
+ * A real challenge payload, encoded the way `@/scout/challenge` encodes one: compact keys inside
+ * `g` (`m` mode, `p` packs, `t` tries, `r` rounds), the seed in `s`, the sender in `b`, their score
+ * in `c` — then base64url. Built here rather than imported so this suite stays free of app imports;
+ * if the encoding ever changes, the screen renders "broken link" and these tests fail loudly.
+ *
+ * `rounds: 5` is deliberately NOT the lobby default (10): a run that starts with 5 rounds proves the
+ * link's rules were applied and not the draft sitting in localStorage.
+ */
+const CHALLENGE = { by: 'Maya', score: 6420, rounds: 5, tries: 4, seed: 'e2e-scout-challenge' } as const;
+const CHALLENGE_CODE = Buffer.from(
+  JSON.stringify({
+    v: 1,
+    s: CHALLENGE.seed,
+    g: { m: 'silhouette', p: ['superstars'], t: CHALLENGE.tries, r: CHALLENGE.rounds },
+    b: CHALLENGE.by,
+    c: CHALLENGE.score,
+  }),
+).toString('base64url');
+const CHALLENGE_URL = `/#/scout/c/${CHALLENGE_CODE}`;
+
 async function settle(page: Page) {
   await page.waitForLoadState('networkidle');
   await page.evaluate(() => document.fonts.ready);
@@ -435,4 +456,75 @@ test.describe('scout screens in every light', () => {
       });
     }
   }
+});
+
+
+// ---------------------------------------------------------------- challenge links (`/scout/c/:code`)
+
+test('scout challenge · a real code names the sender, their score and the rules', async ({ page }) => {
+  await page.setViewportSize(VIEWPORTS.desktop);
+  await page.goto(CHALLENGE_URL);
+  await settle(page);
+
+  await expect(page.getByRole('heading', { name: `${CHALLENGE.by} challenged you`, level: 1 })).toBeVisible();
+  await expect(page.getByTestId('scout-challenge-score')).toContainText('6,420');
+  // The link's own rules, not the lobby draft: 5 rounds and 4 tries came out of the code.
+  const facts = page.getByRole('definition');
+  await expect(facts.filter({ hasText: 'Silhouette' }).first()).toBeVisible();
+  await expect(facts.filter({ hasText: '5 rounds · 4 tries · no timer' })).toHaveCount(1);
+  await expect(page.getByRole('list', { name: 'Packs' })).toContainText('Superstars');
+  await expect(page.getByTestId('scout-accept-challenge')).toBeEnabled();
+
+  await expectSingleH1(page);
+  await expectNoHorizontalOverflow(page);
+  await expectIconButtonsLabelled(page);
+  await page.screenshot({ path: `${OUT}/challenge-desktop.png`, fullPage: true });
+
+  await page.setViewportSize(NARROW);
+  await page.waitForTimeout(300);
+  await expectNoHorizontalOverflow(page);
+  await page.screenshot({ path: `${OUT}/challenge-narrow.png`, fullPage: true });
+});
+
+test('scout challenge · a broken code says so and still offers a way in', async ({ page }) => {
+  await page.setViewportSize(VIEWPORTS.desktop);
+  await page.goto('/#/scout/c/not-a-real-code');
+  await settle(page);
+  await expect(page.getByRole('heading', { name: 'That challenge link is broken', level: 1 })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Play anyway' })).toBeVisible();
+  await expectSingleH1(page);
+  await expectNoHorizontalOverflow(page);
+  await page.screenshot({ path: `${OUT}/challenge-broken-desktop.png`, fullPage: false });
+});
+
+test('scout challenge · Accept deals the identical seeded run', async ({ page }) => {
+  await page.setViewportSize(VIEWPORTS.desktop);
+
+  /** Accept the challenge from a cold page and report what round one actually dealt. */
+  const acceptAndFingerprint = async (): Promise<{ counter: string; image: string }> => {
+    await page.goto(CHALLENGE_URL);
+    // A hash change is a same-document navigation, so reload to clear the in-memory game store and
+    // meet the link exactly as a first-time visitor would.
+    await page.reload();
+    await settle(page);
+    await page.getByTestId('scout-accept-challenge').click();
+    await expect.poll(() => page.evaluate(() => location.hash), { timeout: 30_000 }).toBe('#/scout/play');
+    // The silhouette stage layers a base photo and a reveal curtain over the same headshot; the
+    // base is the one that is always there, whatever the treatment on top of it is doing.
+    const stage = page.getByTestId('scout-stage-base');
+    await expect(stage).toHaveAttribute('src', /a\.espncdn\.com\/i\/headshots\/nfl\/players\/full\/\d+\.png$/);
+    return {
+      counter: (await page.getByTestId('scout-round-counter').textContent()) ?? '',
+      image: (await stage.getAttribute('src')) ?? '',
+    };
+  };
+
+  const first = await acceptAndFingerprint();
+  // The link's rules, not the 10-round lobby default.
+  expect(first.counter.replace(/\s+/g, '')).toBe(`1/${CHALLENGE.rounds}`);
+
+  const second = await acceptAndFingerprint();
+  expect(second.counter).toBe(first.counter);
+  // Same seed, same settings, same dataset → the same first subject, every time.
+  expect(second.image, 'the seeded queue must deal the same round one twice').toBe(first.image);
 });

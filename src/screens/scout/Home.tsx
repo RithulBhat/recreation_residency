@@ -39,11 +39,18 @@ const MODE_ART: Readonly<Record<ScoutMode, { icon: ReactNode; accent: string }>>
   logoZoom: { icon: <Binoculars />, accent: '#fb7185' },
 };
 
+/**
+ * Copy rule for this list: it has to stay TRUE whatever the clip harvest comes back with. Official
+ * tape exists for the famous end of the league and thins out fast further down, so the promise is a
+ * link to the tape WHERE THERE IS ONE — never inline playback everywhere. (Most clips cannot be
+ * embedded at all: the uploader blocks third-party playback, and the reveal falls back to a poster
+ * and a YouTube link. Promising "plays on the reveal" would be wrong twice over.)
+ */
 const FEATURES = [
   { icon: <Layers />, text: 'Every active player · all 32 clubs' },
   { icon: <Sparkles />, text: 'Seven ways to guess' },
   { icon: <Film />, text: 'Real play-by-play, names redacted' },
-  { icon: <Trophy />, text: 'Official highlight tape on every reveal' },
+  { icon: <Trophy />, text: 'His official tape on the reveal, wherever the league has published one' },
 ];
 
 const STEPS = [
@@ -54,13 +61,14 @@ const STEPS = [
   },
   {
     icon: <Keyboard />,
-    title: 'Name him — or burn a try',
+    // Two of the seven modes ask for a franchise, so nothing here calls the answer "him".
+    title: 'Call it — or burn a try',
     text: 'Every miss lifts the shadow and buys a clue: position, conference, jersey, first initial. The earlier you get it, the more it pays.',
   },
   {
     icon: <Film />,
     title: 'Watch the tape',
-    text: 'The reveal is the clean photo, the whole file, and his official highlight reel — straight from the NFL and team channels.',
+    text: 'The reveal is the clean photo and the whole file — and when the NFL or the club has put a highlight reel out, the reveal hands you it.',
   },
 ];
 

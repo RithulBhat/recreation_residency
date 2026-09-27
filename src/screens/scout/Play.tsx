@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { LoaderCircle } from 'lucide-react';
 import { getSfx } from '@/audio';
-import { Kbd, cn } from '@/components/ui';
+import { cn } from '@/components/ui';
 import {
   ClueRail,
   Feedback,
@@ -193,6 +193,7 @@ export default function ScoutPlay() {
   const railTotal = railClues(round.mode, lastStage?.clues ?? []).length;
   const newRail = Math.max(0, rail.length - prevRail.length);
 
+  const visual = isVisualMode(round.mode);
   const subjectStage = (
     <SubjectStage
       mode={round.mode}
@@ -202,12 +203,17 @@ export default function ScoutPlay() {
       revealed={round.status !== 'playing'}
       seed={settings.seed}
       onReady={onStageReady}
-      // ≥280 px on a phone, ≥380 px on desktop (the treatments were measured at those sizes).
-      // Text modes take whatever height is going on a phone; the image modes stay square.
-      className={cn('min-h-[280px] w-full lg:min-h-[380px]', !isVisualMode(round.mode) && 'max-lg:flex-1')}
+      // The stage is the hero: it takes every pixel the column has left after the bar, the price
+      // ladder and the guess box (≥280 px on a phone, ≥380 px on desktop — the treatments were
+      // measured at those sizes). An image mode stays square and is sized by the height it is
+      // given; a text mode fills the slot outright.
+      className={cn(
+        'w-full min-h-[280px] lg:min-h-[380px]',
+        visual ? 'mx-auto lg:w-[var(--scout-hero)]' : 'flex-1 lg:h-full',
+      )}
     />
   );
-  const reveal = <RevealCard state={state} clips={clips} onNext={next} tapeSignal={tapeSignal} />;
+  const reveal = <RevealCard state={state} clips={clips} onNext={next} tapeSignal={tapeSignal} className="lg:h-full" />;
   const guessBox = (
     <GuessBox
       state={state}
@@ -225,8 +231,25 @@ export default function ScoutPlay() {
   );
 
   return (
-    <div className="mx-auto w-full max-w-6xl lg:flex lg:min-h-[calc(100dvh-6.5rem)] lg:items-start lg:justify-center lg:gap-6">
-      <div className="flex min-h-[calc(100dvh-6.5rem)] flex-col gap-3 sm:gap-4 lg:min-h-0 lg:w-full lg:max-w-[440px] lg:shrink">
+    // Desktop: one row, both columns full height. The hero column holds the thing you are looking
+    // at and the thing you type into, in that order and nothing between them; the aside holds every
+    // standing fact — and fills, rather than floating at the top of a dead column.
+    <div
+      // `--scout-hero` is the side of the square stage: every pixel the hero column has left once
+      // the bar, the price ladder, the verdict line and the guess box have taken theirs. The guess
+      // box is capped to the SAME number, which is what puts it directly under the stage rather than
+      // spanning past it — and the top bar and the ladder still span the whole column.
+      className="mx-auto w-full max-w-6xl [--scout-hero:clamp(17.5rem,calc(100dvh-25.5rem),42rem)] lg:flex lg:h-[calc(100dvh-6.5rem)] lg:items-stretch lg:gap-6"
+    >
+      <div
+        className={cn(
+          'flex min-w-0 flex-col gap-3 sm:gap-4 lg:min-h-0 lg:flex-1',
+          // A finished round is BOUNDED on a phone, not merely tall enough: the reveal card scrolls
+          // inside itself and pins "Next round", so the answer and the way onward are on screen the
+          // moment the round ends instead of below a fold that nothing was scrolling to.
+          roundOver ? 'max-lg:h-[calc(100dvh-6.5rem)] max-lg:min-h-0' : 'min-h-[calc(100dvh-6.5rem)]',
+        )}
+      >
         {/* The screen's title is the round itself; on screen the top bar already says all of this. */}
         <h1 className="sr-only">
           {scoutMode(round.mode)?.name ?? 'Highlight Scout'} — round {state.currentRound + 1}
@@ -234,36 +257,40 @@ export default function ScoutPlay() {
         </h1>
         <TopBar state={state} now={now} onQuit={() => setQuitOpen(true)} onHelp={() => setHelpOpen(true)} />
         <TryLadder round={round} tries={settings.tries} />
-        {subjectStage}
-        {!twoColumn && <ClueRail clues={rail} newCount={newRail} total={railTotal} layout="row" />}
-        <div className="mt-auto flex flex-col gap-2 pt-1 sm:gap-3">
-          <Feedback state={state} pool={suggestions.pool} />
-          {roundOver ? (
-            twoColumn ? (
-              <p className="text-center text-xs text-muted">
-                <Kbd size="sm">Enter</Kbd> for the next round · <Kbd size="sm">T</Kbd> for the tape
-              </p>
-            ) : (
-              reveal
-            )
-          ) : (
-            guessBox
-          )}
+        {/* The hero slot. A finished round hands it to the reveal card — on a phone that is what
+            keeps the answer and Next above the fold, and on a laptop it is what gives the tape room. */}
+        <div className="flex min-h-0 flex-col justify-center max-lg:flex-1 lg:flex-1">
+          {roundOver ? reveal : subjectStage}
         </div>
+        {!twoColumn && !roundOver && <ClueRail clues={rail} newCount={newRail} total={railTotal} layout="row" />}
+        {!roundOver && (
+          <div className="mt-auto flex w-full flex-col gap-2 pt-1 sm:gap-3 lg:mx-auto lg:mt-0 lg:max-w-[var(--scout-hero)]">
+            <Feedback state={state} pool={suggestions.pool} />
+            {guessBox}
+          </div>
+        )}
+        {roundOver && !twoColumn && (
+          <Feedback state={state} pool={suggestions.pool} reserve={false} className="mt-auto pt-1" />
+        )}
       </div>
 
-      {/* Exactly one clue rail and one reveal card live in the DOM at a time: a hidden second copy
-          would double every testid and, worse, mount a second YouTube frame. */}
+      {/* Exactly one clue rail lives in the DOM at a time: a hidden second copy would double every
+          testid. The rail draws the clues still to come as locked slots, so the aside is full height
+          from the first frame and nothing under it jumps as they unlock. */}
       {twoColumn && (
-        <aside className="flex w-[380px] min-w-[300px] shrink flex-col gap-4">
-          {roundOver ? (
-            reveal
-          ) : (
-            <>
-              <ClueRail clues={rail} newCount={newRail} total={railTotal} layout="column" className="glass rounded-4xl p-4" />
-              <SessionPanel state={state} />
-            </>
-          )}
+        <aside className="flex w-[21rem] shrink-0 flex-col gap-4 xl:w-[23rem]">
+          <ClueRail
+            clues={rail}
+            newCount={newRail}
+            total={railTotal}
+            layout="column"
+            className="glass min-h-0 rounded-4xl p-4"
+          />
+          {/* The rail is as tall as its ladder; the session panel takes whatever is left, so the
+              aside is a full column of panels rather than two cards floating over dead background.
+              (Franchise IQ and Paper Trail put every clue on the stage, so their rail is empty and
+              the panel takes the lot.) */}
+          <SessionPanel state={state} className="min-h-0 flex-1" />
         </aside>
       )}
 

@@ -141,6 +141,64 @@ export function cropFocus(subject: ScoutSubject, mode: ScoutMode, seed?: string)
 }
 
 // ---------------------------------------------------------------------------------------------
+// Which team a clue is actually about
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * ESPN team id → franchise name, for the ONE case a clue is about a team the subject is not on.
+ *
+ * `ScoutSubject.team` is the player's CURRENT club. A highlight play carries its own `teamId`, and
+ * MEASURED against the shipped dataset, 414 of the 1,700 plays (24%) were run by a different club
+ * than the player is on now — so building the Film Room "Team" clue from `subject.team` captioned a
+ * 2024 Vikings play with a 2026 roster spot and contradicted itself.
+ *
+ * Why a literal and not a lookup into `@/data/nfl`: this module is pure and synchronous, and the
+ * ladder has to be REPRODUCIBLE — a daily or challenge seed must build the same clues whether or
+ * not some async index happened to be warm yet. The 32 entries are pinned to `teams.json` by
+ * `src/components/scout/playTeam.test.ts`, which fails the moment they drift.
+ */
+const TEAM_NAMES: Readonly<Record<string, string>> = {
+  '1': 'Atlanta Falcons',
+  '2': 'Buffalo Bills',
+  '3': 'Chicago Bears',
+  '4': 'Cincinnati Bengals',
+  '5': 'Cleveland Browns',
+  '6': 'Dallas Cowboys',
+  '7': 'Denver Broncos',
+  '8': 'Detroit Lions',
+  '9': 'Green Bay Packers',
+  '10': 'Tennessee Titans',
+  '11': 'Indianapolis Colts',
+  '12': 'Kansas City Chiefs',
+  '13': 'Las Vegas Raiders',
+  '14': 'Los Angeles Rams',
+  '15': 'Miami Dolphins',
+  '16': 'Minnesota Vikings',
+  '17': 'New England Patriots',
+  '18': 'New Orleans Saints',
+  '19': 'New York Giants',
+  '20': 'New York Jets',
+  '21': 'Philadelphia Eagles',
+  '22': 'Arizona Cardinals',
+  '23': 'Pittsburgh Steelers',
+  '24': 'Los Angeles Chargers',
+  '25': 'San Francisco 49ers',
+  '26': 'Seattle Seahawks',
+  '27': 'Tampa Bay Buccaneers',
+  '28': 'Washington Commanders',
+  '29': 'Carolina Panthers',
+  '30': 'Jacksonville Jaguars',
+  '33': 'Baltimore Ravens',
+  '34': 'Houston Texans',
+};
+
+/** The franchise a team id names, preferring the subject's own record when it is the same club. */
+export function teamNameById(id: string, known?: NflTeam): string | undefined {
+  if (known && known.id === id) return known.displayName;
+  return TEAM_NAMES[id];
+}
+
+// ---------------------------------------------------------------------------------------------
 // Clue orders
 // ---------------------------------------------------------------------------------------------
 
@@ -183,9 +241,17 @@ function highlightLadder(subject: ScoutSubject, player: NflPlayer, tries: number
   const play = subject.play;
   const out: ScoutClue[] = [];
   if (play) out.push(clue('play', 'The play', play.redacted || play.text));
-  if (subject.team) out.push(clue('team', 'Team', subject.team.displayName));
+  // The team that RAN THE PLAY, which a quarter of the time is not the club the player is on now.
+  // A play is a moment in a season, so the clue about it has to belong to that season too.
+  const playTeam = play ? teamNameById(play.teamId, subject.team) : undefined;
+  // When the play's club IS the club he is on now, plain "Team" says everything; when it is not,
+  // the label has to say which team it means, or the clue reads as a roster spot he no longer has.
+  const moved = play !== undefined && subject.team !== undefined && subject.team.id !== play.teamId;
+  if (playTeam) out.push(clue('team', moved ? 'Team on the play' : 'Team', playTeam));
+  else if (subject.team) out.push(clue('team', 'Team', subject.team.displayName));
   if (play) {
-    out.push(clue('play', 'Situation', `Q${play.quarter} · ${play.clock} · ${play.kind}`));
+    // The season rides with the situation, so nothing on screen implies the play is from this year.
+    out.push(clue('play', 'Situation', `${play.season} · Q${play.quarter} · ${play.clock} · ${play.kind}`));
   }
   out.push(clue('position', 'Position', GROUP_LABELS[player.group]));
   if (out.length + 1 < tries && play) {
@@ -201,9 +267,18 @@ function highlightLadder(subject: ScoutSubject, player: NflPlayer, tries: number
 function statLadder(subject: ScoutSubject, player: NflPlayer): ScoutClue[] {
   const pairs = (subject.statLine?.stats ?? []).slice(0, MAX_STAT_CLUES);
   const out: ScoutClue[] = pairs.map(([label, value]) => clue('stat', label, value));
-  if (subject.statLine) out.push(clue('stat', 'Season', String(subject.statLine.season)));
+  const season = subject.statLine?.season;
+  if (season !== undefined) out.push(clue('stat', 'Season', String(season)));
   out.push(clue('position', 'Position', GROUP_LABELS[player.group]));
-  if (subject.team) out.push(clue('team', 'Team', subject.team.displayName));
+  // A stat line is a SEASON, and `subject.team` is this year's roster spot — printing them side by
+  // side as "Season 2025 / Team X" asserted a roster spot the dataset does not actually know. The
+  // attached play is the one record that ties this player to a club in a given season, so when it
+  // covers the same season it answers the question; otherwise the clue says what it really is.
+  const play = subject.play;
+  const sameSeason = play !== undefined && season !== undefined && play.season === season;
+  const thatYear = sameSeason ? teamNameById(play.teamId, subject.team) : undefined;
+  if (thatYear) out.push(clue('team', 'Team', thatYear));
+  else if (subject.team) out.push(clue('team', 'Current team', subject.team.displayName));
   return out;
 }
 

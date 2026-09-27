@@ -43,6 +43,19 @@ describe('closeCopy', () => {
     const cityOnly = closeCopy('new york', jets, [jets, giants]);
     expect(cityOnly.detail).toMatch(/Two franchises/i);
   });
+
+  it('never claims a one-club city has another club to try', () => {
+    const kcTeam = buildTeamSubject(kc);
+    const copy = closeCopy('kansas city', kcTeam, [kcTeam, buildTeamSubject(findFixtureTeam('NYJ'))]);
+    expect(copy.detail).not.toMatch(/other one|Two franchises/i);
+    expect(copy.detail).toMatch(/nickname/i);
+  });
+
+  it('never calls a franchise a person', () => {
+    const kcTeam = buildTeamSubject(kc);
+    const copy = closeCopy('kansas city', kcTeam, [kcTeam]);
+    for (const line of [copy.title, copy.detail]) expect(line).not.toMatch(/\b(him|his|he|guy)\b/i);
+  });
 });
 
 describe('verdictLine', () => {
@@ -85,6 +98,26 @@ describe('verdictLine', () => {
     expect(line.tone).toBe('success');
     expect(line.text).toContain('try 3');
     expect(line.text).toContain('1,200');
+  });
+
+  it('never calls a franchise "him" — in any verdict', () => {
+    const teamSubject = buildTeamSubject(kc);
+    const teamRound: ScoutRound = { ...round, mode: 'teamTrivia', subject: teamSubject, stages: buildStages('teamTrivia', teamSubject, 5) };
+    const teamState = { ...state, rounds: [teamRound] } as unknown as ScoutState;
+    const verdicts = ['correct', 'close', 'wrong', 'skipped', 'timeout'] as const;
+    for (const verdict of verdicts) {
+      for (const status of ['playing', 'lost'] as const) {
+        const line = verdictLine(teamState, { ...teamRound, status, score: 900 }, { text: 'kansas city', verdict, tryIndex: 1, at: 0 }, [teamSubject]);
+        for (const part of [line.text, line.detail ?? '']) {
+          expect(part, `${verdict}/${status}: "${part}"`).not.toMatch(/\b(him|his|he|guy)\b/i);
+        }
+      }
+    }
+  });
+
+  it('still talks about a player as a person', () => {
+    const line = verdictLine(state, round, { text: 'nope', verdict: 'wrong', tryIndex: 1, at: 0 }, []);
+    expect(line.text).toMatch(/Not him/);
   });
 });
 

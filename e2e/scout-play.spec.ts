@@ -409,6 +409,116 @@ test('scout home · modes link into setup and the sample renders', async ({ page
   await expectIconButtonsLabelled(page);
 });
 
+/** Every box that has to be on screen the moment a round ends, and whether it is. */
+async function foldCheck(page: Page): Promise<{ docH: number; vh: number; name: boolean; next: boolean }> {
+  return page.evaluate(() => {
+    const vh = window.innerHeight;
+    const inFold = (sel: string): boolean => {
+      const el = document.querySelector(sel);
+      if (!el) return false;
+      const b = el.getBoundingClientRect();
+      return b.top >= -1 && b.bottom <= vh + 1;
+    };
+    return {
+      docH: document.documentElement.scrollHeight,
+      vh,
+      name: inFold('[data-testid="scout-reveal-name"]'),
+      next: inFold('[data-testid="scout-next"]'),
+    };
+  });
+}
+
+test('scout play · the silhouette curtain opens a measurable amount on every rung', async ({ page }) => {
+  await page.setViewportSize(VIEWPORTS.desktop);
+  await startScout(page, settingsFor('silhouette', { tries: 5 }));
+  const stage = page.getByTestId('scout-stage-photo');
+  const cuts: number[] = [];
+  for (let i = 0; i < 5; i++) {
+    cuts.push(Number(await stage.getAttribute('data-cut')));
+    if (i < 4) {
+      await page.getByTestId('scout-skip').click();
+      await expect(page.getByTestId('scout-clue')).toHaveCount(i + 1);
+    }
+  }
+  // Rung 0 is a TRUE shadow (nothing of the face), every rung after it shows a new band of the
+  // photo, and no live rung ever opens the curtain all the way.
+  expect(cuts[0]).toBe(0);
+  for (let i = 1; i < cuts.length; i++) {
+    expect(cuts[i] - cuts[i - 1], `rung ${i} must show more than rung ${i - 1}`).toBeGreaterThanOrEqual(10);
+  }
+  expect(Math.max(...cuts)).toBeLessThan(100);
+  // The curtain is a second, blacked-out copy of the photo — while it is live, it is in the DOM.
+  await expect(page.getByTestId('scout-stage-curtain')).toBeVisible();
+  await page.getByTestId('scout-give-up').click();
+  await expect(page.getByTestId('scout-reveal')).toBeVisible();
+});
+
+test('scout play · the reveal is on screen the moment a round ends, in every mode', async ({ page }) => {
+  await page.setViewportSize(VIEWPORTS.mobile);
+  for (const mode of ALL_MODES) {
+    await startScout(page, settingsFor(mode));
+    const answer = await getAnswer(page);
+    await guess(page, answer!.accepted[0]);
+    await expect(page.getByTestId('scout-reveal')).toBeVisible();
+    await expect(page.getByTestId('scout-next')).toBeVisible();
+    const fold = await foldCheck(page);
+    expect(fold.name, `${mode}: the answer is below the fold`).toBe(true);
+    expect(fold.next, `${mode}: "Next round" is below the fold`).toBe(true);
+    expect(fold.docH, `${mode}: the page scrolls at ${fold.vh} px tall`).toBeLessThanOrEqual(fold.vh + 1);
+  }
+});
+
+test('scout play · a franchise is never called "him"', async ({ page }) => {
+  await page.setViewportSize(VIEWPORTS.desktop);
+  const person = /\b(him|his|guy)\b/i;
+  for (const mode of TEAM_MODES) {
+    await startScout(page, settingsFor(mode));
+    const answer = await getAnswer(page);
+    await guess(page, await page.evaluate(() => window.__scout!.wrongGuess()));
+    await expect(page.getByTestId('scout-feedback')).toContainText(/tries left/i);
+    expect(await page.getByTestId('scout-feedback').innerText(), `${mode}: wrong verdict`).not.toMatch(person);
+
+    const close = await page.evaluate(() => window.__scout!.closeGuess());
+    if (close !== null) {
+      await guess(page, close);
+      const text = await page.getByTestId('scout-feedback').innerText();
+      expect(text, `${mode}: close verdict`).not.toMatch(person);
+      // …and it never promises a second club in a city that has only one.
+      expect(text).not.toMatch(/try the other one/i);
+    }
+
+    await guess(page, answer!.accepted[0]);
+    await expect(page.getByTestId('scout-reveal')).toBeVisible();
+    expect(await page.getByTestId('scout-feedback').innerText(), `${mode}: correct verdict`).not.toMatch(person);
+  }
+});
+
+test('scout play · the dossier keeps the deepest cut on screen to the last rung', async ({ page }) => {
+  await page.setViewportSize(VIEWPORTS.desktop);
+  await startScout(page, settingsFor('teamTrivia', { tries: 6 }));
+  const cards = page.getByTestId('scout-trivia-card');
+  const first = cards.first();
+  const deepCut = await first.innerText();
+  for (let i = 0; i < 5; i++) await page.getByTestId('scout-skip').click();
+  await expect(cards.last()).toBeVisible();
+  // Rung 0 is the most expensive clue in the game: it is still readable, and still says the same thing.
+  await expect(first).toBeInViewport({ ratio: 0.9 });
+  expect(await first.innerText()).toBe(deepCut);
+});
+
+test('scout play · the tape is the payoff on a laptop, not a thumbnail', async ({ page }) => {
+  await page.setViewportSize(VIEWPORTS.desktop);
+  await startScout(page, settingsFor('silhouette', { rounds: 0 }));
+  await findRoundWithClip(page);
+  await page.evaluate(() => window.__scout!.store.getState().giveUp());
+  await expect(page.getByTestId('scout-reveal')).toBeVisible();
+  const poster = page.getByTestId('scout-tape-button');
+  await expect(poster).toBeVisible();
+  const box = (await poster.boundingBox())!;
+  expect(box.width, 'the closed tape is a poster, not a small ghost button').toBeGreaterThan(380);
+  expect(box.height / box.width).toBeCloseTo(9 / 16, 1);
+});
+
 test('scout play · no horizontal overflow at 320 px in any mode', async ({ page }) => {
   await page.setViewportSize(VIEWPORTS.narrow);
   for (const mode of ALL_MODES) {

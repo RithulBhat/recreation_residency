@@ -73,7 +73,14 @@ export default function ScoutDaily() {
 
       <ScoutResumeBanner />
 
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:items-start">
+      {/*
+        Left column is the brief, right column is the button — and nothing is said in both. The mode
+        name, its blurb, its `how` line and the pack live in the card below; the rules live in the
+        one under it; the call to action carries only what belongs next to a button. (Both cards used
+        to print `mode.how` verbatim, side by side.) No `lg:items-start`, so the shorter column
+        stretches and the button sits at the optical centre of the row instead of leaving dead card.
+      */}
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
         <div className="flex flex-col gap-4">
           <Card
             padding="lg"
@@ -132,16 +139,14 @@ export default function ScoutDaily() {
         ) : (
           <Card padding="lg" glow className="overflow-hidden">
             <div className="pointer-events-none absolute -left-16 -top-16 size-56 rounded-full bg-accent-2 opacity-20 blur-3xl" aria-hidden />
-            <div className="relative flex flex-col items-start gap-4">
+            <div className="relative flex flex-col items-start gap-4 lg:h-full lg:justify-center">
               <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-accent">Not played yet</div>
               <h2 className="font-display text-2xl font-black leading-tight text-fg sm:text-3xl">
-                Today it's <span className="text-gradient">{mode?.name ?? settings.mode}</span>
-                <span aria-hidden> {mode?.emoji}</span>
+                One shot at <span className="text-gradient">today's eight</span>
               </h2>
-              <p className="text-sm text-muted">{mode?.how}</p>
-              <p className="font-mono text-xs tabular text-fg/70">
-                {roundsLabel(settings.rounds)} · {triesLabel(settings.tries)}
-                {pack ? ` · ${pack.name}` : ''}
+              <p className="text-sm text-muted">
+                Solve on the first rung for the most points — every miss after that trades score for a
+                clue. There is no second attempt.
               </p>
               {streak > 0 && (
                 <p

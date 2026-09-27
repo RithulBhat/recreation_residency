@@ -161,3 +161,51 @@ describe('teams.json keeps the curated half intact', () => {
     expect(leaks, `a fact hands the player the answer:\n${leaks.join('\n')}`).toEqual([]);
   });
 });
+
+/**
+ * The venue is a clue too — `stages.ts` pushes `clue('venue', 'Home venue', team.venue)` onto both
+ * the teamTrivia and logoZoom ladders — but it comes from ESPN rather than from `facts.json`, so the
+ * alias guard above never looked at it. Two answers leaked through that gap:
+ *
+ *   • the Rams read "Los Angeles Memorial Coliseum", which contains their own location, and
+ *   • the Broncos' "Empower Field at Mile High" contains "mile high", which was in their accepted
+ *     guess list — so the venue rung handed over a string the matcher scores as correct.
+ *
+ * Fix a failure here by rewording nothing: either the venue is stale (correct it) or the alias is
+ * not really a name for the FRANCHISE (drop it, as "mile high" was dropped).
+ */
+describe('the venue clue never gives the franchise away', () => {
+  it('contains no accepted guess for its own team', () => {
+    const leaks = teams.flatMap((t) => leaksIn(t, [t.venue]));
+    expect(leaks, `a venue clue hands the player the answer:\n${leaks.join('\n')}`).toEqual([]);
+  });
+
+  it('never repeats the team’s own location', () => {
+    for (const t of teams) {
+      expect(norm(t.venue).includes(norm(t.location)), `${t.abbr} venue names its own city`).toBe(
+        false,
+      );
+    }
+  });
+
+  /**
+   * ESPN's `franchise.venue.fullName` — what `scripts/sync-nfl.mjs` reads — is the venue the
+   * franchise FIRST used in its current city, not the one it plays in now. For the two Los Angeles
+   * teams that is six years out of date (verified against Wikipedia's list of current NFL stadiums
+   * and confirmed still wrong in the live ESPN response), so a full `npm run nfl:sync` will put the
+   * stale names back. This pin is what makes that regression loud instead of silent.
+   */
+  it('pins the two venues ESPN reports incorrectly', () => {
+    const venueOf = (abbr: string): string | undefined => teams.find((t) => t.abbr === abbr)?.venue;
+    expect(venueOf('LAR'), 'Rams: ESPN still says Los Angeles Memorial Coliseum').toBe(
+      'SoFi Stadium',
+    );
+    expect(venueOf('LAC'), 'Chargers: ESPN still says Dignity Health Sports Park').toBe(
+      'SoFi Stadium',
+    );
+  });
+
+  it('gives every team a non-empty venue', () => {
+    for (const t of teams) expect(t.venue.trim().length, t.abbr).toBeGreaterThan(0);
+  });
+});

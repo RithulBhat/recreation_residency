@@ -122,7 +122,7 @@ test('the strip quotes the real dataset', async ({ page }) => {
   await page.setViewportSize(WIDTHS.desktop);
   await openHub(page);
   const strip = page.getByTestId('hub-inside');
-  for (const n of ['220', '2,507', '1,700', '215']) {
+  for (const n of ['220', '2,507', '1,700', '510']) {
     await expect(strip.getByText(n, { exact: true })).toBeVisible();
   }
   await expect(strip.getByText('all 32 teams')).toBeVisible();

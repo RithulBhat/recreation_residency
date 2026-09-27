@@ -13,14 +13,16 @@
 import type { HighlightPlay, NflDataset, NflPlayer, NflTeam, StatLine } from '@/scout/types';
 
 /**
- * One official highlight video per player, keyed by ESPN athlete id. Harvested by web search,
- * verified through YouTube's keyless oEmbed (official "NFL" or team channels only), and every
- * entry confirmed to genuinely embed via the IFrame API. Used ONLY as the post-guess reveal:
- * a cross-origin YouTube iframe is pixel-isolated, so nothing can be drawn over its content,
- * and YouTube's terms forbid obscuring the player.
+ * One official highlight video per player, keyed by ESPN athlete id. Discovered by real YouTube
+ * search, provenance-checked through YouTube's keyless oEmbed — the league channel or one of the 32
+ * team channels, matched on the channel's unique @handle — and then playability-tested for real.
+ * Harvested by `scripts/harvest-clips.mjs`.
  *
- * Some clips live on a former team's channel or name an older season, so a clip must never be
- * used to imply a player's CURRENT team — show its own title and channel beside it.
+ * Used ONLY as the post-guess reveal: a cross-origin YouTube iframe is pixel-isolated, so nothing
+ * can be drawn over its content, and YouTube's terms forbid obscuring the player.
+ *
+ * Some clips live on a former team's channel or name an older season, so a clip must never be used
+ * to imply a player's CURRENT team — show its own title and channel beside it.
  */
 export interface PlayerClip {
   /** ESPN athlete id. */
@@ -30,6 +32,22 @@ export interface PlayerClip {
   /** Official channel that published it, e.g. 'NFL' or 'Detroit Lions'. */
   channel: string;
   title: string;
+  /**
+   * Whether the video actually PLAYS in an embed on our origin — measured, not assumed.
+   *
+   * This field exists because the dataset's first certification was wrong. Every clip was declared
+   * embeddable on the strength of the IFrame API firing `onReady`, but `onReady` fires for a
+   * domain-restricted video too: the restriction is only enforced once playback is requested, and
+   * then arrives as `onError` 150 ("blocked from display on this website"). Re-testing properly
+   * (ready → `mute()` → `playVideo()` → watch `getPlayerState()`/`getCurrentTime()` while listening
+   * for `onError`) showed only 47 of the original 215 genuinely play. Notably the league's own "NFL"
+   * channel is blocked across the board — 0 of 80 — while team channels are where playable tape is.
+   *
+   * `false` is NOT dead weight: `WatchTape` turns a blocked clip into a poster plus a working
+   * `youtube.com/watch` link, so a blocked clip still beats no clip. It is kept only when nothing
+   * playable could be found for that player.
+   */
+  embeddable: boolean;
 }
 
 /** What `meta.json` records about the last sync. */
@@ -129,6 +147,32 @@ export const loadClips = once(
 /** Player id → its verified highlight clip. Players without one simply have no clip. */
 export const loadClipsById = once(async (): Promise<ReadonlyMap<string, PlayerClip>> => {
   const clips = await loadClips();
+  return new Map(clips.map((c) => [c.id, c]));
+});
+
+/**
+ * True only when the clip has been measured to actually play in an embed. Narrow with this rather
+ * than reading `embeddable` directly, so an absent clip and a blocked one answer the same question
+ * at the call site.
+ */
+export const isPlayableClip = (clip: PlayerClip | undefined): boolean => clip?.embeddable === true;
+
+/**
+ * Only the clips that genuinely play in an embed.
+ *
+ * Use this when a caller needs a tape that will really roll — a mode built around video, or a
+ * prefetch that should not warm a frame destined for error 150. For the ordinary reveal prefer
+ * `loadClipsById`: `WatchTape` already degrades a blocked clip to a poster and a YouTube link, and
+ * that is better than showing the player nothing.
+ */
+export const loadPlayableClips = once(async (): Promise<PlayerClip[]> => {
+  const clips = await loadClips();
+  return clips.filter((c) => c.embeddable);
+});
+
+/** Player id → a clip that is known to play. Players whose only clip is blocked are absent. */
+export const loadPlayableClipsById = once(async (): Promise<ReadonlyMap<string, PlayerClip>> => {
+  const clips = await loadPlayableClips();
   return new Map(clips.map((c) => [c.id, c]));
 });
 

@@ -3,7 +3,18 @@ import { createRng } from '@/game/rng';
 import { buildPool, buildPlayerSubject } from '@/scout/subjects';
 import { DEFAULT_SCOUT_SETTINGS, normalizeScoutSettings } from '@/scout/presets';
 import { fixtureBundle, findFixturePlayer, findFixtureTeam } from '@/scout/fixtures';
-import { currentRound, triesLeft } from '@/scout/selectors';
+import {
+  awaitingBuzz,
+  currentFormat,
+  currentRound,
+  franchisesTotal,
+  handover,
+  livesLeft,
+  lockedOutPlayerIds,
+  runPlayers,
+  timeLeftMs,
+  triesLeft,
+} from '@/scout/selectors';
 import type { ScoutRound, ScoutSettings, ScoutState, ScoutSubject } from '@/scout/types';
 import {
   MAX_RECENT_SCOUT_PACKS,
@@ -190,5 +201,129 @@ describe('store + a hand-built pool', () => {
     useScoutStore.getState().next(1200);
     expect(state().status).toBe('finished');
     expect(state().endReason).toBe('queue-empty');
+  });
+});
+
+describe('session formats through the store', () => {
+  const DUELISTS = [
+    { id: 'p1', name: 'Fox', emoji: '🦊', color: '#f97316' },
+    { id: 'p2', name: 'Octo', emoji: '🐙', color: '#a855f7' },
+  ];
+
+  it('buzzes, locks out and scores per player', () => {
+    const s = settings({
+      format: 'duel',
+      duelStyle: 'buzzer',
+      mode: 'silhouette',
+      packIds: ['superstars'],
+      tries: 3,
+      rounds: 2,
+      players: DUELISTS.map((p) => ({ ...p })),
+    });
+    const store = useScoutStore.getState();
+    store.start(s, subjects(s), 1000);
+    expect(runPlayers(state())).toHaveLength(2);
+    expect(awaitingBuzz(state())).toBe(true);
+
+    // an unattributed guess does nothing while the buzzer is open
+    const before = state();
+    store.guess('mahomes', 1100);
+    expect(state()).toBe(before);
+
+    store.buzz('p1', 1200);
+    expect(currentRound(state())?.activePlayerId).toBe('p1');
+    store.guess('nowhere near it', 1300);
+    expect(lockedOutPlayerIds(state())).toEqual(['p1']);
+    expect(awaitingBuzz(state())).toBe(true);
+
+    store.guessAs('p2', currentRound(state())!.subject.name, 1400);
+    expect(currentRound(state())?.status).toBe('won');
+    expect(runPlayers(state()).find((p) => p.id === 'p2')?.score).toBeGreaterThan(0);
+    expect(runPlayers(state()).find((p) => p.id === 'p1')?.score).toBe(0);
+  });
+
+  it('ignores a buzz outside a buzzer duel', () => {
+    const s = settings({ rounds: 2 });
+    useScoutStore.getState().start(s, subjects(s), 1000);
+    const before = state();
+    useScoutStore.getState().buzz('p1', 1100);
+    expect(state()).toBe(before);
+  });
+
+  it('runs a blitz off one clock, with the store stamping the times', () => {
+    const s = settings({ format: 'blitz', mode: 'silhouette', packIds: ['superstars'], blitzDuration: 30 });
+    const store = useScoutStore.getState();
+    store.start(s, subjects(s), 1000);
+    expect(currentFormat(state())).toBe('blitz');
+    expect(timeLeftMs(state(), 1000)).toBe(30_000);
+    store.guess(currentRound(state())!.subject.name, 2000);
+    // blitz never pauses: the next subject is already up
+    expect(state().status).toBe('playing');
+    expect(state().rounds).toHaveLength(2);
+    store.tick(40_000);
+    expect(state().status).toBe('finished');
+    expect(state().endReason).toBe('time');
+  });
+
+  it('runs a survival to zero lives', () => {
+    const s = settings({ format: 'survival', mode: 'silhouette', packIds: ['superstars'], lives: 1, tries: 2 });
+    const store = useScoutStore.getState();
+    store.start(s, subjects(s), 1000);
+    expect(livesLeft(state())).toBe(1);
+    store.giveUp(1100);
+    expect(livesLeft(state())).toBe(0);
+    store.next(1200);
+    expect(state().status).toBe('finished');
+    expect(state().endReason).toBe('lives');
+  });
+
+  it('runs a gauntlet to the end of the board', () => {
+    const s = settings({ format: 'gauntlet', mode: 'silhouette', seed: 'store-board', tries: 3 });
+    const store = useScoutStore.getState();
+    store.start(s, subjects(s), 1000);
+    const total = franchisesTotal(state());
+    expect(total).toBeGreaterThan(1);
+    for (let i = 0; i < total + 1 && state().status !== 'finished'; i++) {
+      store.giveUp(2000 + i * 10);
+      store.next(2001 + i * 10);
+    }
+    expect(state().status).toBe('finished');
+    expect(state().endReason).toBe('gauntlet');
+  });
+
+  it('rotates a party and reports the handover', () => {
+    const s = settings({
+      format: 'party',
+      mode: 'silhouette',
+      packIds: ['superstars'],
+      tries: 2,
+      rounds: 4,
+      players: DUELISTS.map((p) => ({ ...p })),
+    });
+    const store = useScoutStore.getState();
+    store.start(s, subjects(s), 1000);
+    expect(currentRound(state())?.activePlayerId).toBe('p1');
+    store.giveUp(1100);
+    expect(handover(state())).toMatchObject({ from: { id: 'p1' }, to: { id: 'p2' } });
+    store.next(1200);
+    expect(currentRound(state())?.activePlayerId).toBe('p2');
+  });
+
+  it('keeps a pre-format persisted draft and applies a format preset over it', () => {
+    const legacy = sanitizePersistedScout({
+      settings: { mode: 'faceZoom', packIds: ['pos-qb'], tries: 4, rounds: 12 },
+      recentPackIds: ['pos-qb'],
+    });
+    expect(legacy.settings.format).toBe('standard');
+    expect(legacy.settings.mode).toBe('faceZoom');
+    expect(legacy.settings.lives).toBe(3);
+
+    useScoutSettingsStore.setState({ settings: legacy.settings });
+    useScoutSettingsStore.getState().applyPreset('around-the-league');
+    expect(useScoutSettingsStore.getState().settings.format).toBe('gauntlet');
+    expect(useScoutSettingsStore.getState().settings.rounds).toBe(0);
+    useScoutSettingsStore.getState().update({ format: 'blitz', blitzDuration: 9999 });
+    expect(useScoutSettingsStore.getState().settings.blitzDuration).toBe(300);
+    expect(useScoutSettingsStore.getState().settings.format).toBe('blitz');
   });
 });

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { Lock } from 'lucide-react';
 import { cn } from '@/components/ui';
@@ -32,11 +32,18 @@ function ColorSwatches({ value }: { value: string }) {
  * The `teamTrivia` mode's visual: the clue ladder as a stack of cards. The deepest cut is on top
  * (it arrived first), each miss slides another, easier card in underneath, and the cards still to
  * come sit at the bottom as locked slots so you can see how much rope is left.
+ *
+ * The dossier used to scroll rung 0 — the hardest fact, and the one the round paid most for — clean
+ * out of sight by try 4, behind `scrollbar-none`. Three things keep it reachable now: the first card
+ * is STICKY, so the deep cut never leaves the frame; the scroller keeps a real (thin, tokenised)
+ * scrollbar; and the list fades at its bottom edge whenever there is more below.
  */
 export function TriviaStack({ clues, allClues, className }: TriviaStackProps) {
   const reduce = useReducedMotion();
   const locked = Math.max(0, allClues.length - clues.length);
   const newestRef = useRef<HTMLLIElement>(null);
+  const listRef = useRef<HTMLOListElement>(null);
+  const [more, setMore] = useState(false);
   const count = clues.length;
 
   // The dossier scrolls inside its own card (a long ladder must never push the guess box off
@@ -46,9 +53,24 @@ export function TriviaStack({ clues, allClues, className }: TriviaStackProps) {
     newestRef.current?.scrollIntoView({ block: 'nearest', behavior: reduce ? 'auto' : 'smooth' });
   }, [count, reduce]);
 
+  // Is there anything below the fold of the list? The bottom fade only appears when there is.
+  useEffect(() => {
+    const el = listRef.current;
+    if (!el) return;
+    const check = () => setMore(el.scrollTop + el.clientHeight < el.scrollHeight - 4);
+    check();
+    el.addEventListener('scroll', check, { passive: true });
+    const ro = typeof ResizeObserver === 'function' ? new ResizeObserver(check) : null;
+    ro?.observe(el);
+    return () => {
+      el.removeEventListener('scroll', check);
+      ro?.disconnect();
+    };
+  }, [count, locked]);
+
   return (
     <section
-      className={cn('glass relative isolate flex min-h-[16rem] flex-col gap-2.5 overflow-hidden rounded-4xl bg-bg-elevated/85 p-4 sm:min-h-[20rem] sm:p-5', className)}
+      className={cn('glass relative isolate flex min-h-[16rem] flex-col gap-2 overflow-hidden rounded-4xl bg-bg-elevated/85 p-4 sm:min-h-[20rem] sm:p-5', className)}
       data-testid="scout-stage-trivia"
       aria-label="Franchise clues"
     >
@@ -58,7 +80,18 @@ export function TriviaStack({ clues, allClues, className }: TriviaStackProps) {
         aria-hidden
       />
       <span className="relative eyebrow-readable">Franchise dossier</span>
-      <ol className="scrollbar-none relative flex max-h-[min(56vh,28rem)] flex-col gap-2.5 overflow-y-auto">
+      <ol
+        ref={listRef}
+        // On a laptop the dossier fills the hero slot, which is what stops it scrolling at all; on a
+        // phone it stays capped so a six-fact ladder never pushes the guess box off the screen.
+        className="relative flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto scroll-pb-2 scroll-pt-[4.5rem] pr-1 pb-0.5 max-lg:max-h-[min(56vh,28rem)]"
+        style={{
+          scrollbarWidth: 'thin',
+          scrollbarColor: 'color-mix(in oklab, var(--sg-fg) 28%, transparent) transparent',
+          maskImage: more ? 'linear-gradient(to bottom, #000 calc(100% - 2.5rem), transparent)' : undefined,
+          WebkitMaskImage: more ? 'linear-gradient(to bottom, #000 calc(100% - 2.5rem), transparent)' : undefined,
+        }}
+      >
         <AnimatePresence initial={false}>
           {clues.map((c, i) => (
             <motion.li
@@ -69,10 +102,15 @@ export function TriviaStack({ clues, allClues, className }: TriviaStackProps) {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               transition={{ type: 'spring', stiffness: 320, damping: 28 }}
               className={cn(
-                'rounded-3xl border p-3 sm:p-3.5',
-                i === clues.length - 1 && clues.length > 1
-                  ? 'border-accent/40 bg-accent/10 shadow-glow'
-                  : 'border-border bg-surface',
+                'shrink-0 rounded-3xl border px-3 py-2.5 sm:px-3.5',
+                // Rung 0 is the deepest cut and the most expensive clue in the game, so it STAYS
+                // PUT while the rest of the dossier scrolls under it — hence the opaque fill
+                // (`bg-surface` is translucent) and the shadow that says it is floating.
+                i === 0 && clues.length > 1
+                  ? 'sticky top-0 z-10 border-border bg-bg-elevated shadow-lg'
+                  : i === clues.length - 1 && clues.length > 1
+                    ? 'border-accent/40 bg-accent/10 shadow-glow'
+                    : 'border-border bg-surface',
               )}
               data-testid="scout-trivia-card"
             >
@@ -86,7 +124,7 @@ export function TriviaStack({ clues, allClues, className }: TriviaStackProps) {
         {Array.from({ length: locked }, (_, i) => (
           <li
             key={`locked-${i}`}
-            className="flex items-center gap-2 rounded-3xl border border-dashed border-border px-3 py-2.5 text-xs text-muted opacity-60"
+            className="flex shrink-0 items-center gap-2 rounded-3xl border border-dashed border-border px-3 py-2.5 text-xs text-muted opacity-60"
             aria-hidden
           >
             <Lock className="size-3.5 shrink-0" />
@@ -94,9 +132,9 @@ export function TriviaStack({ clues, allClues, className }: TriviaStackProps) {
           </li>
         ))}
       </ol>
-      <p className="relative mt-auto pt-1 text-xs text-muted">
-        {locked > 0 ? 'Every miss trades a deep cut for an easier clue.' : 'That is everything the dossier has.'}
-      </p>
+      {locked > 0 && (
+        <p className="relative shrink-0 pt-1 text-xs text-muted">Every miss trades a deep cut for an easier clue.</p>
+      )}
     </section>
   );
 }

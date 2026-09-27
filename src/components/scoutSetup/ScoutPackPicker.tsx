@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { ChevronDown, Search, Star, X } from 'lucide-react';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { SCOUT_PACKS } from '@/scout/packs';
 import { SCOUT_LIMITS } from '@/scout/presets';
 import { useScoutSettingsStore } from '@/store/scoutStore';
@@ -37,8 +38,18 @@ export const SCOUT_PACK_CATEGORIES: readonly Category[] = [
   { id: 'franchises', label: 'Franchises', tags: ['teams'] },
 ];
 
-/** How many packs the grid shows before the "show all" expander. */
+/**
+ * How many packs the grid shows before the "show all" expander.
+ *
+ * The grid is one column on a phone, so ten is already a long scroll there; from `lg` up it is two
+ * columns beside the mode + rules stack, which is taller than the pack card — six rows instead of
+ * five spends that slack on real content instead of leaving dead column. Keep this a multiple of
+ * two so the desktop grid never ends on a half row.
+ */
 export const COLLAPSED_PACKS = 10;
+export const COLLAPSED_PACKS_WIDE = 12;
+/** Tailwind's `lg` — the width at which the lobby splits into two columns. */
+const TWO_COLUMN = '(min-width: 64rem)';
 
 function inCategory(pack: ScoutPack, category: Category): boolean {
   if (category.tags.length === 0) return true;
@@ -63,6 +74,8 @@ export function ScoutPackPicker({ counts, poolSize, loading }: ScoutPackPickerPr
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState('all');
   const [expanded, setExpanded] = useState(false);
+  const wide = useMediaQuery(TWO_COLUMN);
+  const collapsedCount = wide ? COLLAPSED_PACKS_WIDE : COLLAPSED_PACKS;
 
   const packIds = settings.packIds;
   const selected = useMemo(
@@ -76,8 +89,8 @@ export function ScoutPackPicker({ counts, poolSize, loading }: ScoutPackPickerPr
     () => SCOUT_PACKS.filter((p) => inCategory(p, active) && matchesQuery(p, query)),
     [active, query],
   );
-  // 47 packs is a wall on a phone: show a screenful and let the rest open on demand.
-  const visible = expanded ? matching : matching.slice(0, COLLAPSED_PACKS);
+  // 60 packs is a wall on a phone: show a screenful and let the rest open on demand.
+  const visible = expanded ? matching : matching.slice(0, collapsedCount);
   const hidden = matching.length - visible.length;
 
   const toggle = (pack: ScoutPack) => {
@@ -243,7 +256,7 @@ export function ScoutPackPicker({ counts, poolSize, loading }: ScoutPackPickerPr
           <ChevronDown className="size-4" aria-hidden />
         </button>
       )}
-      {expanded && matching.length > COLLAPSED_PACKS && (
+      {expanded && matching.length > collapsedCount && (
         <button
           type="button"
           onClick={() => setExpanded(false)}
