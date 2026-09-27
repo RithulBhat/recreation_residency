@@ -133,7 +133,14 @@ export function RevealCard({ state, clips, onNext, tapeSignal, className }: Reve
           the answer and the way onward below the fold is exactly what this card is here to fix.
           On a laptop the identity block and the score breakdown share a row, which is what leaves
           the tape a full-width band underneath instead of a thumbnail wedged between them. */}
-      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto">
+      <div
+        className={cn(
+          'flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto',
+          // With no tape there is nothing tall to fill the slot, so the card centres what it has
+          // rather than leaving a void under it. (Safe: that case never overflows.)
+          !clip && 'justify-center',
+        )}
+      >
       <div className="flex gap-4">
         <motion.div
           className="shrink-0 overflow-hidden rounded-3xl border border-border bg-bg-elevated"

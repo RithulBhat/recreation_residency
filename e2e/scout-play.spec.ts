@@ -434,10 +434,12 @@ test('scout play · the silhouette curtain opens a measurable amount on every ru
   const stage = page.getByTestId('scout-stage-photo');
   const cuts: number[] = [];
   for (let i = 0; i < 5; i++) {
-    cuts.push(Number(await stage.getAttribute('data-cut')));
+    const cut = Number(await stage.getAttribute('data-cut'));
+    cuts.push(cut);
     if (i < 4) {
       await page.getByTestId('scout-skip').click();
-      await expect(page.getByTestId('scout-clue')).toHaveCount(i + 1);
+      // The clue ladder can be shorter than the try ladder, so wait on the curtain, not the clues.
+      await expect(stage).not.toHaveAttribute('data-cut', String(cut));
     }
   }
   // Rung 0 is a TRUE shadow (nothing of the face), every rung after it shows a new band of the
@@ -469,7 +471,9 @@ test('scout play · the reveal is on screen the moment a round ends, in every mo
 });
 
 test('scout play · a franchise is never called "him"', async ({ page }) => {
-  await page.setViewportSize(VIEWPORTS.desktop);
+  // The phone layout is the one that still shows the verdict line after the round ends (on a
+  // laptop the reveal card takes the hero slot and carries the verdict itself).
+  await page.setViewportSize(VIEWPORTS.mobile);
   const person = /\b(him|his|guy)\b/i;
   for (const mode of TEAM_MODES) {
     await startScout(page, settingsFor(mode));
