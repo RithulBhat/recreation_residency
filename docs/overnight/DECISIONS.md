@@ -100,10 +100,18 @@ their files mid-wave. Games are built against local route constants and the wiri
 reviewed commit. Full checklist in PLAN.md; note that only the `Record` maps fail loudly —
 `activeGame`, `isPlayPath`, `Placeholder` and the e2e guards all fail *silently*.
 
-## 10. Each game gets at most 4 nav entries.
-**Why:** `AppShell.tsx:61` is `MOBILE_COLS: Record<number, string> = { 4: …, 5: … }` read with a
-silent `?? 'grid-cols-5'` fallback, over `[Home, ...GAME_NAV[game]]`. A 5-entry nav renders in a
-5-column grid with no error and no failing test. Chosen nav: Play · Daily · Party · Stats.
+## 10. Each game gets at most 4 nav entries. — SUPERSEDED at `b147647`
+**Was:** `AppShell.tsx:61` held `MOBILE_COLS: Record<number, string> = { 4: …, 5: … }` read with a
+silent `?? 'grid-cols-5'` fallback, over `[Home, ...GAME_NAV[game]]`. A 5-entry nav rendered in a
+5-column grid with no error and no failing test, so the cap was a design constraint here.
+
+**Now:** the other session replaced it with `mobileCols(count)`, total over 2–6 with a clamp, and
+generalised `Placeholder`'s hardcoded scout check to `GAME_SOON: Partial<Record<GameKey, …>>`.
+Both traps are gone and the cap is lifted. The nav stays **Play · Daily · Party · Stats** because
+four is the right number for these games, not because five would break.
+
+Kept rather than deleted: the reasoning is why the fix happened, and the same silent-fallback
+shape is worth recognising elsewhere.
 
 ## 11. No new dependencies.
 **Why:** the prompt forbids paid APIs and new secrets, and everything needed is present — peerjs

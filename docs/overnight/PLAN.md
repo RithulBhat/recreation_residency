@@ -1,7 +1,10 @@
 # Overnight build — Price Guess + Higher or Lower
 
-Branch `feat/price-guess-higher-lower`, based on `4c39ba8`.
-Baseline verified green before any work: **2,119 unit tests / 98 files passing, `tsc --noEmit` clean.**
+Branch `feat/price-guess-higher-lower`. Originally cut from `4c39ba8`; rebased onto `b147647`
+once the other session's wave landed — clean, no conflicts, which is the disjoint-path
+discipline paying off.
+Baseline verified green before any work: **2,119 unit tests / 98 files passing, `tsc --noEmit`
+clean.** After the rebase the shared baseline is **2,173**; with this branch's work, **2,311**.
 
 ## Phase 0 findings
 
@@ -83,16 +86,24 @@ Games are therefore built against local route constants and handed over as one w
 ## Wiring handoff (delivered at the end, landed by the other session in one commit)
 1. `GameKey` union + `R.price` / `R.hilo` route tables — `src/routes.ts`
 2. `GAME_LABEL`, `GAME_HOME`, `GAME_TAGLINE` entries — `src/routes.ts`
-3. `GAME_NAV` entries — `src/components/AppShell.tsx:45` (**4th exhaustive map**)
+3. `GAME_NAV` entries — `src/components/AppShell.tsx:45` (**4th exhaustive map**, now exported)
 4. `activeGame()` + `isPlayPath()` arms — silent failures, not type errors
-5. `Placeholder.tsx:49` — hardcoded `game === 'scout'`; a third game 404s on every route
-6. All routes into **four** arrays in `e2e/visual.spec.ts` (narrow/h1/duplicate-id/scout)
+5. Optional `GAME_SOON` entry — `src/screens/Placeholder.tsx:31`
+6. All routes into the arrays in `e2e/visual.spec.ts` (narrow/h1/duplicate-id)
 7. Hub tiles — `src/screens/Residency.tsx` + `src/components/hub/**`
 
-**Nav constraint:** `AppShell.tsx:61` is `MOBILE_COLS = { 4: …, 5: … }` with a silent
-`?? 'grid-cols-5'` fallback, and `mobileNav = [Home, ...GAME_NAV[game]]`. Each game therefore gets
-**at most 4 nav entries** or the mobile tab bar lays out in the wrong grid with no error.
-Chosen nav for both games: **Play · Daily · Party · Stats** (= 5 columns with Home).
+**Two of the original traps are gone as of `b147647`** (fixed by the other session after this
+plan was written):
+- `MOBILE_COLS`'s two-entry lookup with a silent fallback is now `mobileCols(count)`, total over
+  2–6 with a clamp. The 4-nav-entry cap on each game is lifted; up to five is safe.
+- `Placeholder`'s hardcoded `game === 'scout'` is now
+  `GAME_SOON: Partial<Record<GameKey, RouteMeta>>`, so unlisted games fall through cleanly
+  instead of rendering the 404 treatment.
+
+`src/residencyWiring.test.ts` now derives all of the above from `GameKey` and fails when a game
+is only half-wired — so the handoff is checked by a test rather than by a checklist that rots.
+
+Chosen nav for both games: **Play · Daily · Party · Stats** (5 columns with Home).
 
 ## Milestones
 1. PLAN + DECISIONS + shared arcade utilities (content schema, settings codec, seeded pairing) + tests
