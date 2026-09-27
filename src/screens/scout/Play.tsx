@@ -30,6 +30,7 @@ import {
   useScoutSuggestions,
 } from '@/components/scout';
 import { ScoutPuzzleStage } from '@/components/scoutPuzzles';
+import { useBroadcastScore } from '@/hooks/useBroadcastScore';
 import { useConfetti } from '@/hooks/useConfetti';
 import { useHotkeys, type HotkeyMap } from '@/hooks/useHotkeys';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
@@ -129,6 +130,8 @@ export default function ScoutPlay() {
   const now = useScoutClock(Boolean(playing) && stageReady, settings.roundTimer > 0 || blitz);
 
   useFinishScoutGame();
+  // The broadcast score reads the store itself, so it needs nothing from this screen but a mount.
+  useBroadcastScore();
 
   // A new round always draws its own curtain from scratch.
   useEffect(() => setCurtain(false), [state.id, state.currentRound]);

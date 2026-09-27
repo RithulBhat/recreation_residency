@@ -23,6 +23,8 @@ export { ScoutPackPicker, SCOUT_PACK_CATEGORIES } from './ScoutPackPicker';
 export type { ScoutPackPickerProps } from './ScoutPackPicker';
 export { ScoutRules } from './ScoutRules';
 export type { ScoutRulesProps } from './ScoutRules';
+export { ScoutBroadcastSettings } from './ScoutBroadcastSettings';
+export type { ScoutBroadcastSettingsProps } from './ScoutBroadcastSettings';
 export { ScoutPresetRow, scoutPresetMatches } from './ScoutPresetRow';
 export { ScoutStartBar, useScoutBarBottom } from './ScoutStartBar';
 export type { ScoutStartBarProps } from './ScoutStartBar';

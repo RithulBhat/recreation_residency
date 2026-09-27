@@ -14,6 +14,10 @@
  * `settingsStore` is a different agent's file and is not touched). Everything that comes out of
  * storage goes back through `normalizeScoutSettings`.
  *
+ * It also holds `broadcast` — Highlight Scout's BROADCAST SCORE preferences (`src/audio/broadcast.ts`).
+ * These are device preferences rather than run rules, so they sit beside `settings` instead of inside
+ * `ScoutSettings`: they must never ride along in a challenge link or change what a seed deals.
+ *
  * Subscription helpers are prefixed (`onScoutRoundOver`, `onScoutFinished`) so `src/store/index.ts`
  * can `export *` from both game stores without an ambiguous re-export.
  */
@@ -130,10 +134,25 @@ export function onScoutFinished(cb: (state: ScoutState) => void): () => void {
 export const SCOUT_SETTINGS_STORAGE_KEY = 'sg:scout';
 export const SCOUT_SETTINGS_VERSION = 1;
 
+/**
+ * Highlight Scout's broadcast-score preferences. The stings are on by default (they are the point);
+ * the background bed is OFF by default, because music under a guessing game is a taste few share.
+ * `volume` is the score's own trim — the global volume and `sfxEnabled` still gate it on top.
+ */
+export interface ScoutBroadcastPrefs {
+  stings: boolean;
+  bed: boolean;
+  /** 0..1, relative to the app volume. */
+  volume: number;
+}
+
+export const DEFAULT_SCOUT_BROADCAST: ScoutBroadcastPrefs = { stings: true, bed: false, volume: 0.7 };
+
 export interface ScoutSettingsState {
   settings: ScoutSettings;
   /** Most recent first, max 8. */
   recentPackIds: string[];
+  broadcast: ScoutBroadcastPrefs;
 }
 
 export interface ScoutSettingsActions {
@@ -141,6 +160,7 @@ export interface ScoutSettingsActions {
   applyPreset(id: string): void;
   reset(): void;
   pushRecentPack(id: string): void;
+  setBroadcast(partial: Partial<ScoutBroadcastPrefs>): void;
 }
 
 export type ScoutSettingsStore = ScoutSettingsState & ScoutSettingsActions;
@@ -152,6 +172,20 @@ function pushUnique(list: readonly string[], id: string, max: number): string[] 
   return out.slice(0, max);
 }
 
+function clamp01(v: unknown): number {
+  return typeof v === 'number' && Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : DEFAULT_SCOUT_BROADCAST.volume;
+}
+
+/** Whatever storage held, turned back into a valid set of broadcast preferences. */
+export function normalizeScoutBroadcast(raw: unknown): ScoutBroadcastPrefs {
+  const p = (raw && typeof raw === 'object' ? raw : {}) as Partial<Record<keyof ScoutBroadcastPrefs, unknown>>;
+  return {
+    stings: typeof p.stings === 'boolean' ? p.stings : DEFAULT_SCOUT_BROADCAST.stings,
+    bed: typeof p.bed === 'boolean' ? p.bed : DEFAULT_SCOUT_BROADCAST.bed,
+    volume: clamp01(p.volume),
+  };
+}
+
 /** Sanitize whatever came out of storage (or a migration). */
 export function sanitizePersistedScout(raw: unknown): ScoutSettingsState {
   const p = (raw && typeof raw === 'object' ? raw : {}) as Partial<Record<keyof ScoutSettingsState, unknown>>;
@@ -161,6 +195,7 @@ export function sanitizePersistedScout(raw: unknown): ScoutSettingsState {
   return {
     settings: normalizeScoutSettings(p.settings as Partial<ScoutSettings> | undefined),
     recentPackIds: recent,
+    broadcast: normalizeScoutBroadcast(p.broadcast),
   };
 }
 
@@ -169,18 +204,26 @@ export const useScoutSettingsStore = create<ScoutSettingsStore>()(
     (set, get) => ({
       settings: normalizeScoutSettings(DEFAULT_SCOUT_SETTINGS),
       recentPackIds: [],
+      broadcast: DEFAULT_SCOUT_BROADCAST,
 
       update: (partial) => set({ settings: normalizeScoutSettings({ ...get().settings, ...partial }) }),
       applyPreset: (id) => set({ settings: applyScoutPreset(get().settings, id) }),
       reset: () => set({ settings: normalizeScoutSettings(DEFAULT_SCOUT_SETTINGS) }),
       pushRecentPack: (id) =>
         set({ recentPackIds: pushUnique(get().recentPackIds, id, MAX_RECENT_SCOUT_PACKS) }),
+      // `reset` deliberately leaves the broadcast prefs alone: resetting the RULES of a run should
+      // not silently turn the player's music back on (or off).
+      setBroadcast: (partial) => set({ broadcast: normalizeScoutBroadcast({ ...get().broadcast, ...partial }) }),
     }),
     {
       name: SCOUT_SETTINGS_STORAGE_KEY,
       version: SCOUT_SETTINGS_VERSION,
       storage: createJSONStorage(() => localStorage),
-      partialize: (s): ScoutSettingsState => ({ settings: s.settings, recentPackIds: s.recentPackIds }),
+      partialize: (s): ScoutSettingsState => ({
+        settings: s.settings,
+        recentPackIds: s.recentPackIds,
+        broadcast: s.broadcast,
+      }),
       migrate: (persisted) => sanitizePersistedScout(persisted),
       merge: (persisted, current) => ({ ...current, ...sanitizePersistedScout(persisted) }),
     },

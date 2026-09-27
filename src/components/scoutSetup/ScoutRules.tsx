@@ -21,6 +21,7 @@ import { Stepper } from '@/components/ui/Stepper';
 import { Switch } from '@/components/ui/Switch';
 import { cn } from '@/components/ui/cn';
 import { SettingRow } from '@/components/setup/SettingRow';
+import { ScoutBroadcastSettings } from './ScoutBroadcastSettings';
 import {
   BLITZ_PENALTY_LABEL,
   BLITZ_RUNG_LABEL,
@@ -72,6 +73,10 @@ export interface ScoutRulesProps {
  * neither rounds nor a tier, and duel/party have no hints. A control that would turn nothing is not
  * rendered at all — where its absence could be surprising, the reason takes its place. Every control
  * carries `data-setting="<key>"`, so a test can assert that set against the format's `uses` exactly.
+ *
+ * The BROADCAST SCORE block at the bottom is deliberately the one thing here WITHOUT a `data-setting`:
+ * it is a device preference (like the theme or the volume), not a rule of the run, so it belongs to
+ * every format and must stay out of the set that test compares against `uses`.
  */
 export function ScoutRules({ tierCounts }: ScoutRulesProps) {
   const settings = useScoutSettingsStore((s) => s.settings);
@@ -327,6 +332,8 @@ export function ScoutRules({ tierCounts }: ScoutRulesProps) {
           />
         </div>
       )}
+
+      <ScoutBroadcastSettings className="border-t border-border/70 pt-4" />
     </div>
   );
 }

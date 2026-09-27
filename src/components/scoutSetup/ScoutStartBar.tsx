@@ -1,4 +1,5 @@
 import { Play, RotateCcw } from 'lucide-react';
+import { getAudioEngine } from '@/audio';
 import { GAUNTLET_SIZE, scoutFormat } from '@/scout/formats';
 import { Button } from '@/components/ui/Button';
 import { Portal } from '@/components/ui/internal';
@@ -20,7 +21,13 @@ export interface ScoutStartBarProps {
   datasetLoading: boolean;
 }
 
-/** Sticky summary + the big Start button. Portaled to `<body>` so it never affects page layout. */
+/**
+ * Sticky summary + the big Start button. Portaled to `<body>` so it never affects page layout.
+ *
+ * Start also unlocks the shared AudioContext. It has to happen HERE, synchronously inside the tap:
+ * the broadcast score's kickoff fires a moment later from the play screen, and a context nothing has
+ * unlocked can make no sound (by design — `Broadcast.play` will not resume one itself).
+ */
 export function ScoutStartBar({ game, poolSize, datasetLoading }: ScoutStartBarProps) {
   const settings = useScoutSettingsStore((s) => s.settings);
   const reset = useScoutSettingsStore((s) => s.reset);
@@ -28,6 +35,11 @@ export function ScoutStartBar({ game, poolSize, datasetLoading }: ScoutStartBarP
   const summary = scoutSettingsSummary(settings);
   const kind = poolKind(settings);
   const emptyPool = poolSize === 0;
+
+  const launch = (): void => {
+    void getAudioEngine().unlock();
+    void game.start(settings);
+  };
 
   const gauntlet = scoutFormat(settings) === 'gauntlet';
   const poolLine = datasetLoading
@@ -79,7 +91,7 @@ export function ScoutStartBar({ game, poolSize, datasetLoading }: ScoutStartBarP
                   variant="glow"
                   leadingIcon={<RotateCcw />}
                   loading={game.loading}
-                  onClick={() => void game.start(settings)}
+                  onClick={launch}
                   data-testid="scout-retry"
                 >
                   Try again
@@ -101,7 +113,7 @@ export function ScoutStartBar({ game, poolSize, datasetLoading }: ScoutStartBarP
                   leadingIcon={<Play className="fill-current" />}
                   loading={game.loading || datasetLoading}
                   disabled={emptyPool}
-                  onClick={() => void game.start(settings)}
+                  onClick={launch}
                   className="flex-1 sm:flex-none sm:min-w-40"
                   data-testid="scout-start"
                 >

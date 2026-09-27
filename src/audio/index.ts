@@ -2,6 +2,17 @@ export { getAudioEngine, createAudioEngine, AUTOPLAY_BLOCKED, DEFAULT_CACHE_SIZE
 export type { AudioBackend, AudioEngineOptions, SongoonerAudioEngine, FetchLike, FetchResponseLike, PlayFullOptions } from './engine';
 export { getSfx, createSfx, HOVER_MIN_GAP_MS } from './sfx';
 export {
+  getBroadcast,
+  createBroadcast,
+  createBroadcastRig,
+  scheduleCue,
+  scheduleBed,
+  bedBuffer,
+  BED_LEVEL,
+  CUE_SECONDS,
+} from './broadcast';
+export type { BroadcastRig, BedNodes } from './broadcast';
+export {
   clampOffset,
   clampPitch,
   detuneFor,

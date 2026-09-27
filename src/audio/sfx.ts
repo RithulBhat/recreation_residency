@@ -2,6 +2,10 @@
  * Fully synthesized UI / game sound effects — oscillators, filtered noise and gain envelopes on the
  * engine's shared AudioContext. No audio assets. Sounds bypass the music master/analyser so the
  * visualizer only shows the track.
+ *
+ * The voice primitives (`tone`, `noise`, `envelope`, `filterNode`, `noiseBuffer`, `releaseOnEnd`)
+ * are exported for `./broadcast.ts`, which builds Highlight Scout's broadcast cues out of the same
+ * vocabulary on the same context. They are internal to `src/audio` — nothing outside it imports them.
  */
 import type { Sfx, SfxName } from '@/types';
 import { getAudioEngine } from './engine';
@@ -9,16 +13,16 @@ import { getAudioEngine } from './engine';
 /** Hover sounds are dropped if another one played more recently than this. */
 export const HOVER_MIN_GAP_MS = 70;
 /** Exponential ramps cannot reach 0; this is "silent". */
-const FLOOR = 0.0001;
+export const FLOOR = 0.0001;
 const DEFAULT_VOLUME = 0.8;
 
-interface FilterOpts {
+export interface FilterOpts {
   type: BiquadFilterType;
   freq: number;
   freqTo?: number;
   q?: number;
 }
-interface ToneOpts {
+export interface ToneOpts {
   type: OscillatorType;
   freq: number;
   freqTo?: number;
@@ -28,23 +32,23 @@ interface ToneOpts {
   attack?: number;
   filter?: FilterOpts;
 }
-interface NoiseOpts {
+export interface NoiseOpts {
   at: number;
   dur: number;
   gain?: number;
   attack?: number;
   filter: FilterOpts;
 }
-type Voice = (ctx: AudioContext, out: AudioNode, t: number) => void;
+export type Voice = (ctx: AudioContext, out: AudioNode, t: number) => void;
 
 /** Linear attack to the peak, then an exponential decay that lands at silence when the voice stops. */
-function envelope(param: AudioParam, at: number, dur: number, peak: number, attack: number): void {
+export function envelope(param: AudioParam, at: number, dur: number, peak: number, attack: number): void {
   param.setValueAtTime(0, at);
   param.linearRampToValueAtTime(peak, at + attack);
   param.exponentialRampToValueAtTime(FLOOR, at + dur);
 }
 
-function releaseOnEnd(source: AudioScheduledSourceNode, ...others: AudioNode[]): void {
+export function releaseOnEnd(source: AudioScheduledSourceNode, ...others: AudioNode[]): void {
   source.onended = () => {
     try {
       source.disconnect();
@@ -55,7 +59,7 @@ function releaseOnEnd(source: AudioScheduledSourceNode, ...others: AudioNode[]):
   };
 }
 
-function filterNode(ctx: AudioContext, f: FilterOpts, at: number, dur: number): BiquadFilterNode {
+export function filterNode(ctx: AudioContext, f: FilterOpts, at: number, dur: number): BiquadFilterNode {
   const node = ctx.createBiquadFilter();
   node.type = f.type;
   node.frequency.setValueAtTime(f.freq, at);
@@ -64,7 +68,7 @@ function filterNode(ctx: AudioContext, f: FilterOpts, at: number, dur: number): 
   return node;
 }
 
-function tone(ctx: AudioContext, out: AudioNode, o: ToneOpts): void {
+export function tone(ctx: AudioContext, out: AudioNode, o: ToneOpts): void {
   const osc = ctx.createOscillator();
   osc.type = o.type;
   osc.frequency.setValueAtTime(o.freq, o.at);
@@ -89,7 +93,7 @@ function tone(ctx: AudioContext, out: AudioNode, o: ToneOpts): void {
 const noiseBuffers = new WeakMap<AudioContext, AudioBuffer>();
 
 /** One second of white noise per context, looped by the noise voices. */
-function noiseBuffer(ctx: AudioContext): AudioBuffer {
+export function noiseBuffer(ctx: AudioContext): AudioBuffer {
   let buffer = noiseBuffers.get(ctx);
   if (!buffer) {
     const n = Math.max(1, Math.round(ctx.sampleRate));
@@ -101,7 +105,7 @@ function noiseBuffer(ctx: AudioContext): AudioBuffer {
   return buffer;
 }
 
-function noise(ctx: AudioContext, out: AudioNode, o: NoiseOpts): void {
+export function noise(ctx: AudioContext, out: AudioNode, o: NoiseOpts): void {
   const src = ctx.createBufferSource();
   src.buffer = noiseBuffer(ctx);
   src.loop = true;
