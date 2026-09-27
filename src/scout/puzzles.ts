@@ -151,6 +151,26 @@ export function cardFameWindows(difficulty: ScoutDifficulty): FameWindow[] {
   }
 }
 
+/**
+ * Fame bands centred on the subject, tightest first, then the tier's own windows as a fallback.
+ *
+ * WHY: `oddOneOut` draws its outlier from the ANSWER pool (gated by the pack and the tier) but drew
+ * its other three from {@link cardFameWindows}, which floors at {@link CARD_FAME_FLOOR}. At the
+ * `any` tier that let a deep-cut outlier hide among three household names, so the answer was the
+ * least famous card on the board 72% of the time, measured over 9,940 generated rounds. A player
+ * could win by picking the name they did not recognise, having learned nothing about colleges or
+ * draft rounds — the round still resolved correctly, so every other test passed. `puzzles.tells.test.ts`
+ * now holds that rate near chance.
+ */
+function fameBandsAround(player: NflPlayer, windows: readonly FameWindow[]): FameWindow[] {
+  const fame = Number.isFinite(player.fame) ? player.fame : 0;
+  const around = [12, 20, 30].map((spread) => ({
+    min: Math.max(0, fame - spread),
+    max: Math.min(100, fame + spread),
+  }));
+  return [...around, ...windows];
+}
+
 function inWindow(player: NflPlayer, w: FameWindow): boolean {
   const fame = Number.isFinite(player.fame) ? player.fame : 0;
   return fame >= w.min && fame <= w.max;
@@ -671,7 +691,8 @@ export function oddOneOutPuzzle(
     for (const key of keys) {
       if (tried >= maxBuckets) break;
       const bucket = (groups.get(key) ?? []).filter((p) => p.id !== player.id);
-      const eligible = windows
+      // Bands centred on the outlier, so he is not simply the least famous name on the board.
+      const eligible = fameBandsAround(player, windows)
         .map((w) => bucket.filter((p) => inWindow(p, w)))
         .find((list) => list.length >= ODD_ONE_OUT_CARDS - 1);
       if (!eligible) continue;
