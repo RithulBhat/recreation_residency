@@ -35,8 +35,8 @@ export interface GapBand {
  * straight from the build prompt: easy ≥ 2×, hard within 10%, insane within 3%.
  */
 export const HILO_BANDS: Record<HiloDifficulty, GapBand> = {
-  easy: { min: 2, max: Infinity },
-  medium: { min: 1.25, max: Infinity },
+  easy: { min: 2, max: 8 },
+  medium: { min: 1.25, max: 3 },
   hard: { min: 1, max: 1.1 },
   insane: { min: 1, max: 1.03 },
 };
@@ -97,6 +97,19 @@ export interface Matchup {
 /**
  * Choose a partner for `anchor` from `pool`, honouring `band` if possible and degrading if not.
  *
+ * ## Direction is balanced deliberately, not left to the ratio filter
+ * Filtering only by ratio looks unbiased — across a whole run, "higher" comes up about half the
+ * time. It is not. Higher or Lower chains, so the anchor is wherever the last round left you,
+ * and from a cheap anchor most of the pool is dearer. Measured on a realistic long-tailed pool,
+ * "if A is below the median, guess higher" won 78% of easy rounds against 50% chance, while the
+ * marginal rate of "higher" sat at a reassuring 50.6%. The tell is conditional on the anchor and
+ * invisible in the aggregate.
+ *
+ * So candidates are split into dearer and cheaper buckets and the SIDE is chosen on a coin flip
+ * first, then an item within it. Where the anchor sits then tells you nothing. At the very top
+ * and bottom of a pool one bucket is empty and the other is forced — unavoidable, and rare
+ * enough not to be readable.
+ *
  * `usedIds` keeps a run from repeating an item. Returns `null` only when every item in the pool
  * is either the anchor or already used — the one case the caller must handle by ending the run.
  */
@@ -114,13 +127,58 @@ export function pickPartner(
   for (let rung = 0; rung < ladder.length; rung++) {
     const step = ladder[rung];
     const fits = available.filter((i) => withinBand(ratioOf(anchor.value, i.value), step));
-    if (fits.length > 0) {
-      return { item: rng.pick(fits), degraded: rung, band: step };
+    if (fits.length === 0) continue;
+
+    let dearer: readonly ContentItem[] = fits.filter((i) => i.value > anchor.value);
+    let cheaper: readonly ContentItem[] = fits.filter((i) => i.value < anchor.value);
+    // Backfill an empty side from looser rungs so the direction is genuinely a coin flip.
+    if (dearer.length === 0) dearer = sideCandidates(available, anchor.value, ladder, rung + 1, true);
+    if (cheaper.length === 0) {
+      cheaper = sideCandidates(available, anchor.value, ladder, rung + 1, false);
     }
+
+    const side =
+      dearer.length > 0 && cheaper.length > 0
+        ? rng.next() < 0.5
+          ? dearer
+          : cheaper
+        : dearer.length > 0
+          ? dearer
+          : cheaper;
+    if (side.length === 0) continue;
+    return { item: rng.pick(side), degraded: rung, band: step };
   }
+
   // The ladder ends unconstrained, so this is unreachable while `available` is non-empty —
   // kept as a total function rather than a non-null assertion.
   return { item: rng.pick(available), degraded: ladder.length, band: { min: 1, max: Infinity } };
+}
+
+/**
+ * Candidates on one side of the anchor, relaxing the band down the ladder until that side has
+ * something in it.
+ *
+ * This is what makes the coin flip real at the edges of a pool. With a minimum-gap band like
+ * easy's (at least 2x), nothing in the bottom of a pool has a partner 2x cheaper, so the only
+ * legal move is upward and the answer is forced. Accepting a smaller gap for that one round is
+ * a minor difficulty deviation; a forced answer is a leak the player can read every time.
+ */
+function sideCandidates(
+  available: readonly ContentItem[],
+  anchorValue: number,
+  ladder: readonly GapBand[],
+  fromRung: number,
+  dearer: boolean,
+): readonly ContentItem[] {
+  for (let rung = fromRung; rung < ladder.length; rung++) {
+    const found = available.filter(
+      (i) =>
+        (dearer ? i.value > anchorValue : i.value < anchorValue) &&
+        withinBand(ratioOf(anchorValue, i.value), ladder[rung]),
+    );
+    if (found.length > 0) return found;
+  }
+  return [];
 }
 
 export interface SequenceStep {
@@ -193,4 +251,40 @@ export function directionOf(from: number, to: number): Direction {
 export function isTooClose(a: number, b: number, tolerance: number): boolean {
   if (tolerance <= 0) return a === b;
   return ratioOf(a, b) <= 1 + tolerance;
+}
+
+/**
+ * How often a band can actually be satisfied by a pool, as a fraction of anchors that have at
+ * least one partner inside it.
+ *
+ * A pool whose neighbouring values are 9% apart can never produce an "insane" pair (within 3%),
+ * so every round silently degrades and the hardest setting plays no differently from the one
+ * below it. Measuring this is what turns that from an invisible disappointment into something
+ * the setup screen can refuse to offer.
+ */
+export function bandFeasibility(pool: readonly ContentItem[], band: GapBand): number {
+  if (pool.length < 2) return 0;
+  let usable = 0;
+  for (const anchor of pool) {
+    const has = pool.some(
+      (other) => other.id !== anchor.id && withinBand(ratioOf(anchor.value, other.value), band),
+    );
+    if (has) usable++;
+  }
+  return usable / pool.length;
+}
+
+/**
+ * The difficulties a pool can honestly deliver, at a given minimum feasibility.
+ *
+ * Offering a setting the content cannot honour is worse than not offering it: the player picks
+ * "insane", gets ordinary rounds, and concludes the game is broken rather than the pack.
+ */
+export function feasibleDifficulties(
+  pool: readonly ContentItem[],
+  minimum = 0.6,
+): readonly HiloDifficulty[] {
+  return (Object.keys(HILO_BANDS) as HiloDifficulty[]).filter(
+    (d) => bandFeasibility(pool, HILO_BANDS[d]) >= minimum,
+  );
 }

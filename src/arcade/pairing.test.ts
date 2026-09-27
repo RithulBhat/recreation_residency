@@ -64,10 +64,18 @@ describe('HILO_BANDS', () => {
   });
 
   it('separates wide-gap from narrow-gap difficulties', () => {
-    expect(withinBand(ratioOf(1, 10), HILO_BANDS.easy)).toBe(true);
-    expect(withinBand(ratioOf(1, 10), HILO_BANDS.insane)).toBe(false);
+    expect(withinBand(ratioOf(1, 4), HILO_BANDS.easy)).toBe(true);
+    expect(withinBand(ratioOf(1, 4), HILO_BANDS.insane)).toBe(false);
     expect(withinBand(ratioOf(1, 1.02), HILO_BANDS.insane)).toBe(true);
     expect(withinBand(ratioOf(1, 1.02), HILO_BANDS.easy)).toBe(false);
+  });
+
+  it('caps the wide bands as well as flooring them', () => {
+    // Left open at the top, a low anchor's only legal partners are dearer ones, so the chain
+    // pins against the ceiling of the pool where the answer is forced. See pairing.strategies.
+    expect(Number.isFinite(HILO_BANDS.easy.max)).toBe(true);
+    expect(Number.isFinite(HILO_BANDS.medium.max)).toBe(true);
+    expect(withinBand(ratioOf(1, 50), HILO_BANDS.easy)).toBe(false);
   });
 });
 
@@ -189,9 +197,17 @@ describe('buildSequence', () => {
   });
 
   it('reports zero degradation on a pool that comfortably fits the band', () => {
-    const wide = [item('a', 1), item('b', 100), item('c', 10000)];
+    // inside easy's [2, 8] band at every hop
+    const wide = [item('a', 1), item('b', 3), item('c', 9), item('d', 27)];
     const built = buildSequence(wide, 'easy', 3, createRng('w'));
     expect(built.totalDegraded).toBe(0);
+  });
+
+  it('degrades, rather than failing, when every hop exceeds the band cap', () => {
+    const scattered = [item('a', 1), item('b', 100), item('c', 10_000)];
+    const built = buildSequence(scattered, 'easy', 3, createRng('w'));
+    expect(built.steps).toHaveLength(3);
+    expect(built.totalDegraded).toBeGreaterThan(0);
   });
 
   it('handles an empty pool and a zero length without throwing', () => {
