@@ -51,6 +51,12 @@ Verified exactly this way with Playwright driving two pages.
 
 Other commands:
 
+**Do not run two Playwright suites at once in the same checkout.** They share
+`test-results/.artifacts/`, and the second run deletes trace files the first is still writing. It
+surfaces as four or five unrelated tests failing with `ENOENT ... recording*.trace`, which reads
+exactly like a real regression — it cost an hour of chasing Scout failures that did not exist.
+Run one at a time, or give each run its own `--output` directory.
+
 ```bash
 npm test                              # 2,595 unit tests
 npm run typecheck
