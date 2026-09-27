@@ -12,6 +12,8 @@ import { STATS_STORAGE_KEY } from '@/store/statsStore';
 import {
   SCOUT_CLIP_COUNT,
   SCOUT_PLAY_COUNT,
+  SCOUT_FORMAT_COUNT,
+  SCOUT_MODE_COUNT,
   SCOUT_PLAYER_COUNT,
   SCOUT_TEAM_COUNT,
   SONGOONER_PACK_COUNT,
@@ -43,5 +45,17 @@ describe('hub counts', () => {
 
   it('reads the same localStorage key the stats store writes', () => {
     expect(STATS_KEY).toBe(STATS_STORAGE_KEY);
+  });
+});
+
+describe('mode and format counts match the game', () => {
+  it('SCOUT_MODE_COUNT equals the puzzle types the lobby offers', async () => {
+    const { SCOUT_MODES } = await import('@/scout/packs');
+    expect(SCOUT_MODE_COUNT).toBe(SCOUT_MODES.length);
+  });
+
+  it('SCOUT_FORMAT_COUNT equals the session formats', async () => {
+    const { SCOUT_FORMATS } = await import('@/scout/formats');
+    expect(SCOUT_FORMAT_COUNT).toBe(SCOUT_FORMATS.length);
   });
 });

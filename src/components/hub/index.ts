@@ -8,6 +8,8 @@ export { ScoutArt, silhouetteId } from './ScoutArt';
 export {
   SCOUT_CLIP_COUNT,
   SCOUT_PLAY_COUNT,
+  SCOUT_FORMAT_COUNT,
+  SCOUT_MODE_COUNT,
   SCOUT_PLAYER_COUNT,
   SCOUT_TEAM_COUNT,
   SONGOONER_PACK_COUNT,

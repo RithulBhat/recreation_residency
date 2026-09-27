@@ -6,6 +6,7 @@ import {
   HubFooter,
   HubHero,
   InsideStrip,
+  SCOUT_MODE_COUNT,
   SCOUT_PLAYER_COUNT,
   ScoutArt,
   SONGOONER_PACK_COUNT,
@@ -19,6 +20,10 @@ interface HubGame {
   tagline: string;
   blurb: string;
   facts: readonly string[];
+  /** Where this game's content comes from. Shown on the card so no game looks more factual than it is. */
+  provenance: string;
+  /** Set when any of the game's content is estimated rather than sourced. */
+  approximate?: string;
   to: string;
   playTo: string;
   playLabel: string;
@@ -39,6 +44,7 @@ const GAMES: readonly HubGame[] = [
     blurb:
       'A tenth of a second of a song. Name it, or trade points for a longer clip. Classic, blitz, survival, duels, party mode and a daily run.',
     facts: ['0.1s → 10s clips', `${SONGOONER_PACK_COUNT} packs`, 'Duels, party & voice'],
+    provenance: 'Audio previews stream live from Deezer',
     to: R.songooner.home,
     playTo: `${R.songooner.setup}?autostart=1`,
     playLabel: 'Play Songooner now',
@@ -51,7 +57,12 @@ const GAMES: readonly HubGame[] = [
     tagline: GAME_TAGLINE.scout,
     blurb:
       'A blacked-out headshot, revealed one try at a time. Or an extreme face zoom, a redacted play-by-play, a season stat line, a career path, a logo crop.',
-    facts: [`${SCOUT_PLAYER_COUNT.toLocaleString()} players`, '7 clue modes', 'Real play-by-play'],
+    facts: [
+      `${SCOUT_PLAYER_COUNT.toLocaleString()} players`,
+      `${SCOUT_MODE_COUNT} clue modes`,
+      'Real play-by-play',
+    ],
+    provenance: 'Rosters, photos and play-by-play from ESPN',
     to: R.scout.home,
     playTo: `${R.scout.setup}?autostart=1`,
     playLabel: 'Play Highlight Scout now',

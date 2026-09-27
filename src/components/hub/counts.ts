@@ -32,5 +32,15 @@ export const SCOUT_PLAY_COUNT = 1700;
  */
 export const SCOUT_CLIP_COUNT = 510;
 
+/**
+ * `SCOUT_MODES.length` — the puzzle types Highlight Scout can ask. The hub shipped "7 clue modes"
+ * for a game with thirteen, because the string was written when there were seven and nothing tied
+ * it to the source. `counts.test.ts` now pins it.
+ */
+export const SCOUT_MODE_COUNT = 13;
+
+/** `SCOUT_FORMATS.length` — how a whole run is shaped (standard, blitz, survival, gauntlet, duel, party). */
+export const SCOUT_FORMAT_COUNT = 6;
+
 /** `sg:stats` — the key `src/store/statsStore.ts` persists under. Asserted in `useLastVisit.test.ts`. */
 export const STATS_KEY = 'sg:stats';

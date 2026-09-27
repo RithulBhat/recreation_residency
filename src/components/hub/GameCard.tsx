@@ -30,6 +30,17 @@ export interface GameCardProps {
   blurb: string;
   /** Three or four short facts, rendered as chips. */
   facts: readonly string[];
+  /**
+   * Where this game's content comes from, in a few words. Every tile carries one, so no game on
+   * the hub can read as more factual than it is.
+   */
+  provenance?: string;
+  /**
+   * Set when any of the game's content is estimated rather than sourced from a live dataset.
+   * Rendered as a plain "approximate" note rather than buried, because a player deciding whether
+   * to trust a number deserves to know before they play, not after they lose a round to it.
+   */
+  approximate?: string;
   /** The game's home — where the whole card leads. */
   to: string;
   /** Straight into a game, from the card's own button. */
@@ -59,6 +70,8 @@ export function GameCard({
   tagline,
   blurb,
   facts,
+  provenance,
+  approximate,
   to,
   playTo,
   playLabel,
@@ -125,6 +138,18 @@ export function GameCard({
             </li>
           ))}
         </ul>
+
+        {(provenance || approximate) && (
+          <p className="mt-1 text-[11px] leading-snug text-muted">
+            {provenance}
+            {approximate && (
+              <>
+                {provenance ? ' · ' : ''}
+                <span className="text-warn">{approximate}</span>
+              </>
+            )}
+          </p>
+        )}
 
         {/* Actions sit after the stretched link in the DOM, so they take their own clicks. */}
         <div className="relative z-10 mt-auto flex flex-wrap items-center justify-between gap-3 pt-4 lg:pt-3">
