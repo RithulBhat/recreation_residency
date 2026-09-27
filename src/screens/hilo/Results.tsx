@@ -7,7 +7,7 @@ import { Card } from '@/components/ui/Card';
 import { NumberTicker } from '@/components/ui/NumberTicker';
 import { formatCompact } from '@/arcade/units';
 import { useHiloStore } from '@/hilo/store';
-import { HILO } from '@/hilo/routes';
+import { R } from '@/routes';
 import { ShareButton } from '@/components/arcade/ShareButton';
 import { shareCard } from '@/hilo/share';
 import { gridOf } from '@/arcade/share';
@@ -21,7 +21,7 @@ export default function HiloResults() {
 
   useEffect(() => {
     if (state.rounds.length === 0 && state.status !== 'finished') {
-      navigate(HILO.setup, { replace: true });
+      navigate(R.hilo.setup, { replace: true });
     }
   }, [state.rounds.length, state.status, navigate]);
 
@@ -91,12 +91,12 @@ export default function HiloResults() {
           leadingIcon={<RotateCcw />}
           onClick={() => {
             start();
-            navigate(HILO.play);
+            navigate(R.hilo.play);
           }}
         >
           Play again
         </Button>
-        <Button fullWidth size="lg" variant="ghost" leadingIcon={<Settings2 />} to={HILO.setup}>
+        <Button fullWidth size="lg" variant="ghost" leadingIcon={<Settings2 />} to={R.hilo.setup}>
           Change setup
         </Button>
       </div>

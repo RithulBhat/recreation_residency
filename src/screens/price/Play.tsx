@@ -10,7 +10,7 @@ import { formatValue } from '@/arcade/units';
 import { missLine } from '@/price/miss';
 import { PriceKeypad } from '@/components/price/PriceKeypad';
 import { usePriceStore } from '@/price/store';
-import { PRICE } from '@/price/routes';
+import { R } from '@/routes';
 import { scoreGuess } from '@/price/scoring';
 import type { PriceHint } from '@/price/types';
 
@@ -44,8 +44,8 @@ export default function PricePlay() {
 
   // A game that was never started (a refresh straight onto /price/play) has nothing to show.
   useEffect(() => {
-    if (state.status === 'idle') navigate(PRICE.setup, { replace: true });
-    if (state.status === 'finished') navigate(PRICE.results, { replace: true });
+    if (state.status === 'idle') navigate(R.price.setup, { replace: true });
+    if (state.status === 'finished') navigate(R.price.results, { replace: true });
   }, [state.status, navigate]);
 
   useEffect(() => {

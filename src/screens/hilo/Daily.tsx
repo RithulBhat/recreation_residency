@@ -8,7 +8,7 @@ import { ShareButton } from '@/components/arcade/ShareButton';
 import { todayISO } from '@/game/challenge';
 import { dailySeedFor, readDaily, secondsUntilTomorrow } from '@/arcade/daily';
 import { useHiloStore } from '@/hilo/store';
-import { HILO } from '@/hilo/routes';
+import { R } from '@/routes';
 import { presetById } from '@/hilo/settings';
 
 function countdown(seconds: number): string {
@@ -85,7 +85,7 @@ export default function HiloDaily() {
             onClick={() => {
               setSettings(settings);
               start(settings);
-              navigate(HILO.play);
+              navigate(R.hilo.play);
             }}
           >
             Play today&rsquo;s run

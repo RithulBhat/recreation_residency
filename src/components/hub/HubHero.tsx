@@ -1,3 +1,4 @@
+import { GAME_LABEL } from '@/routes';
 import { Link } from 'react-router';
 import { ArrowRight, ChartColumn } from 'lucide-react';
 import { R, RESIDENCY_NAME } from '@/routes';
@@ -58,6 +59,17 @@ function WelcomeBack() {
  * 97 px below the fold and cut the game cards mid-sentence, so the front door asked for a scroll
  * before it offered a game.
  */
+/**
+ * Spelled from the real `GameKey` list rather than typed as a word.
+ *
+ * "Two games, one house" was true when it was written and silently stopped being true the moment
+ * a third arrived — the same failure as a card advertising seven clue modes for a game with
+ * thirteen. Deriving it means the front door cannot lie about how many games are behind it.
+ */
+const GAME_WORDS = ['No', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight'] as const;
+const GAME_COUNT_WORD =
+  GAME_WORDS[Object.keys(GAME_LABEL).length] ?? String(Object.keys(GAME_LABEL).length);
+
 export function HubHero() {
   const [lead, last] = splitName(RESIDENCY_NAME);
   return (
@@ -71,7 +83,7 @@ export function HubHero() {
       <div className="relative flex items-center gap-2.5">
         <span className="hub-lamp size-1.5 rounded-full" aria-hidden />
         <span className="font-mono text-[11px] font-semibold uppercase tracking-[0.28em] text-fg/70">
-          Two games, one house
+          {GAME_COUNT_WORD} games, one house
         </span>
         <span className="hub-lamp hub-lamp-b size-1.5 rounded-full" aria-hidden />
       </div>
@@ -82,8 +94,8 @@ export function HubHero() {
       </h1>
 
       <p className="relative max-w-2xl text-balance text-sm text-muted sm:text-lg lg:text-base 2xl:text-lg">
-        Name a song from a heartbeat of audio, or the NFL player behind a silhouette. Free, no
-        sign-up, nothing to install.
+        Name a song from a heartbeat of audio. Name the NFL player behind a silhouette. Guess what
+        something costs, or which of two numbers is bigger. Free, no sign-up, nothing to install.
       </p>
 
       <WelcomeBack />

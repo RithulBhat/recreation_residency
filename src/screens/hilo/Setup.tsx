@@ -13,7 +13,7 @@ import { HILO_PACKS } from '@/data/hilo';
 import { resolveRunPool } from '@/hilo/pool';
 import { measureFor } from '@/hilo/measure';
 import { useHiloStore } from '@/hilo/store';
-import { HILO } from '@/hilo/routes';
+import { R } from '@/routes';
 import {
   DIFFICULTY_BLURB,
   FORMAT_BLURB,
@@ -62,7 +62,7 @@ export default function HiloSetup() {
   const begin = () => {
     setSettings(local);
     start(local);
-    navigate(HILO.play);
+    navigate(R.hilo.play);
   };
 
   return (

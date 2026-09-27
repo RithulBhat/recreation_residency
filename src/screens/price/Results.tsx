@@ -8,7 +8,7 @@ import { NumberTicker } from '@/components/ui/NumberTicker';
 import { formatValue, relativeError } from '@/arcade/units';
 import { describeMiss } from '@/price/miss';
 import { usePriceStore } from '@/price/store';
-import { PRICE } from '@/price/routes';
+import { R } from '@/routes';
 import { ShareButton } from '@/components/arcade/ShareButton';
 import { shareCard } from '@/price/share';
 import { gridOf } from '@/arcade/share';
@@ -20,7 +20,7 @@ export default function PriceResults() {
   const { state, start } = usePriceStore();
 
   useEffect(() => {
-    if (state.rounds.length === 0) navigate(PRICE.setup, { replace: true });
+    if (state.rounds.length === 0) navigate(R.price.setup, { replace: true });
   }, [state.rounds.length, navigate]);
 
   const daily = state.settings.seed?.startsWith('price-daily-') ? todayISO() : undefined;
@@ -103,7 +103,7 @@ export default function PriceResults() {
           leadingIcon={<RotateCcw />}
           onClick={() => {
             start();
-            navigate(PRICE.play);
+            navigate(R.price.play);
           }}
         >
           Play again
@@ -113,7 +113,7 @@ export default function PriceResults() {
           size="lg"
           variant="ghost"
           leadingIcon={<Settings2 />}
-          to={PRICE.setup}
+          to={R.price.setup}
         >
           Change setup
         </Button>

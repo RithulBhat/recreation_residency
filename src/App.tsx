@@ -7,8 +7,6 @@ import { PageTransition } from '@/components/PageTransition';
 import { BrandedLoader } from '@/components/BrandedLoader';
 import { useTheme } from '@/hooks/useTheme';
 import { R, isPlayPath } from '@/routes';
-import { PRICE } from '@/price/routes';
-import { HILO } from '@/hilo/routes';
 
 const Residency = lazy(() => import('@/screens/Residency'));
 const Home = lazy(() => import('@/screens/Home'));
@@ -32,6 +30,8 @@ const Duel = lazy(() => import('@/screens/Duel'));
 const Challenge = lazy(() => import('@/screens/Challenge'));
 // Price Guess is routed against its own local constants while it is built. The wiring that adds
 // it to `GameKey` and the four exhaustive Records lands as one reviewed commit with the hub tile.
+const PriceHome = lazy(() => import('@/screens/price/Home'));
+const HiloHome = lazy(() => import('@/screens/hilo/Home'));
 const PriceSetup = lazy(() => import('@/screens/price/Setup'));
 const PricePlay = lazy(() => import('@/screens/price/Play'));
 const PriceResults = lazy(() => import('@/screens/price/Results'));
@@ -120,17 +120,19 @@ export default function App() {
               <Route path={R.scout.stats} element={<ScoutStats />} />
               <Route path={R.scout.challenge} element={<ScoutChallenge />} />
 
-              <Route path={PRICE.setup} element={<PriceSetup />} />
-              <Route path={PRICE.play} element={<PricePlay />} />
-              <Route path={PRICE.results} element={<PriceResults />} />
+              <Route path={R.price.home} element={<PriceHome />} />
+              <Route path={R.price.setup} element={<PriceSetup />} />
+              <Route path={R.price.play} element={<PricePlay />} />
+              <Route path={R.price.results} element={<PriceResults />} />
 
-              <Route path={HILO.setup} element={<HiloSetup />} />
-              <Route path={HILO.play} element={<HiloPlay />} />
-              <Route path={HILO.results} element={<HiloResults />} />
-              <Route path={PRICE.daily} element={<PriceDaily />} />
-              <Route path={HILO.daily} element={<HiloDaily />} />
-              <Route path={PRICE.party} element={<PriceParty />} />
-              <Route path={HILO.party} element={<HiloParty />} />
+              <Route path={R.hilo.home} element={<HiloHome />} />
+              <Route path={R.hilo.setup} element={<HiloSetup />} />
+              <Route path={R.hilo.play} element={<HiloPlay />} />
+              <Route path={R.hilo.results} element={<HiloResults />} />
+              <Route path={R.price.daily} element={<PriceDaily />} />
+              <Route path={R.hilo.daily} element={<HiloDaily />} />
+              <Route path={R.price.party} element={<PriceParty />} />
+              <Route path={R.hilo.party} element={<HiloParty />} />
 
               {Gallery && <Route path={R.gallery} element={<Gallery />} />}
               <Route path="*" element={<Placeholder />} />

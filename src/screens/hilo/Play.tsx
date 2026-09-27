@@ -7,7 +7,7 @@ import { Card } from '@/components/ui/Card';
 import { HiloCard } from '@/components/hilo/HiloCard';
 import { ratioOf } from '@/arcade/pairing';
 import { useHiloStore } from '@/hilo/store';
-import { HILO } from '@/hilo/routes';
+import { R } from '@/routes';
 import { availablePowerUps, correctPick, currentPair } from '@/hilo/engine';
 import { measureFor } from '@/hilo/measure';
 
@@ -16,8 +16,8 @@ export default function HiloPlay() {
   const { state, dispatch, pick } = useHiloStore();
 
   useEffect(() => {
-    if (state.status === 'idle') navigate(HILO.setup, { replace: true });
-    if (state.status === 'finished') navigate(HILO.results, { replace: true });
+    if (state.status === 'idle') navigate(R.hilo.setup, { replace: true });
+    if (state.status === 'finished') navigate(R.hilo.results, { replace: true });
   }, [state.status, navigate]);
 
   // The timed format needs a clock; every other format is untimed and this does nothing.

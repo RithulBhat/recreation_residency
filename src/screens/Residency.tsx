@@ -3,9 +3,15 @@ import type { GameTone } from '@/components/hub/GameCard';
 import { GAME_LABEL, GAME_TAGLINE, R } from '@/routes';
 import {
   GameCard,
+  HiloArt,
+  HILO_ITEM_COUNT,
+  HILO_PACK_COUNT,
   HubFooter,
   HubHero,
   InsideStrip,
+  PriceArt,
+  PRICE_ITEM_COUNT,
+  PRICE_PACK_COUNT,
   SCOUT_MODE_COUNT,
   SCOUT_PLAYER_COUNT,
   ScoutArt,
@@ -33,7 +39,7 @@ interface HubGame {
 }
 
 /**
- * The two worlds. `?autostart=1` is the lobby's "skip the setup" flag, so the card's Play button
+ * The four worlds. `?autostart=1` is the lobby's "skip the setup" flag, so the card's Play button
  * really does drop you into a round rather than onto another screen.
  */
 const GAMES: readonly HubGame[] = [
@@ -69,6 +75,37 @@ const GAMES: readonly HubGame[] = [
     badge: 'New',
     tone: 'accent-2',
     art: <ScoutArt />,
+  },
+  {
+    kicker: 'Money',
+    name: GAME_LABEL.price,
+    tagline: GAME_TAGLINE.price,
+    blurb:
+      'A thing, and a keypad. Guess the price by closeness, or Price-Is-Right style where a penny over scores nothing. Solo, daily, or a room full of people on their phones.',
+    facts: [`${PRICE_ITEM_COUNT} items`, `${PRICE_PACK_COUNT} packs`, 'Party rooms'],
+    to: R.price.home,
+    playTo: R.price.setup,
+    playLabel: 'Play Price Guess now',
+    badge: 'New',
+    tone: 'accent',
+    art: <PriceArt />,
+    provenance: 'Prices written by hand',
+    approximate: 'Prices are approximate',
+  },
+  {
+    kicker: 'Numbers',
+    name: GAME_LABEL.hilo,
+    tagline: GAME_TAGLINE.hilo,
+    blurb:
+      'Two things, one number hidden. Populations, economies, land area, NFL weigh-ins, draft order, chart heat. One life, or lives, or a sixty-second sprint.',
+    facts: [`${HILO_ITEM_COUNT.toLocaleString()} figures`, `${HILO_PACK_COUNT} packs`, 'All sourced'],
+    to: R.hilo.home,
+    playTo: R.hilo.setup,
+    playLabel: 'Play Higher or Lower now',
+    badge: 'New',
+    tone: 'accent-2',
+    art: <HiloArt />,
+    provenance: 'Figures from the World Bank, ESPN and Deezer',
   },
 ];
 
@@ -117,6 +154,8 @@ export default function Residency() {
                 badge={g.badge}
                 tone={g.tone}
                 art={g.art}
+                provenance={g.provenance}
+                approximate={g.approximate}
               />
             </li>
           ))}

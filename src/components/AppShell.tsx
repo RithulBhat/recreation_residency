@@ -1,6 +1,15 @@
 import type { ReactNode } from 'react';
 import { Link, NavLink, useLocation } from 'react-router';
-import { CalendarDays, ChartColumn, Gamepad2, Home, Library, Play, SlidersHorizontal } from 'lucide-react';
+import {
+  CalendarDays,
+  ChartColumn,
+  Gamepad2,
+  Home,
+  Library,
+  Play,
+  SlidersHorizontal,
+  Users,
+} from 'lucide-react';
 import type { ThemeName } from '@/hooks/useTheme';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { GAME_HOME, GAME_LABEL, R, RESIDENCY_NAME, RESIDENCY_SHORT, activeGame, type GameKey } from '@/routes';
@@ -54,6 +63,16 @@ export const GAME_NAV: Record<GameKey, readonly NavItem[]> = {
     { to: R.scout.setup, label: 'Play', icon: <Play /> },
     { to: R.scout.daily, label: 'Daily', icon: <CalendarDays /> },
     { to: R.scout.stats, label: 'Stats', icon: <ChartColumn /> },
+  ],
+  price: [
+    { to: R.price.setup, label: 'Play', icon: <Play /> },
+    { to: R.price.daily, label: 'Daily', icon: <CalendarDays /> },
+    { to: R.price.party, label: 'Party', icon: <Users /> },
+  ],
+  hilo: [
+    { to: R.hilo.setup, label: 'Play', icon: <Play /> },
+    { to: R.hilo.daily, label: 'Daily', icon: <CalendarDays /> },
+    { to: R.hilo.party, label: 'Party', icon: <Users /> },
   ],
 };
 

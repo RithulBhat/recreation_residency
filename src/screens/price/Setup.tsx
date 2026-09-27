@@ -9,7 +9,7 @@ import { Stepper } from '@/components/ui/Stepper';
 import { Switch } from '@/components/ui/Switch';
 import { PRICE_PACKS } from '@/data/price';
 import { usePriceStore } from '@/price/store';
-import { PRICE } from '@/price/routes';
+import { R } from '@/routes';
 import { PRESETS, reconcile } from '@/price/settings';
 import type { PriceDifficulty, PriceScoring } from '@/price/types';
 
@@ -30,7 +30,7 @@ export default function PriceSetup() {
   const begin = () => {
     setSettings(local);
     start(local);
-    navigate(PRICE.play);
+    navigate(R.price.play);
   };
 
   return (

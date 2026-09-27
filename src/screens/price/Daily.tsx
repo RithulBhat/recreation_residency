@@ -8,7 +8,7 @@ import { ShareButton } from '@/components/arcade/ShareButton';
 import { todayISO } from '@/game/challenge';
 import { dailySeedFor, readDaily, secondsUntilTomorrow } from '@/arcade/daily';
 import { usePriceStore } from '@/price/store';
-import { PRICE } from '@/price/routes';
+import { R } from '@/routes';
 import { presetById } from '@/price/settings';
 
 function countdown(seconds: number): string {
@@ -82,7 +82,7 @@ export default function PriceDaily() {
             onClick={() => {
               setSettings(settings);
               start(settings);
-              navigate(PRICE.play);
+              navigate(R.price.play);
             }}
           >
             Play today&rsquo;s run
