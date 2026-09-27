@@ -9,6 +9,11 @@ import { formatValue, relativeError } from '@/arcade/units';
 import { describeMiss } from '@/price/miss';
 import { usePriceStore } from '@/price/store';
 import { PRICE } from '@/price/routes';
+import { ShareButton } from '@/components/arcade/ShareButton';
+import { shareCard } from '@/price/share';
+import { gridOf } from '@/arcade/share';
+import { writeDaily } from '@/arcade/daily';
+import { todayISO } from '@/game/challenge';
 
 export default function PriceResults() {
   const navigate = useNavigate();
@@ -17,6 +22,18 @@ export default function PriceResults() {
   useEffect(() => {
     if (state.rounds.length === 0) navigate(PRICE.setup, { replace: true });
   }, [state.rounds.length, navigate]);
+
+  const daily = state.settings.seed?.startsWith('price-daily-') ? todayISO() : undefined;
+  const card = shareCard(state, {
+    daily,
+    url: window.location.origin + window.location.pathname,
+  });
+
+  // A finished daily is remembered so it can be re-shared without replaying it.
+  useEffect(() => {
+    if (!daily || state.status !== 'finished') return;
+    writeDaily('price', { date: daily, score: state.totalScore, marks: gridOf(card.marks) });
+  }, [daily, state.status, state.totalScore, card.marks]);
 
   if (state.rounds.length === 0) return null;
 
@@ -76,6 +93,8 @@ export default function PriceResults() {
       <p className="text-center text-xs text-muted">
         Every price in this game is an author estimate, not a sourced figure.
       </p>
+
+      <ShareButton card={card} />
 
       <div className="flex gap-2">
         <Button

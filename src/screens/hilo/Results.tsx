@@ -8,6 +8,11 @@ import { NumberTicker } from '@/components/ui/NumberTicker';
 import { formatCompact } from '@/arcade/units';
 import { useHiloStore } from '@/hilo/store';
 import { HILO } from '@/hilo/routes';
+import { ShareButton } from '@/components/arcade/ShareButton';
+import { shareCard } from '@/hilo/share';
+import { gridOf } from '@/arcade/share';
+import { writeDaily } from '@/arcade/daily';
+import { todayISO } from '@/game/challenge';
 import { measureFor } from '@/hilo/measure';
 
 export default function HiloResults() {
@@ -21,6 +26,16 @@ export default function HiloResults() {
   }, [state.rounds.length, state.status, navigate]);
 
   const correct = state.rounds.filter((r) => r.outcome === 'correct').length;
+  const daily = state.settings.seed?.startsWith('hilo-daily-') ? todayISO() : undefined;
+  const card = shareCard(state, {
+    daily,
+    url: window.location.origin + window.location.pathname,
+  });
+
+  useEffect(() => {
+    if (!daily || state.status !== 'finished') return;
+    writeDaily('hilo', { date: daily, score: state.totalScore, marks: gridOf(card.marks) });
+  }, [daily, state.status, state.totalScore, card.marks]);
 
   return (
     <div className="mx-auto flex w-full max-w-xl flex-col gap-4">
@@ -66,6 +81,8 @@ export default function HiloResults() {
           </li>
         ))}
       </ul>
+
+      <ShareButton card={card} />
 
       <div className="flex gap-2">
         <Button

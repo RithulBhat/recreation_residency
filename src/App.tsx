@@ -38,6 +38,8 @@ const PriceResults = lazy(() => import('@/screens/price/Results'));
 const HiloSetup = lazy(() => import('@/screens/hilo/Setup'));
 const HiloPlay = lazy(() => import('@/screens/hilo/Play'));
 const HiloResults = lazy(() => import('@/screens/hilo/Results'));
+const PriceDaily = lazy(() => import('@/screens/price/Daily'));
+const HiloDaily = lazy(() => import('@/screens/hilo/Daily'));
 
 const VOLUME_KEY = 'sg:volume';
 const MUTED_KEY = 'sg:muted';
@@ -123,6 +125,8 @@ export default function App() {
               <Route path={HILO.setup} element={<HiloSetup />} />
               <Route path={HILO.play} element={<HiloPlay />} />
               <Route path={HILO.results} element={<HiloResults />} />
+              <Route path={PRICE.daily} element={<PriceDaily />} />
+              <Route path={HILO.daily} element={<HiloDaily />} />
 
               {Gallery && <Route path={R.gallery} element={<Gallery />} />}
               <Route path="*" element={<Placeholder />} />
