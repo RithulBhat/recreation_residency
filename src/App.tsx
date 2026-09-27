@@ -28,8 +28,6 @@ const Daily = lazy(() => import('@/screens/Daily'));
 const Stats = lazy(() => import('@/screens/Stats'));
 const Duel = lazy(() => import('@/screens/Duel'));
 const Challenge = lazy(() => import('@/screens/Challenge'));
-// Price Guess is routed against its own local constants while it is built. The wiring that adds
-// it to `GameKey` and the four exhaustive Records lands as one reviewed commit with the hub tile.
 const PriceHome = lazy(() => import('@/screens/price/Home'));
 const HiloHome = lazy(() => import('@/screens/hilo/Home'));
 const PriceSetup = lazy(() => import('@/screens/price/Setup'));
@@ -124,14 +122,14 @@ export default function App() {
               <Route path={R.price.setup} element={<PriceSetup />} />
               <Route path={R.price.play} element={<PricePlay />} />
               <Route path={R.price.results} element={<PriceResults />} />
+              <Route path={R.price.daily} element={<PriceDaily />} />
+              <Route path={R.price.party} element={<PriceParty />} />
 
               <Route path={R.hilo.home} element={<HiloHome />} />
               <Route path={R.hilo.setup} element={<HiloSetup />} />
               <Route path={R.hilo.play} element={<HiloPlay />} />
               <Route path={R.hilo.results} element={<HiloResults />} />
-              <Route path={R.price.daily} element={<PriceDaily />} />
               <Route path={R.hilo.daily} element={<HiloDaily />} />
-              <Route path={R.price.party} element={<PriceParty />} />
               <Route path={R.hilo.party} element={<HiloParty />} />
 
               {Gallery && <Route path={R.gallery} element={<Gallery />} />}
