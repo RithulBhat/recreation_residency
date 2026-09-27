@@ -152,23 +152,42 @@ export function cardFameWindows(difficulty: ScoutDifficulty): FameWindow[] {
 }
 
 /**
- * Fame bands centred on the subject, tightest first, then the tier's own windows as a fallback.
+ * Fame bands centred on the subject, INTERSECTED with the tier's own band, tightest first.
  *
- * WHY: `oddOneOut` draws its outlier from the ANSWER pool (gated by the pack and the tier) but drew
- * its other three from {@link cardFameWindows}, which floors at {@link CARD_FAME_FLOOR}. At the
- * `any` tier that let a deep-cut outlier hide among three household names, so the answer was the
- * least famous card on the board 72% of the time, measured over 9,940 generated rounds. A player
- * could win by picking the name they did not recognise, having learned nothing about colleges or
- * draft rounds — the round still resolved correctly, so every other test passed. `puzzles.tells.test.ts`
- * now holds that rate near chance.
+ * Two constraints pull against each other here and both matter:
+ *
+ * - Centre on the outlier, or he is simply the least famous name on the board. Drawing the answer
+ *   from the tier pool while flooring the cards at {@link CARD_FAME_FLOOR} made him the least
+ *   famous card 72% of the time across 9,940 rounds — a player could win by picking the name he
+ *   did not recognise, having learned no football at all.
+ * - Respect the tier, or the Difficulty control is decoration. Centring alone overrode the tier
+ *   band so completely that `oddOneOut` honoured its intended range on just 7% of deep-cut rounds
+ *   and 26% of rotation rounds: the setting was very nearly fiction.
+ *
+ * Intersecting them satisfies both. The outlier is already inside the tier (`buildPool` gates the
+ * answer by `tierOf`), so the intersection is never empty, and the cards land in the tier's range
+ * AND close to the outlier's own standing. The un-intersected bands and then the raw tier windows
+ * remain as fallbacks, because a narrow band is not satisfiable on every roster.
  */
 function fameBandsAround(player: NflPlayer, windows: readonly FameWindow[]): FameWindow[] {
   const fame = Number.isFinite(player.fame) ? player.fame : 0;
+  const tier = windows[0];
   const around = [12, 20, 30].map((spread) => ({
     min: Math.max(0, fame - spread),
     max: Math.min(100, fame + spread),
   }));
-  return [...around, ...windows];
+  // Only clamp to the tier when the outlier HIMSELF sits inside it. At the `any` tier the answer
+  // pool is ungated, so a deep cut can anchor a round whose card window floors at 45; clamping
+  // there would push every card above him and hand back the exact fame tell this centring exists
+  // to kill. Measured: clamping unconditionally took "answer is the least famous" from chance to
+  // 56% at `any` and 52% at `starter`. When he is outside the tier band, his own band wins.
+  const inTier = tier !== undefined && fame >= tier.min && fame <= tier.max;
+  const clamped = inTier
+    ? around
+        .map((b) => ({ min: Math.max(b.min, tier.min), max: Math.min(b.max, tier.max) }))
+        .filter((b) => b.min <= b.max)
+    : [];
+  return [...clamped, ...around, ...windows];
 }
 
 function inWindow(player: NflPlayer, w: FameWindow): boolean {
@@ -917,4 +936,55 @@ export function isChoicePuzzle(puzzle: ScoutPuzzle): boolean {
 /** The card a player picked, by id. */
 export function puzzleCardById(puzzle: ScoutPuzzle, playerId: string): ScoutPersonCard | undefined {
   return puzzleCards(puzzle).find((c) => c.playerId === playerId);
+}
+
+// ---------------------------------------------------------------------------------------------
+// Feasibility — which (mode, difficulty) pairs the shipped data can actually honour
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * Not every puzzle type can serve every difficulty, and the reason is the CONTENT rather than the
+ * code. `higherLower` needs two men who carry the same stat in the same season, and stat lines only
+ * exist for the ~300 most productive players — so there is no such pair anywhere in the deep-cut
+ * tier. Measured on the shipped dataset: 0 rounds, at any seed.
+ *
+ * Offering a difficulty the data cannot honour and quietly substituting an easier one is worse than
+ * not offering it, because the player concludes the game is broken rather than the pack. So the
+ * lobby asks this first and hides what it cannot deliver.
+ */
+export interface ModeFeasibility {
+  mode: ScoutPuzzleMode;
+  difficulty: ScoutDifficulty;
+  /** How many distinct rounds the dataset can build. */
+  rounds: number;
+  /** False when the pair yields nothing at all. */
+  playable: boolean;
+}
+
+/** Probe one (mode, difficulty) pair against the real data. Cheap enough to run at lobby open. */
+export function puzzleFeasibility(
+  dataset: ScoutPuzzleDataset,
+  mode: ScoutPuzzleMode,
+  difficulty: ScoutDifficulty,
+  opts: { seed?: string; playerEligible?: (p: NflPlayer) => boolean } = {},
+): ModeFeasibility {
+  const specs = buildScoutPuzzleSpecs({
+    dataset,
+    modes: [mode],
+    difficulty,
+    seed: opts.seed ?? 'feasibility',
+    limit: 0,
+    ...(opts.playerEligible ? { playerEligible: opts.playerEligible } : {}),
+  });
+  const rounds = specs.filter((spec) => spec.mode === mode).length;
+  return { mode, difficulty, rounds, playable: rounds > 0 };
+}
+
+/** Every puzzle mode this difficulty can actually serve, in `SCOUT_PUZZLE_MODES` order. */
+export function feasiblePuzzleModes(
+  dataset: ScoutPuzzleDataset,
+  difficulty: ScoutDifficulty,
+  opts: { seed?: string; playerEligible?: (p: NflPlayer) => boolean } = {},
+): ScoutPuzzleMode[] {
+  return SCOUT_PUZZLE_MODES.filter((mode) => puzzleFeasibility(dataset, mode, difficulty, opts).playable);
 }
