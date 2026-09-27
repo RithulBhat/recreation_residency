@@ -8,6 +8,7 @@ import { BrandedLoader } from '@/components/BrandedLoader';
 import { useTheme } from '@/hooks/useTheme';
 import { R, isPlayPath } from '@/routes';
 import { PRICE } from '@/price/routes';
+import { HILO } from '@/hilo/routes';
 
 const Residency = lazy(() => import('@/screens/Residency'));
 const Home = lazy(() => import('@/screens/Home'));
@@ -34,6 +35,9 @@ const Challenge = lazy(() => import('@/screens/Challenge'));
 const PriceSetup = lazy(() => import('@/screens/price/Setup'));
 const PricePlay = lazy(() => import('@/screens/price/Play'));
 const PriceResults = lazy(() => import('@/screens/price/Results'));
+const HiloSetup = lazy(() => import('@/screens/hilo/Setup'));
+const HiloPlay = lazy(() => import('@/screens/hilo/Play'));
+const HiloResults = lazy(() => import('@/screens/hilo/Results'));
 
 const VOLUME_KEY = 'sg:volume';
 const MUTED_KEY = 'sg:muted';
@@ -115,6 +119,10 @@ export default function App() {
               <Route path={PRICE.setup} element={<PriceSetup />} />
               <Route path={PRICE.play} element={<PricePlay />} />
               <Route path={PRICE.results} element={<PriceResults />} />
+
+              <Route path={HILO.setup} element={<HiloSetup />} />
+              <Route path={HILO.play} element={<HiloPlay />} />
+              <Route path={HILO.results} element={<HiloResults />} />
 
               {Gallery && <Route path={R.gallery} element={<Gallery />} />}
               <Route path="*" element={<Placeholder />} />

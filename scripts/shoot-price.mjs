@@ -49,6 +49,20 @@ for (const [name, w, h] of [['mobile', 375, 812], ['desktop', 1440, 900]]) {
     const over = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);
     if (over) errors.push('320px: horizontal overflow');
   }
+  // Higher or Lower
+  await page.goto('http://localhost:5487/#/hilo/setup', { waitUntil: 'networkidle' });
+  await page.waitForTimeout(900);
+  await page.screenshot({ path: `${out}/hilo-setup-${name}.png`, fullPage: true });
+  const chain = page.getByRole('button', { name: /start the chain/i });
+  if (await chain.count()) {
+    await chain.click();
+    await page.waitForTimeout(900);
+    await page.screenshot({ path: `${out}/hilo-play-${name}.png`, fullPage: true });
+    const higher = page.getByRole('button', { name: /^higher$/i });
+    if (await higher.count()) { await higher.click(); await page.waitForTimeout(1400); }
+    await page.screenshot({ path: `${out}/hilo-reveal-${name}.png`, fullPage: true });
+  }
+
   await page.close();
 }
 await b.close();
